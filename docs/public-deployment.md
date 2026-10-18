@@ -14,8 +14,9 @@ Create an ignored, mode `600` `.env.public` at the repository root. Set
 random secrets. Set `KORA_CONSOLE_ORIGINS` to the exact Netlify HTTPS origin.
 Keep `KORA_MODE=sandbox`, and leave `PAYSTACK_SECRET_KEY` blank for the simulator.
 Never commit this file. The Compose file supplies the internal `DATABASE_URL`.
-Personal sign-in uses Privy. Set `PRIVY_APP_ID` and the server-side
-`PRIVY_VERIFICATION_KEY`; optionally set `PRIVY_CLIENT_ID`. Enable Privy email
+Personal sign-in uses Privy. Set `PRIVY_APP_ID`; optionally set
+`PRIVY_CLIENT_ID` and a pinned server-side `PRIVY_VERIFICATION_KEY` (the API
+otherwise uses Privy's app-scoped public JWKS). Enable Privy email
 login and identity tokens, and allow the exact Netlify HTTPS origin in Privy.
 In the Privy Dashboard, open **User management → Authentication → Advanced**
 and turn on **Return user data in an identity token** for the Microsendr app.
