@@ -45,6 +45,21 @@
 .personal-wallet-actions{display:flex;flex-wrap:wrap;gap:16px}
 .personal-wallet-actions :is(button,a){display:inline-flex;align-items:center;gap:7px;border:0;background:none;color:#4682b4;font:inherit;font-weight:700;text-decoration:none;padding:0;cursor:pointer}
 .personal-wallet-details>small{color:#647786;line-height:1.5}
+.personal-qie-card{max-width:650px;margin-top:20px}
+.personal-qie-form{border-top:1px solid #2b4032;margin-top:16px;padding-top:20px}
+.personal-qie-form h3,.personal-qie-history h3{margin:0 0 8px;font-size:17px}
+.personal-qie-form p,.personal-qie-retry p{color:#aebfad;font-size:13px;line-height:1.5}
+.personal-qie-form label{margin-top:18px}
+.personal-qie-history{border-top:1px solid #2b4032;margin-top:20px;padding-top:20px}
+.personal-qie-history>div{display:flex;gap:12px;justify-content:space-between;border-top:1px solid #2b4032;padding:14px 0}
+.personal-qie-history>div>span{display:grid;gap:3px;min-width:0;overflow-wrap:anywhere}
+.personal-qie-history small{margin:0}
+.personal-qie-history a{display:flex;gap:4px;align-items:center;color:#8fc3ee;font-size:12px;white-space:nowrap}
+.personal-qie-retry{background:#243b2c;padding:16px;border-radius:10px}
+.personal-qie-recovery{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.personal-qie-recovery input{min-width:210px;flex:1}
+.personal-qie-recovery button{background:#d3f092;color:#183321;border:0;border-radius:8px;padding:10px;cursor:pointer}
+.personal-qie-recovery button:disabled{opacity:.55;cursor:not-allowed}
 .personal-money-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-bottom:22px}
 .personal-money-grid .personal-form-card{max-width:none;min-width:0}
 .personal-money-grid .personal-card>p{min-height:62px;line-height:1.55}

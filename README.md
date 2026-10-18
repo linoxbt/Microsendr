@@ -2,14 +2,14 @@
 
 **Your money, without borders.** Microsendr is a consumer finance application and settlement foundation. The current public Personal experience uses Privy sign-in, an embedded QIE wallet, and clearly labeled sandbox money flows. Earlier Business, Stellar Testnet and developer sandbox modules remain in the repository for regression coverage.
 
-> **Current status:** Development sandbox. NGN balances and Paystack test transactions are simulated. QIE mainnet support is read-only. Digital-dollar deposits, transfers, exchange and live bank payouts are not enabled. See [settlement status](docs/microsendr-settlement-status.md).
+> **Current status:** NGN balances and Paystack test transactions are simulated. Personal also supports user-authorized native QIEV3 wallet transfers on QIE Mainnet with durable receipt tracking. Digital-dollar deposits, exchange and live bank payouts are not enabled. See [settlement status](docs/microsendr-settlement-status.md).
 
 ## Product surface
 
 | Area | Current behavior |
 | --- | --- |
 | Personal | Privy login, embedded wallet, home, activity, profile, sandbox payments and Paystack test collection/payout |
-| QIE | Mainnet address and native balance reads; receipt validation library; no automatic credit or live send |
+| QIE | Mainnet address and native balance, signed native-wallet send, persisted instruction, receipt matching and worker reconciliation; no ledger credit |
 | Paystack | Test-key-only checkout, bank name enquiry and payout; explicit status verification |
 | Financial core | PostgreSQL double-entry ledger, idempotency, reservations, outbox, immutable journals and reconciliation controls |
 | Historical modules | Business workspace, Stellar Testnet KUSD and multi-provider sandbox routing |
@@ -63,6 +63,7 @@ Database suites require the migrated local PostgreSQL instance. Older provider s
 - Use integer minor units and balanced, immutable journals.
 - Require idempotency keys for money-moving commands. Keep ambiguous provider results **unknown** until verified.
 - Match external receipts to instructions before posting balances. A redirect, client callback or transaction hash alone is insufficient.
+- QIEV3 transfers are signed by the user wallet. Microsendr records external settlement evidence but does not take custody or post a QIE customer liability.
 - Credit only allowlisted assets on verified networks; a ticker is not an asset identity.
 - Label provider test events as tests. Live QIE-to-NGN conversion requires a verified asset, liquidity route, regulated partner arrangement, monitoring and reconciliation.
 

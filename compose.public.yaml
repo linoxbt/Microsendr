@@ -52,5 +52,21 @@ services:
         condition: service_healthy
     command: ["pnpm", "worker"]
 
+  proxy:
+    image: caddy:2.9-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - kora-public-caddy-data:/data
+      - kora-public-caddy-config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+
 volumes:
   kora-public-postgres:
+  kora-public-caddy-data:
+  kora-public-caddy-config:

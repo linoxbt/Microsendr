@@ -40,17 +40,19 @@ configured per session in the API code. Both secrets are required before the
 verification button appears; the signed webhook is the only source of approval.
 Didit approval never turns on real payments in this sandbox.
 
-The HTTPS reverse proxy needs a host entry equivalent to:
+The Compose `proxy` service runs Caddy with this host entry:
 
 ```caddyfile
 kora-api.13-140-188-185.sslip.io {
     encode gzip
-    reverse_proxy 127.0.0.1:4312
+    reverse_proxy api:4312
 }
 ```
 
-The IP-dependent `sslip.io` hostname must be changed in both Caddy and
-`netlify.toml` if the host IP changes. Docker binds port 4312 to loopback only.
+The IP-dependent `sslip.io` hostname must be changed in both
+`deploy/caddy/Caddyfile` and `netlify.toml` if the host IP changes. Caddy owns
+ports 80 and 443, while Docker binds API port 4312 to loopback only. Its
+certificate state persists in the `kora-public-caddy-data` volume.
 
 ## Start and update
 

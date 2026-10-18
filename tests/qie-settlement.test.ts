@@ -1,0 +1,80 @@
+import { after, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
+import { randomBytes } from 'node:crypto';
+import { id, pool } from '../packages/database/src/index.js';
+import { hashKey } from '../packages/payments/src/auth.js';
+import { buildApi } from '../services/api/src/app.js';
+import { QIE_CHAIN_ID, QIE_NATIVE_POSITION, QIE_NETWORK } from '../packages/qie/src/index.js';
+import { nativeTransferAuthorization, type ChainSettlementAdapter, type SettlementEvidence } from '../packages/settlement/src/index.js';
+import { chainAdapters, createNativeSettlement, reconcileChainSettlement, submitNativeSettlement } from '../packages/settlement/src/service.js';
+
+after(async () => { await pool.end(); });
+
+test('signed QIE settlement is idempotent, hash-unique, and reconciles only matching new chain evidence', async () => {
+  const account = privateKeyToAccount(generatePrivateKey());
+  const userId = id('usr'), accountId = id('acct');
+  await pool.query('INSERT INTO personal_users(id,email,email_verified_at) VALUES($1,$2,now())', [userId,`${userId}@example.test`]);
+  await pool.query('UPDATE personal_users SET privy_app_id=$2,privy_subject=$3 WHERE id=$1',[userId,'settlement-test',`did:privy:${userId}`]);
+  await pool.query("INSERT INTO kora_accounts(id,owner_type,personal_user_id) VALUES($1,'personal',$2)",[accountId,userId]);
+  const to = '0x2222222222222222222222222222222222222222';
+  const key = id('key'), expiresAt = new Date(Date.now()+4*60_000).toISOString(), amountAtomic = 100000000000000000n;
+  const signed = (idempotencyKey: string, amount = amountAtomic) => account.signMessage({ message: nativeTransferAuthorization({
+    accountId, network: QIE_NETWORK, chainId: QIE_CHAIN_ID, from: account.address, to,
+    amountAtomic: amount, idempotencyKey, expiresAt,
+  }) });
+  let evidence: SettlementEvidence = { state: 'pending', confirmations: '2', block_number: '101', block_hash: '0x'+'b'.repeat(64) };
+  const adapter: ChainSettlementAdapter = { network: QIE_NETWORK, chainId: QIE_CHAIN_ID,
+    nativeAssetPositionId: QIE_NATIVE_POSITION, nativeAssetCode: 'QIEV3',nativeDecimals:18,requiredConfirmations:12n,
+    transactionUrl: hash => `https://mainnet.qie.digital/tx/${hash}`,headBlock: async () => 100n,
+    nativeTransferEvidence: async (_hash, instruction) => {
+      assert.equal(instruction.from,account.address.toLowerCase());
+      assert.equal(instruction.to,to.toLowerCase());
+      assert.equal(instruction.amountAtomic,amountAtomic);
+      return evidence;
+    },
+  };
+  const previous = chainAdapters[QIE_NETWORK];
+  chainAdapters[QIE_NETWORK] = () => adapter;
+  try {
+    const input = { userId, accountId, network: QIE_NETWORK, from: account.address, to,
+      amountAtomic: amountAtomic.toString(), idempotencyKey: key, expiresAt, signature: await signed(key) };
+    const created = await createNativeSettlement(input);
+    assert.equal(created.status,'awaiting_submission');
+    assert.equal((await createNativeSettlement(input)).id,created.id);
+    await assert.rejects(createNativeSettlement({ ...input, amountAtomic: '2' }), { code: 'wallet_signature_invalid' });
+    await assert.rejects(createNativeSettlement({ ...input, amountAtomic: '2', signature: await signed(key,2n) }), { code: 'idempotency_conflict' });
+    const hash = `0x${randomBytes(32).toString('hex')}`;
+    assert.equal((await submitNativeSettlement(userId,created.id,hash)).status,'submitted');
+    assert.equal((await submitNativeSettlement(userId,created.id,hash)).tx_hash,hash);
+    await assert.rejects(submitNativeSettlement(userId,created.id,'0x'+'c'.repeat(64)), { code: 'transaction_conflict' });
+    await reconcileChainSettlement(created.id,adapter);
+    assert.equal((await pool.query('SELECT status FROM chain_settlements WHERE id=$1',[created.id])).rows[0].status,'pending');
+    evidence = { ...evidence, state: 'confirmed', confirmations: '12', block_number: '99' };
+    await reconcileChainSettlement(created.id,adapter);
+    assert.equal((await pool.query('SELECT status,last_error FROM chain_settlements WHERE id=$1',[created.id])).rows[0].status,'unknown');
+    evidence = { ...evidence, block_number: '101' };
+    await reconcileChainSettlement(created.id,adapter);
+    assert.equal((await pool.query('SELECT status,block_number FROM chain_settlements WHERE id=$1',[created.id])).rows[0].status,'confirmed');
+    const secondKey = id('key');
+    const second = await createNativeSettlement({ ...input, idempotencyKey: secondKey, signature: await signed(secondKey) });
+    await assert.rejects(submitNativeSettlement(userId,second.id,hash), { code: 'transaction_already_tracked' });
+    assert.equal((await pool.query("SELECT COUNT(*)::int count FROM chain_settlements WHERE tx_hash=$1",[hash])).rows[0].count,1);
+    const token = randomBytes(32).toString('hex'), csrf = randomBytes(32).toString('hex');
+    await pool.query("INSERT INTO personal_sessions(token_hash,personal_user_id,csrf_token,expires_at) VALUES($1,$2,$3,now()+interval '1 day')",[hashKey(token),userId,csrf]);
+    const app = await buildApi({ serveWeb: false, rateLimitMax: 10000 });
+    try {
+      const routeKey = id('key');
+      const body = { network: QIE_NETWORK, from: account.address, to, amount_atomic: amountAtomic.toString(),
+        expires_at: expiresAt, signature: await signed(routeKey) };
+      const url = '/personal/api/settlements';
+      assert.equal((await app.inject({ method:'POST',url,payload:body })).statusCode,401);
+      assert.equal((await app.inject({ method:'POST',url,headers:{ cookie:`kora_personal=${token}`,origin:'http://127.0.0.1:4310','idempotency-key':routeKey },payload:body })).statusCode,403);
+      const createdByApi = await app.inject({ method:'POST',url,headers:{ cookie:`kora_personal=${token}`,origin:'http://127.0.0.1:4310','x-kora-csrf':csrf,'idempotency-key':routeKey },payload:body });
+      assert.equal(createdByApi.statusCode,200,createdByApi.body);
+      const listed = await app.inject({ url,headers:{ cookie:`kora_personal=${token}` } });
+      assert.equal(listed.statusCode,200);
+      assert.ok(listed.json().data.some((item: { id: string }) => item.id === createdByApi.json().id));
+    } finally { await app.close(); }
+  } finally { chainAdapters[QIE_NETWORK] = previous; }
+});

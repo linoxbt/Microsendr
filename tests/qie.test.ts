@@ -11,23 +11,28 @@ function fakeRpc(values: Record<string, unknown>) {
 const from = '0x1111111111111111111111111111111111111111';
 const to = '0x2222222222222222222222222222222222222222';
 const hash = '0x' + 'a'.repeat(64);
+const blockHash = '0x' + 'b'.repeat(64);
 
 test('QIE native transfer evidence requires mainnet, matching instruction and finality', async () => {
   const values = {
     eth_chainId: '0x7c6',
-    eth_getTransactionByHash: { from, to, value: '0x64' },
-    eth_getTransactionReceipt: { transactionHash: hash, status: '0x1', blockNumber: '0xa' },
+    eth_getTransactionByHash: { from, to, value: '0x64', blockHash },
+    eth_getTransactionReceipt: { transactionHash: hash, status: '0x1', blockNumber: '0xa', blockHash },
+    eth_getBlockByNumber: { hash: blockHash },
     eth_blockNumber: '0xb',
   };
   const client = new QieClient(fakeRpc(values));
-  const expected = { from, to, valueWei: 100n, confirmations: 3n };
-  assert.deepEqual(await client.nativeTransferEvidence(hash, expected), { state: 'pending', confirmations: '2', block_number: '10' });
+  const expected = { from, to, amountAtomic: 100n, confirmations: 3n };
+  assert.deepEqual(await client.nativeTransferEvidence(hash, expected), { state: 'pending', confirmations: '2', block_number: '10', block_hash: blockHash });
   values.eth_blockNumber = '0xc';
-  assert.deepEqual(await client.nativeTransferEvidence(hash, expected), { state: 'confirmed', confirmations: '3', block_number: '10' });
+  assert.deepEqual(await client.nativeTransferEvidence(hash, expected), { state: 'confirmed', confirmations: '3', block_number: '10', block_hash: blockHash });
   values.eth_getTransactionReceipt.status = '0x0';
   assert.equal((await client.nativeTransferEvidence(hash, expected)).state, 'failed');
   values.eth_getTransactionReceipt.status = '0x1';
-  await assert.rejects(client.nativeTransferEvidence(hash, { ...expected, valueWei: 99n }), QieRpcError);
+  await assert.rejects(client.nativeTransferEvidence(hash, { ...expected, amountAtomic: 99n }), QieRpcError);
+  values.eth_getBlockByNumber.hash = '0x' + 'c'.repeat(64);
+  assert.equal((await client.nativeTransferEvidence(hash, expected)).state, 'pending');
+  values.eth_getBlockByNumber.hash = blockHash;
   values.eth_chainId = '0x1';
   await assert.rejects(client.nativeTransferEvidence(hash, expected), QieRpcError);
 });

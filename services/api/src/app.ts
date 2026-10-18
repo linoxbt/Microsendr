@@ -58,6 +58,7 @@ import { registerRails } from './rails.js';
 import { registerProduct } from './product.js';
 import { registerPersonal, type PersonalOptions } from './personal.js';
 import { registerDidit } from './didit.js';
+import { SettlementError } from '../../../packages/settlement/src/service.js';
 import { page, type ListTable } from './pagination.js';
 declare module 'fastify' {
   interface FastifyRequest {
@@ -287,6 +288,10 @@ export async function buildApi(options: ApiOptions = {}) {
       code = 'internal_error',
       message = 'The request could not be completed';
     if (error instanceof PaymentError) {
+      status = error.status;
+      code = error.code;
+      message = error.message;
+    } else if (error instanceof SettlementError) {
       status = error.status;
       code = error.code;
       message = error.message;

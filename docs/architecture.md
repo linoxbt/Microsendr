@@ -11,7 +11,8 @@ Microsendr is a TypeScript monorepo with a Fastify API, durable worker, React cl
 | `services/worker` | Leased outbox work, external attempts and webhook delivery |
 | `packages/ledger` | Balanced immutable journals and balance projections |
 | `packages/payments` | Intents, reservations, provider evidence and lifecycle |
-| `packages/qie` | QIE chain configuration and read-only receipt validation |
+| `packages/qie` | QIE Mainnet RPC adapter, native balances and canonical receipt validation |
+| `packages/settlement` | Chain-neutral adapter contract, signed native-transfer instructions and reconciliation |
 | `connectors/paystack` | Test-mode NGN provider contract |
 
 ## Payment lifecycle

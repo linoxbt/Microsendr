@@ -1,0 +1,4 @@
+kora-api.13-140-188-185.sslip.io {
+    encode gzip
+    reverse_proxy api:4312
+}

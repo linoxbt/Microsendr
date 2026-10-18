@@ -8,6 +8,7 @@ import { hashKey } from '../../../packages/payments/src/auth.js';
 import { PaymentError } from '../../../packages/payments/src/errors.js';
 import { privyConfiguration, privyVerifier, type PrivyConfig } from './identity.js';
 import { QieClient, QIE_CHAIN_ID, QIE_EXPLORER } from '../../../packages/qie/src/index.js';
+import { createNativeSettlement, publicSettlement, submitNativeSettlement } from '../../../packages/settlement/src/service.js';
 import type { PaystackClient } from '../../../connectors/paystack/src/index.js';
 import { registerPersonalPaystack } from './personal-paystack.js';
 
@@ -213,6 +214,34 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
     const observed = await new QieClient().nativeBalance(address);
     return { chain_id: Number(QIE_CHAIN_ID), address, asset: 'QIEV3', decimals: 18,
       ...observed, explorer_url: `${QIE_EXPLORER}address/${address}`, ledger_credited: false };
+  });
+  app.post('/personal/api/settlements', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async request => {
+    const row = await required(request, true);
+    if (!row.privy_subject) throw new PaymentError(403,'privy_wallet_required','Sign in with Privy to authorize a QIE wallet transfer');
+    const key = request.headers['idempotency-key'];
+    const body = z.object({ network: z.string().regex(/^[a-z0-9-]{3,48}$/), from: z.string(), to: z.string(),
+      amount_atomic: z.string(), expires_at: z.iso.datetime(), signature: z.string().regex(/^0x[a-fA-F0-9]{130}$/) }).strict().parse(request.body);
+    return createNativeSettlement({ userId: row.user_id, accountId: row.account_id, network: body.network,
+      from: body.from, to: body.to, amountAtomic: body.amount_atomic, expiresAt: body.expires_at,
+      signature: body.signature as `0x${string}`, idempotencyKey: typeof key === 'string' ? key : '' });
+  });
+  app.post('/personal/api/settlements/:id/submit', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async request => {
+    const row = await required(request, true);
+    const { id: settlementId } = z.object({ id: z.string().regex(/^stl_[a-f0-9]{32}$/) }).parse(request.params);
+    const { tx_hash } = z.object({ tx_hash: z.string().regex(/^0x[a-fA-F0-9]{64}$/) }).strict().parse(request.body);
+    return submitNativeSettlement(row.user_id,settlementId,tx_hash);
+  });
+  app.get('/personal/api/settlements', async request => {
+    const row = await required(request);
+    const records = await pool.query(`SELECT * FROM chain_settlements WHERE personal_user_id=$1 ORDER BY created_at DESC LIMIT 30`,[row.user_id]);
+    return { data: records.rows.map(publicSettlement) };
+  });
+  app.get('/personal/api/settlements/:id', async request => {
+    const row = await required(request);
+    const { id: settlementId } = z.object({ id: z.string().regex(/^stl_[a-f0-9]{32}$/) }).parse(request.params);
+    const record = (await pool.query('SELECT * FROM chain_settlements WHERE id=$1 AND personal_user_id=$2',[settlementId,row.user_id])).rows[0];
+    if (!record) throw new PaymentError(404,'settlement_not_found','Settlement not found');
+    return publicSettlement(record);
   });
   app.post('/personal/api/sandbox/verify', async (request) => {
     const row = await required(request, true);

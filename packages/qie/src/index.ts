@@ -1,12 +1,23 @@
+import type { ChainSettlementAdapter, NativeTransferInstruction, SettlementEvidence } from '../../settlement/src/index.js';
+
 export const QIE_CHAIN_ID = 1990n;
 export const QIE_RPC_URL = 'https://rpc1mainnet.qie.digital/';
 export const QIE_EXPLORER = 'https://mainnet.qie.digital/';
+export const QIE_NETWORK = 'qie-mainnet';
+export const QIE_NATIVE_POSITION = 'pos_qiev3_mainnet';
 const addressPattern = /^0x[a-fA-F0-9]{40}$/;
 const hashPattern = /^0x[a-fA-F0-9]{64}$/;
 
 export class QieRpcError extends Error {}
 
-export class QieClient {
+export class QieClient implements ChainSettlementAdapter {
+  readonly network = QIE_NETWORK;
+  readonly chainId = QIE_CHAIN_ID;
+  readonly nativeAssetPositionId = QIE_NATIVE_POSITION;
+  readonly nativeAssetCode = 'QIEV3';
+  readonly nativeDecimals = 18;
+  readonly requiredConfirmations = 12n;
+  transactionUrl(hash: string) { return `${QIE_EXPLORER}tx/${hash}`; }
   constructor(
     private readonly request: typeof fetch = fetch,
     private readonly rpcUrl: string = QIE_RPC_URL,
@@ -46,32 +57,45 @@ export class QieClient {
     return { balance_wei: BigInt(rawBalance).toString(), block_number: BigInt(rawBlock).toString() };
   }
 
+  async headBlock(): Promise<bigint> {
+    await this.assertMainnet();
+    const block = await this.rpc<string>('eth_blockNumber');
+    if (!/^0x[0-9a-f]+$/i.test(block)) throw new QieRpcError('Invalid QIE block height');
+    return BigInt(block);
+  }
+
   // This is settlement evidence only. Financial posting requires a separately
   // persisted instruction, wallet binding, token allowlist, and reconciliation.
   async nativeTransferEvidence(
     hash: string,
-    expected: { from: string; to: string; valueWei: bigint; confirmations: bigint },
-  ): Promise<{ state: 'pending' | 'confirmed' | 'failed'; confirmations: string; block_number: string | null }> {
+    expected: NativeTransferInstruction,
+  ): Promise<SettlementEvidence> {
     if (!hashPattern.test(hash) || !addressPattern.test(expected.from) ||
-        !addressPattern.test(expected.to) || expected.valueWei <= 0n ||
+        !addressPattern.test(expected.to) || expected.amountAtomic <= 0n ||
         expected.confirmations < 1n)
       throw new QieRpcError('Invalid settlement input');
     await this.assertMainnet();
     const [tx, receipt, head] = await Promise.all([
-      this.rpc<{ from: string; to: string | null; value: string } | null>('eth_getTransactionByHash', [hash]),
-      this.rpc<{ transactionHash: string; status: string; blockNumber: string } | null>('eth_getTransactionReceipt', [hash]),
+      this.rpc<{ from: string; to: string | null; value: string; blockHash?: string } | null>('eth_getTransactionByHash', [hash]),
+      this.rpc<{ transactionHash: string; status: string; blockNumber: string; blockHash?: string } | null>('eth_getTransactionReceipt', [hash]),
       this.rpc<string>('eth_blockNumber'),
     ]);
-    if (!tx || !receipt) return { state: 'pending', confirmations: '0', block_number: null };
+    if (!tx || !receipt) return { state: 'pending', confirmations: '0', block_number: null, block_hash: null };
     if (tx.from.toLowerCase() !== expected.from.toLowerCase() ||
         tx.to?.toLowerCase() !== expected.to.toLowerCase() ||
-        BigInt(tx.value) !== expected.valueWei ||
+        BigInt(tx.value) !== expected.amountAtomic ||
         receipt.transactionHash.toLowerCase() !== hash.toLowerCase())
       throw new QieRpcError('Settlement transaction does not match instruction');
+    if (!receipt.blockHash || !hashPattern.test(receipt.blockHash) ||
+        (tx.blockHash && tx.blockHash.toLowerCase() !== receipt.blockHash.toLowerCase()))
+      throw new QieRpcError('Invalid settlement block evidence');
     const block = BigInt(receipt.blockNumber);
+    const canonical = await this.rpc<{ hash: string } | null>('eth_getBlockByNumber', [receipt.blockNumber, false]);
+    if (!canonical || canonical.hash.toLowerCase() !== receipt.blockHash.toLowerCase())
+      return { state: 'pending', confirmations: '0', block_number: null, block_hash: null };
     const confirmations = BigInt(head) >= block ? BigInt(head) - block + 1n : 0n;
-    const state = receipt.status === '0x0' ? 'failed' :
-      receipt.status === '0x1' && confirmations >= expected.confirmations ? 'confirmed' : 'pending';
-    return { state, confirmations: confirmations.toString(), block_number: block.toString() };
+    if (!['0x0', '0x1'].includes(receipt.status)) throw new QieRpcError('Invalid receipt status');
+    const state = confirmations < expected.confirmations ? 'pending' : receipt.status === '0x0' ? 'failed' : 'confirmed';
+    return { state, confirmations: confirmations.toString(), block_number: block.toString(), block_hash: receipt.blockHash.toLowerCase() };
   }
 }

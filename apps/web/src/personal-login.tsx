@@ -24,14 +24,14 @@ export function PersonalLogin({ brand, go, error, onComplete, authConfig }: Prop
       <button className="ms-personal-login-back" onClick={() => go('/')}><ArrowLeft size={17}/> Back to home</button>
     </header>
     <main className="ms-personal-login-main">
-      <section className="ms-personal-login-visual" aria-label="Microsendr Personal sandbox preview">
+      <section className="ms-personal-login-visual" aria-label="Microsendr Personal preview">
         <img src="/images/payment-cafe.webp" alt="" />
         <div className="ms-personal-login-scrim" />
         <span className="ms-personal-login-image-label">MICROSENDR / PERSONAL</span>
         <div className="ms-personal-login-visual-copy">
           <h2>Your money.<br/>Your move.</h2>
           <p>A clear place to send and keep track.</p>
-          <span><ShieldCheck size={17}/> Sandbox preview · Simulated funds</span>
+          <span><ShieldCheck size={17}/> Simulated NGN · Live QIE wallet transfers</span>
         </div>
       </section>
       <section className="ms-personal-login-panel" aria-labelledby="personal-signin-title">
@@ -41,10 +41,10 @@ export function PersonalLogin({ brand, go, error, onComplete, authConfig }: Prop
           <p className="ms-personal-login-intro">Use your email to sign in or create an account.</p>
           {error && <p className="personal-error" role="alert">{error}</p>}
           <MicrosendrAuth mode="personal" onComplete={onComplete} config={authConfig} sharedProvider />
-          <div className="ms-personal-login-note"><ShieldCheck size={18}/><span>Sandbox access only. Balances and transfers are simulated.</span></div>
+          <div className="ms-personal-login-note"><ShieldCheck size={18}/><span>NGN balances are simulated. QIE Mainnet wallet transfers are separate.</span></div>
         </div>
       </section>
     </main>
-    <footer className="ms-personal-login-footer"><span>© {new Date().getFullYear()} Microsendr</span><span>Personal · Sandbox</span></footer>
+    <footer className="ms-personal-login-footer"><span>© {new Date().getFullYear()} Microsendr</span><span>Personal · NGN sandbox + QIE wallet</span></footer>
   </div>;
 }

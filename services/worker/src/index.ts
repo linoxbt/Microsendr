@@ -3,6 +3,7 @@ import { pool } from '../../../packages/database/src/index.js';
 import { runRailOnce } from '../../../packages/rails/src/index.js';
 import { runOnce } from './worker.js';
 import { deliverOne } from '../../../packages/payments/src/webhooks.js';
+import { reconcileOneChainSettlement } from '../../../packages/settlement/src/service.js';
 let running = true;
 const args = process.argv.slice(2);
 const value = (flag: string) => (args.includes(flag) ? args[args.indexOf(flag) + 1] : undefined);
@@ -27,9 +28,10 @@ try {
     await dispatch();
     await rail();
     await webhooks();
+    await reconcileOneChainSettlement();
   } else {
     await runQueues(
-      [dispatch, rail, webhooks],
+      [dispatch, rail, webhooks, reconcileOneChainSettlement],
       () => running,
       () => {
         running = false;
