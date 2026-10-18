@@ -30,7 +30,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@kora/sdk': fileURLToPath(new URL('../../sdks/typescript/src/index.ts', import.meta.url)),
+      '@microsendr/sdk': fileURLToPath(new URL('../../sdks/typescript/src/index.ts', import.meta.url)),
     },
   },
   server: {

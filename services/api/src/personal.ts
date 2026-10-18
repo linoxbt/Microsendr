@@ -8,6 +8,8 @@ import { hashKey } from '../../../packages/payments/src/auth.js';
 import { PaymentError } from '../../../packages/payments/src/errors.js';
 import { privyConfiguration, privyVerifier, type PrivyConfig } from './identity.js';
 import { QieClient, QIE_CHAIN_ID, QIE_EXPLORER } from '../../../packages/qie/src/index.js';
+import type { PaystackClient } from '../../../connectors/paystack/src/index.js';
+import { registerPersonalPaystack } from './personal-paystack.js';
 
 const emailSchema = z.string().trim().toLowerCase().email().max(254);
 const minorSchema = z.string().regex(/^[1-9][0-9]{0,11}$/);
@@ -84,7 +86,7 @@ function setCookie(request: FastifyRequest, reply: FastifyReply, token: string) 
     secure: origin(request).startsWith('https:'), path: '/', maxAge: 86400 });
 }
 
-export async function registerPersonal(app: FastifyInstance, options: PersonalOptions = {}, privyConfig: PrivyConfig = privyConfiguration()) {
+export async function registerPersonal(app: FastifyInstance, options: PersonalOptions = {}, privyConfig: PrivyConfig = privyConfiguration(), paystackClient?: PaystackClient) {
   const secret = options.codeSecret ?? process.env.KORA_AUTH_SECRET;
   const sendCode = options.sendCode ?? mailer();
   const verifier = privyVerifier(privyConfig);
@@ -261,4 +263,5 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
       WHERE t.sender_account_id=$1 OR t.receiver_account_id=$1 ORDER BY t.created_at DESC,t.id DESC LIMIT 50`, [row.account_id]);
     return { data: result.rows.map((t) => ({ ...t, asset: 'NGN', status: 'completed', simulated: true })) };
   });
+  await registerPersonalPaystack(app, { required, origin, client: paystackClient });
 }

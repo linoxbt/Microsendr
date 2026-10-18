@@ -142,7 +142,7 @@ validation/production gate.
 ## API and SDK additions
 
 All `/v1` endpoints require the existing scoped key or cookie session. Mutations
-require an idempotency key. The generated [OpenAPI](../specs/openapi/kora.json)
+require an idempotency key. The generated [OpenAPI](../specs/openapi/microsendr.json)
 includes concrete request/response models and the browser-safe SDK methods.
 
 | Capability | Endpoints | Scope |

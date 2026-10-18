@@ -1,1 +1,1 @@
-{"name":"@kora/fake-connector","version":"0.1.0","private":true,"type":"module","exports":"./src/index.ts"}
+{"name":"@microsendr/fake-connector","version":"0.1.0","private":true,"type":"module","exports":"./src/index.ts"}

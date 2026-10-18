@@ -1,1 +1,1 @@
-{"name":"@kora/stellar","version":"0.4.0","private":true,"type":"module","exports":"./src/index.ts"}
+{"name":"@microsendr/stellar","version":"0.4.0","private":true,"type":"module","exports":"./src/index.ts"}

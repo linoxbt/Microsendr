@@ -626,7 +626,7 @@ export async function buildApi(options: ApiOptions = {}) {
   await registerRails(app, options.paystackClient);
   await registerStellar(app, options.stellarConnector);
   await registerProduct(app);
-  await registerPersonal(app, options.personal, options.privyConfig);
+  await registerPersonal(app, options.personal, options.privyConfig, options.paystackClient);
   registerDidit(app);
   await registerSessions(app, options.privyConfig, options.personal);
   app.get('/openapi.json', async () => app.swagger());

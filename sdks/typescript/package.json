@@ -1,5 +1,5 @@
 {
-  "name": "@kora/sdk",
+  "name": "@microsendr/sdk",
   "version": "0.8.0",
   "type": "module",
   "main": "./dist/index.js",

@@ -2,11 +2,10 @@
 
 ## Product name and scope
 
-The product is **Kora**. Its scope is African financial interoperability:
-on-ramp, off-ramp, cross-border settlement, and allowlisted Stellar asset access.
-Nigeria can be the first real local rail without narrowing the product brand.
-This follows the user's instruction to build Kora and remove the earlier
-corridor-specific tag.
+The current product is **Microsendr**, a consumer financial account with
+QIE as its intended primary settlement network. The current launch scope is
+Personal. Business and Stellar Testnet modules remain historical sandbox work.
+The previous Kora name and network scope are retained in archived material only.
 
 The repository supplied a v1.0 master PDF and a v2.1 network addendum referencing
 an absent v2.0.0 baseline. The implementation uses their shared financial safety
@@ -67,6 +66,6 @@ Delivery is at-least-once and receivers deduplicate by event ID.
 
 ## Original source documents
 
-The source PDFs are retained in `docs/reference/` under Kora filenames. Their
-original wording is historical reference material; these decisions and the
-roadmap describe the current implementation.
+The source PDFs are retained in `docs/reference/` under neutral archive
+filenames. Their original wording is historical reference material; the
+settlement status document describes current launch capabilities.

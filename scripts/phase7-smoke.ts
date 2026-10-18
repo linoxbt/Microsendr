@@ -5,7 +5,7 @@ import { createMerchant, sandboxFund, invariantReport } from '../packages/ledger
 import { issueApiKey } from '../packages/payments/src/auth.js';
 import { processIntent } from '../packages/payments/src/index.js';
 import { buildApi } from '../services/api/src/app.js';
-import { Kora } from '../sdks/typescript/src/index.js';
+import { Microsendr } from '../sdks/typescript/src/index.js';
 const app = await buildApi({ serveWeb: false });
 try {
   const merchant = id('pilot');
@@ -13,7 +13,7 @@ try {
   await sandboxFund(merchant, 'NGN', '10000000', id('fund'));
   const key = await issueApiKey(merchant, 'Private phase 7 fixture');
   const baseUrl = await app.listen({ host: '127.0.0.1', port: 0 }),
-    api = new Kora({ baseUrl, apiKey: key.secret });
+    api = new Microsendr({ baseUrl, apiKey: key.secret });
   const customer = await api.createCustomer({ name: 'Nigeria routing recipient' }, id('idem'));
   const account = await api.createInstrument(
     customer.id,

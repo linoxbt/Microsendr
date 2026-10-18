@@ -8,13 +8,14 @@ The Personal product currently posts only **simulated NGN** to its double-entry 
 - Privy provisions an EVM wallet on Personal login. The Profile page can show its QIE address and live native QIE balance through a server-side, read-only RPC call. The UI warns users not to deposit until monitoring and accounting are in place.
 - `packages/qie` validates native transfer receipts against an expected instruction and confirmation threshold. It does **not** submit transactions or post to the ledger.
 - Digital-dollar deposits and transfers remain disabled until the supported QUSDC contract, decimals, provenance, liquidity, custody, wallet signing behavior, and reconciliation path are verified. Search results for one commonly repeated QUSDC address resolve to an ordinary account on the QIE explorer.
-- The wallet address is not yet bound to a Kora Account by signed identity evidence. Do not treat an arbitrary client address or transaction hash as a customer deposit.
+- The wallet address is not yet bound to a Microsendr Account by signed identity evidence. Do not treat an arbitrary client address or transaction hash as a customer deposit.
 
 ## Paystack
 
-- The existing provider connector supports **Paystack test mode** for Business rail workflows, with verified receipts and idempotent ledger posting. The Personal product does not yet use that connector.
+- The provider connector supports **Paystack test mode** for Business rail workflows. Personal now has separate test-mode collection and withdrawal instructions with idempotency keys, provider credential binding, reserved balances, verified receipts, explicit provider fee journals, and unknown-outcome quarantine.
+- Personal offers Paystack test checkout and bank recipient name enquiry. The user must select **Check status** after checkout or payout; provider verification then posts or releases the corresponding ledger amount. Automatic webhook/poll reconciliation remains a production-readiness gap.
 - `PAYSTACK_SECRET_KEY` is absent on the deployed server. Only a test secret key can be used by the current connector.
-- A Personal deposit/withdrawal flow needs its own persisted instructions, account/recipient binding, verified Paystack statuses, provider fee accounting, returns, and reconciliation. Paystack does not convert a QIE asset to NGN.
+- Paystack test transactions move no real NGN. The Personal balance continues to be labeled simulated, including after a verified test transaction. Paystack does not convert a QIE asset to NGN.
 - Production use requires partner approval and a separately verified crypto-to-fiat settlement route.
 
 ## Privy

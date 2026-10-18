@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
-import { Kora, KoraError, type Model } from '@kora/sdk';
-export function ControlsPage({ api, can }: { api: Kora; can: (scope: string) => boolean }) {
+import { Microsendr, MicrosendrError, type Model } from '@microsendr/sdk';
+export function ControlsPage({ api, can }: { api: Microsendr; can: (scope: string) => boolean }) {
   const [status, setStatus] = useState<Model<'ControlStatus'>>(),
     [approvals, setApprovals] = useState<Model<'ControlApproval'>[]>([]),
     [reports, setReports] = useState<Model<'ControlReport'>[]>([]),
@@ -58,7 +58,7 @@ export function ControlsPage({ api, can }: { api: Kora; can: (scope: string) => 
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Request failed');
-      if (e instanceof KoraError && e.status < 500) {
+      if (e instanceof MicrosendrError && e.status < 500) {
         pending.current = undefined;
         setUncertain(false);
       } else setUncertain(true);

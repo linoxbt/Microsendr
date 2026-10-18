@@ -1,1 +1,1 @@
-{"name":"@kora/web","version":"0.2.0","private":true,"type":"module","dependencies":{"@kora/sdk":"workspace:*"}}
+{"name":"@microsendr/web","version":"0.2.0","private":true,"type":"module","dependencies":{"@microsendr/sdk":"workspace:*"}}

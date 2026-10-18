@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Kora, KoraError, type Model } from '@kora/sdk';
+import { Microsendr, MicrosendrError, type Model } from '@microsendr/sdk';
 import { ArrowUpRight, RefreshCw, ShieldCheck, Landmark } from 'lucide-react';
 
 const money = (minor: string) => {
@@ -21,7 +21,7 @@ export function LocalRailPage({
   onSelect,
   can,
 }: {
-  api: Kora;
+  api: Microsendr;
   onSelect: (intent: Model<'Intent'>) => void;
   can: (scope: string) => boolean;
 }) {
@@ -127,7 +127,7 @@ export function LocalRailPage({
       await reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Request failed');
-      const ambiguous = !(e instanceof KoraError) || e.status >= 500;
+      const ambiguous = !(e instanceof MicrosendrError) || e.status >= 500;
       setUncertain(ambiguous);
       if (!ambiguous) pending.current = undefined;
     } finally {

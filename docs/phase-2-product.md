@@ -70,7 +70,7 @@ Fastify registers these on each versioned route, validates inputs, serializes
 responses and generates OpenAPI 3.0.3. Internal callbacks and session endpoints
 are excluded from the public API contract. All mutations document idempotency.
 
-`pnpm generate` writes `specs/openapi/kora.json` and generated SDK types.
+`pnpm generate` writes `specs/openapi/microsendr.json` and generated SDK types.
 `pnpm contract:check` checks both without writing. The SDK client imports no Node
 runtime modules; raw-body signature helpers are a separate Node-only export.
 Builds produce ESM, source maps and declarations. No package is published by CI.

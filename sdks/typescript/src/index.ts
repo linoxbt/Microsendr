@@ -6,14 +6,14 @@ type Body<K extends keyof operations> = operations[K] extends {
 }
   ? B
   : never;
-export interface KoraOptions {
+export interface MicrosendrOptions {
   baseUrl?: string;
   apiKey?: string;
   csrfToken?: string;
   fetch?: typeof fetch;
   timeoutMs?: number;
 }
-export class KoraError extends Error {
+export class MicrosendrError extends Error {
   constructor(
     public status: number,
     public code: string,
@@ -21,11 +21,11 @@ export class KoraError extends Error {
     public requestId: string | null,
   ) {
     super(message);
-    this.name = 'KoraError';
+    this.name = 'MicrosendrError';
   }
 }
-export class Kora {
-  constructor(private options: KoraOptions = {}) {}
+export class Microsendr {
+  constructor(private options: MicrosendrOptions = {}) {}
   async request<T>(
     method: string,
     path: string,
@@ -49,7 +49,7 @@ export class Kora {
     });
     const data = await response.json();
     if (!response.ok)
-      throw new KoraError(
+      throw new MicrosendrError(
         response.status,
         data.error?.code ?? 'request_failed',
         data.error?.message ?? 'Request failed',

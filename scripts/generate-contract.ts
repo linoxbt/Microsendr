@@ -7,7 +7,7 @@ const app = await buildApi({ serveWeb: false });
 try {
   const spec = app.swagger();
   const files: [string, string][] = [
-    ['specs/openapi/kora.json', JSON.stringify(spec, null, 2) + '\n'],
+    ['specs/openapi/microsendr.json', JSON.stringify(spec, null, 2) + '\n'],
     [
       'sdks/typescript/src/generated.ts',
       astToString(await openapiTS(spec as Parameters<typeof openapiTS>[0])),

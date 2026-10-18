@@ -30,7 +30,7 @@ import {
   Command,
   ChevronRight,
 } from 'lucide-react';
-import { Kora, KoraError, type Model } from '@kora/sdk';
+import { Microsendr, MicrosendrError, type Model } from '@microsendr/sdk';
 import '@fontsource-variable/dm-sans';
 import './style.css';
 import { NetworkPage } from './network.js';
@@ -291,7 +291,7 @@ function TransferFlow({
   onDone,
   hosted = false,
 }: {
-  api: Kora;
+  api: Microsendr;
   onDone: () => void;
   hosted?: boolean;
 }) {
@@ -402,7 +402,7 @@ function TransferFlow({
         ),
       );
     } catch (e) {
-      if (e instanceof KoraError && e.status < 500) setSubmitted(false);
+      if (e instanceof MicrosendrError && e.status < 500) setSubmitted(false);
       setError(message(e));
     } finally {
       setBusy(false);
@@ -621,7 +621,7 @@ function Transactions({
   compact = false,
   onSelect,
 }: {
-  api: Kora;
+  api: Microsendr;
   compact?: boolean;
   onSelect: (i: Intent) => void;
 }) {
@@ -816,7 +816,7 @@ function IntentDetail({
   onClose,
   operations = false,
 }: {
-  api: Kora;
+  api: Microsendr;
   intent: Intent;
   onClose: () => void;
   operations?: boolean;
@@ -971,7 +971,7 @@ function Overview({
   onSelect,
   canTransfer,
 }: {
-  api: Kora;
+  api: Microsendr;
   onTransfer: () => void;
   onSelect: (i: Intent) => void;
   canTransfer: boolean;
@@ -1104,7 +1104,7 @@ function Overview({
     </>
   );
 }
-function BusinessOverview({ api, go }: { api: Kora; go: (path: string) => void }) {
+function BusinessOverview({ api, go }: { api: Microsendr; go: (path: string) => void }) {
   const balances = useLoad(() => api.listBalances(), [api]);
   const ngnAvailable = balances.value?.data.find((b) => b.asset === 'NGN' && b.purpose === 'available')?.minor ?? '0';
   const ngnHeld = balances.value?.data.find((b) => b.asset === 'NGN' && b.purpose === 'reserved')?.minor ?? '0';
@@ -1119,13 +1119,13 @@ function BusinessOverview({ api, go }: { api: Kora; go: (path: string) => void }
     </div>
   </>;
 }
-function BusinessBalances({ api }: { api: Kora }) {
+function BusinessBalances({ api }: { api: Microsendr }) {
   const balances=useLoad(()=>api.listBalances(),[api]);
   const available=balances.value?.data.find(b=>b.asset==='NGN'&&b.purpose==='available')?.minor??'0';
   const reserved=balances.value?.data.find(b=>b.asset==='NGN'&&b.purpose==='reserved')?.minor??'0';
   return <><div className="page-heading"><div><span className="eyebrow">BUSINESS ACCOUNT</span><h1>Balances</h1></div></div>{balances.error&&<Notice>{balances.error}</Notice>}<section className="card business-position"><div><span>Asset</span><b>NGN · Nigerian naira</b></div><div><span>Network</span><b>Fiat Nigeria · simulated</b></div><div><span>Available</span><b>₦{decimal(available,'NGN')}</b></div><div><span>Reserved</span><b>₦{decimal(reserved,'NGN')}</b></div></section></>;
 }
-function AssetsPage({ api }: { api: Kora }) {
+function AssetsPage({ api }: { api: Microsendr }) {
   const data = useLoad(() => Promise.all([api.listAssets(), api.listBalances()]), [api]);
   return (
     <>
@@ -1190,14 +1190,14 @@ function AssetsPage({ api }: { api: Kora }) {
   );
 }
 async function readAll<T>(
-  api: Kora,
+  api: Microsendr,
   list: (query: Record<string, string>) => Promise<{ data: T[]; next_cursor: string | null }>,
 ) {
   const data: T[] = [];
   for await (const item of api.paginate(list, { limit: '100' })) data.push(item);
   return { data, has_more: false, next_cursor: null };
 }
-function CustomersPage({ api }: { api: Kora }) {
+function CustomersPage({ api }: { api: Microsendr }) {
   const data = useLoad(() => readAll(api, api.listCustomers), [api]);
   const [name, setName] = useState(''),
     [error, setError] = useState(''),
@@ -1286,7 +1286,7 @@ function CustomersPage({ api }: { api: Kora }) {
     </>
   );
 }
-function CustomerInstruments({ api, customer }: { api: Kora; customer: Model<'Customer'> }) {
+function CustomerInstruments({ api, customer }: { api: Microsendr; customer: Model<'Customer'> }) {
   const data = useLoad(
     () => readAll(api, (query) => api.listInstruments(customer.id, query)),
     [api, customer.id],
@@ -1359,7 +1359,7 @@ function CustomerInstruments({ api, customer }: { api: Kora; customer: Model<'Cu
     </>
   );
 }
-function DevelopersPage({ api, session, go }: { api: Kora; session: Session; go: (path: string) => void }) {
+function DevelopersPage({ api, session, go }: { api: Microsendr; session: Session; go: (path: string) => void }) {
   const [tab, setTab] = useState('keys'),
     [secret, setSecret] = useState(''),
     [error, setError] = useState(''),
@@ -1493,7 +1493,7 @@ function DevelopersPage({ api, session, go }: { api: Kora; session: Session; go:
               onClick={() =>
                 void run(async () => {
                   const result = await api.createApiKey(
-                    { name, scopes: scopes as Parameters<Kora['createApiKey']>[0]['scopes'] },
+                    { name, scopes: scopes as Parameters<Microsendr['createApiKey']>[0]['scopes'] },
                     uid(),
                   );
                   setSecret(result.secret);
@@ -1701,7 +1701,7 @@ function DevelopersPage({ api, session, go }: { api: Kora; session: Session; go:
     </>
   );
 }
-function OperationsPage({ api, onSelect }: { api: Kora; onSelect: (i: Intent) => void }) {
+function OperationsPage({ api, onSelect }: { api: Microsendr; onSelect: (i: Intent) => void }) {
   const data = useLoad(() => api.listReconciliation(), [api]);
   const intents = useLoad(() => api.listIntents({ limit: '100', state: 'unknown' }), [api]);
   const [lookup, setLookup] = useState(''),
@@ -1825,7 +1825,7 @@ function Docs() {
       paths: Record<string, Record<string, { summary: string; tags: string[] }>>;
     };
   });
-  const code = `import { Kora } from '@kora/sdk';\n\nconst kora = new Kora({\n  baseUrl: 'http://127.0.0.1:4310',\n  apiKey: process.env.KORA_API_KEY\n});\n\nconst quote = await kora.createQuote({\n  source_asset: 'NGN',\n  destination_asset: 'KES',\n  amount_minor: '1600000'\n}, crypto.randomUUID());`;
+  const code = `import { Microsendr } from '@microsendr/sdk';\n\nconst kora = new Microsendr({\n  baseUrl: 'http://127.0.0.1:4310',\n  apiKey: process.env.KORA_API_KEY\n});\n\nconst quote = await kora.createQuote({\n  source_asset: 'NGN',\n  destination_asset: 'KES',\n  amount_minor: '1600000'\n}, crypto.randomUUID());`;
   return (
     <div className="docs">
       <span className="eyebrow">DEVELOPER DOCUMENTATION</span>
@@ -1876,14 +1876,14 @@ function Docs() {
           <h3>Verify signed webhooks</h3>
           <p>
             Read the raw body and verify <code>kora-signature</code> with <code>verifyWebhook</code>{' '}
-            from <code>@kora/sdk/webhooks</code>. Deduplicate by event ID; replay retains the same
+            from <code>@microsendr/sdk/webhooks</code>. Deduplicate by event ID; replay retains the same
             ID.
           </p>
         </section>
         <aside>
           <div className="code-card">
             <div>
-              <span>TypeScript · @kora/sdk</span>
+              <span>TypeScript · @microsendr/sdk</span>
               <CopyButton value={code} />
             </div>
             <pre>{code}</pre>
@@ -1951,7 +1951,7 @@ function App() {
     document.documentElement.dataset.theme = signedInApp || (path.startsWith('/personal') && personalAuthenticated) ? theme : 'light';
     localStorage.setItem('microsendr-theme', theme);
   }, [theme, path, session?.authenticated, session?.auth_method, personalAuthenticated]);
-  const api = useMemo(() => new Kora({ csrfToken: session?.csrf_token }), [session?.csrf_token]);
+  const api = useMemo(() => new Microsendr({ csrfToken: session?.csrf_token }), [session?.csrf_token]);
   const merchant = useLoad(
     () => (session?.authenticated ? api.getMerchant() : Promise.resolve(undefined)),
     [api, session?.authenticated],

@@ -1,4 +1,4 @@
-name: Kora sandbox
+name: Microsendr CI
 on:
   push:
   pull_request:

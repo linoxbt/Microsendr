@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, RefreshCw } from 'lucide-react';
-import { Kora, KoraError, type Model } from '@kora/sdk';
+import { Microsendr, MicrosendrError, type Model } from '@microsendr/sdk';
 function money(minor: string, asset: string) {
   const scale = asset === 'KUSD' ? 7 : 2,
     value = BigInt(minor),
@@ -12,7 +12,7 @@ export function NetworkPage({
   can,
   onSelect,
 }: {
-  api: Kora;
+  api: Microsendr;
   can: (scope: string) => boolean;
   onSelect: (intent: Model<'Intent'>) => void;
 }) {
@@ -124,7 +124,7 @@ export function NetworkPage({
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Request failed');
-      if (e instanceof KoraError && e.status < 500) {
+      if (e instanceof MicrosendrError && e.status < 500) {
         pending.current = undefined;
         setUncertain(false);
       } else setUncertain(true);

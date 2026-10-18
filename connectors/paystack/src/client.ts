@@ -151,14 +151,15 @@ export class PaystackClient {
       throw e;
     }
   }
-  async initializeCollection(input: { reference: string; amount: string; email: string }) {
+  async initializeCollection(input: { reference: string; amount: string; email: string; callbackUrl?: string }) {
+    const { callbackUrl, ...payment } = input;
     const result = z
       .object({
         reference: z.string(),
         authorization_url: z.string().url(),
         access_code: z.string(),
       })
-      .parse(await this.request('POST', '/transaction/initialize', { ...input, currency: 'NGN' }));
+      .parse(await this.request('POST', '/transaction/initialize', { ...payment, currency: 'NGN', ...(callbackUrl ? { callback_url: callbackUrl } : {}) }));
     if (
       result.reference !== input.reference ||
       new URL(result.authorization_url).origin !== 'https://checkout.paystack.com'

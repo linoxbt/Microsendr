@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Kora, KoraError, type Model } from '@kora/sdk';
+import { Microsendr, MicrosendrError, type Model } from '@microsendr/sdk';
 import { ArrowUpRight, ShieldCheck } from 'lucide-react';
 function amount(s: string, scale: number) {
   if (!new RegExp(`^\\d+(?:\\.\\d{1,${scale}})?$`).test(s))
@@ -14,7 +14,7 @@ export function StellarPage({
   onSelect,
   can,
 }: {
-  api: Kora;
+  api: Microsendr;
   onSelect: (i: Model<'Intent'>) => void;
   can: (s: string) => boolean;
 }) {
@@ -87,7 +87,7 @@ export function StellarPage({
       setUncertain(false);
       await load().catch((e) => setError(`Saved successfully; refresh failed: ${e.message}`));
     } catch (e) {
-      if (e instanceof KoraError && e.status < 500) {
+      if (e instanceof MicrosendrError && e.status < 500) {
         pending.current = undefined;
         setUncertain(false);
       } else setUncertain(true);

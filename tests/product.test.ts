@@ -7,7 +7,7 @@ import { createMerchant, invariantReport } from '../packages/ledger/src/index.js
 import { issueApiKey } from '../packages/payments/src/auth.js';
 import { runOnce } from '../services/worker/src/worker.js';
 import { models, contracts } from '../packages/contracts/src/index.js';
-import { Kora, KoraError } from '../sdks/typescript/src/index.js';
+import { Microsendr, MicrosendrError } from '../sdks/typescript/src/index.js';
 process.env.KORA_WEBHOOK_ENCRYPTION_KEY = randomBytes(32).toString('base64');
 const apps: Awaited<ReturnType<typeof buildApi>>[] = [];
 after(async () => {
@@ -152,7 +152,7 @@ test('key cursor pagination and SDK iteration expose each owned key once without
   assert.equal(first.has_more, true);
   assert.equal(first.data.length, 2);
   assert.equal('hash' in first.data[0], false);
-  const sdk = new Kora({
+  const sdk = new Microsendr({
     apiKey: f.key.secret,
     fetch: (async (url, options) => {
       const r = await f.app.inject({
@@ -260,7 +260,7 @@ test('OpenAPI covers every versioned endpoint with concrete response models and 
 test('browser-safe SDK sends exact integer strings, stable keys, and structured errors without automatic retries', async () => {
   const f = await fixture();
   let calls = 0;
-  const sdk = new Kora({
+  const sdk = new Microsendr({
     apiKey: f.key.secret,
     fetch: (async (url, options) => {
       calls++;
@@ -282,7 +282,7 @@ test('browser-safe SDK sends exact integer strings, stable keys, and structured 
   await assert.rejects(
     sdk.createCustomer({ name: 'Changed' }, 'sdk-customer'),
     (e) =>
-      e instanceof KoraError &&
+      e instanceof MicrosendrError &&
       e.status === 409 &&
       e.code === 'idempotency_conflict' &&
       !!e.requestId,

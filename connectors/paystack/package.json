@@ -1,1 +1,1 @@
-{"name":"@kora/paystack","version":"0.3.0","private":true,"type":"module","exports":"./src/index.ts"}
+{"name":"@microsendr/paystack","version":"0.3.0","private":true,"type":"module","exports":"./src/index.ts"}

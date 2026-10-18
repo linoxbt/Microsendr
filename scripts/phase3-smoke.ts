@@ -12,7 +12,7 @@ import {
 } from '../packages/ledger/src/index.js';
 import { issueApiKey } from '../packages/payments/src/auth.js';
 import { pool, id } from '../packages/database/src/index.js';
-import { Kora } from '../sdks/typescript/src/index.js';
+import { Microsendr } from '../sdks/typescript/src/index.js';
 const h = await paystackHarness();
 process.env.KORA_WEBHOOK_ENCRYPTION_KEY = randomBytes(32).toString('base64');
 const app = await buildApi({ serveWeb: false, paystackClient: h.client });
@@ -22,7 +22,7 @@ try {
   await sandboxFund(merchant, 'NGN', '1000000', `fund:${merchant}`);
   const key = await issueApiKey(merchant, 'Smoke operator');
   const baseUrl = await app.listen({ host: '127.0.0.1', port: 0 }),
-    sdk = new Kora({ baseUrl, apiKey: key.secret });
+    sdk = new Microsendr({ baseUrl, apiKey: key.secret });
   const worker = (mode: 'intent' | 'rail', resource: string, crash?: string) =>
     new Promise<{ code: number | null; signal: string | null }>((resolve, reject) => {
       const child = spawn(

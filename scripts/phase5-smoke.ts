@@ -6,7 +6,7 @@ import { pool, id, transaction } from '../packages/database/src/index.js';
 import { addEvidence } from '../packages/controls/src/index.js';
 import { processIntent } from '../packages/payments/src/index.js';
 import { invariantReport } from '../packages/ledger/src/index.js';
-import { Kora, KoraError } from '../sdks/typescript/src/index.js';
+import { Microsendr, MicrosendrError } from '../sdks/typescript/src/index.js';
 const app = await buildApi({ serveWeb: false });
 try {
   const f = await controlFixture('Phase 5 capped staging rehearsal');
@@ -25,8 +25,8 @@ try {
     { mode: 0o600 },
   );
   const baseUrl = await app.listen({ port: 0, host: '127.0.0.1' });
-  const a = new Kora({ baseUrl, apiKey: f.requester.secret }),
-    b = new Kora({ baseUrl, apiKey: f.reviewer.secret });
+  const a = new Microsendr({ baseUrl, apiKey: f.requester.secret }),
+    b = new Microsendr({ baseUrl, apiKey: f.reviewer.secret });
   const policy = {
     caps: [{ asset: 'NGN' as const, per_transaction_minor: '200000', per_day_minor: '320000' }],
   };
@@ -40,7 +40,7 @@ try {
       { decision: 'approve', reason: 'Self approval attempt' },
       id('idem'),
     ),
-    (e) => e instanceof KoraError && e.code === 'self_approval',
+    (e) => e instanceof MicrosendrError && e.code === 'self_approval',
   );
   await b.reviewControlApproval(
     request.id,
@@ -91,7 +91,7 @@ try {
   );
   await assert.rejects(
     a.createIntent({ ...body, quote_id: pausedQuote.id, reference: id('order') }, id('idem')),
-    (e) => e instanceof KoraError && e.code === 'outbound_paused',
+    (e) => e instanceof MicrosendrError && e.code === 'outbound_paused',
   );
   await processIntent(intent.id);
   assert.equal((await a.getIntent(intent.id)).state, 'succeeded');
