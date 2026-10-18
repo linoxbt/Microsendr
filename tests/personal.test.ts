@@ -4,6 +4,7 @@ import { buildApi } from '../services/api/src/app.js';
 import { id, pool } from '../packages/database/src/index.js';
 import { invariantReport } from '../packages/ledger/src/index.js';
 import { generateKeyPair, exportSPKI, SignJWT } from 'jose';
+import { createHmac, randomUUID } from 'node:crypto';
 
 const origin = 'http://127.0.0.1:4310';
 const codes = new Map<string,string>();
@@ -96,4 +97,51 @@ test('Privy Personal requires a matching signed identity token with verified ema
     assert.equal(changed.json().account_id, first.json().account_id);
     assert.equal(changed.json().email, changedEmail);
   } finally { await configured.close(); }
+});
+
+test('Didit session and signed decisions remain separate from sandbox access', async () => {
+  const auth = await login(`${id('didit')}@example.test`);
+  const oldFetch = globalThis.fetch;
+  const oldKey = process.env.DIDIT_API_KEY;
+  const oldSecret = process.env.DIDIT_WEBHOOK_SECRET;
+  const providerId = randomUUID();
+  process.env.DIDIT_API_KEY = 'test-key-only';
+  process.env.DIDIT_WEBHOOK_SECRET = 'test-webhook-secret-only';
+  globalThis.fetch = async (input, init) => {
+    assert.equal(input, 'https://verification.didit.me/v3/session/');
+    assert.equal((init?.headers as Record<string, string>)['x-api-key'], 'test-key-only');
+    const request = JSON.parse(String(init?.body));
+    assert.equal(request.workflow_id, '5045382d-f318-4cfe-8439-7b3d097adf63');
+    assert.match(request.vendor_data, /^usr_/);
+    return new Response(JSON.stringify({ session_id: providerId, url: `https://verify.didit.me/session/${providerId}` }), { status: 201 });
+  };
+  try {
+    assert.equal((await write(auth, '/personal/api/kyc/session', { consent: false })).statusCode, 400);
+    const created = await write(auth, '/personal/api/kyc/session', { consent: true });
+    assert.equal(created.statusCode, 200, created.body);
+    assert.equal(created.json().session_id, providerId);
+    assert.equal((await write(auth, '/personal/api/kyc/session', { consent: true })).statusCode, 409);
+    const before = await app.inject({ url: '/personal/api/kyc', headers: { cookie: auth.cookie } });
+    assert.equal(before.json().status, 'Not Started');
+    const user = (await pool.query('SELECT id FROM personal_users WHERE email=$1', [(await app.inject({ url: '/personal/api/session', headers: { cookie: auth.cookie } })).json().email])).rows[0];
+    const send = (event_id: string, status: string, timestamp = Math.floor(Date.now() / 1000), valid = true) => {
+      const event = { event_id, session_id: providerId, status, timestamp, vendor_data: user.id };
+      const canonical = JSON.stringify(Object.fromEntries(Object.entries(event).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)));
+      const signature = valid ? createHmac('sha256', 'test-webhook-secret-only').update(canonical).digest('hex') : '0'.repeat(64);
+      return app.inject({ method: 'POST', url: '/personal/api/webhooks/didit', headers: { 'x-signature-v2': signature }, payload: event });
+    };
+    assert.equal((await send('stale', 'Approved', 1)).statusCode, 401);
+    assert.equal((await send('bad', 'Approved', undefined, false)).statusCode, 401);
+    assert.equal((await send('approved', 'Approved')).statusCode, 200);
+    assert.equal((await send('approved', 'Approved')).statusCode, 200);
+    assert.equal((await send('late-progress', 'In Progress')).statusCode, 200);
+    assert.equal((await app.inject({ url: '/personal/api/kyc', headers: { cookie: auth.cookie } })).json().status, 'Approved');
+    assert.equal((await app.inject({ url: '/personal/api/session', headers: { cookie: auth.cookie } })).json().kyc_state, 'not_started');
+    assert.equal((await send('expired', 'Kyc Expired')).statusCode, 200);
+    assert.equal((await app.inject({ url: '/personal/api/kyc', headers: { cookie: auth.cookie } })).json().status, 'Kyc Expired');
+  } finally {
+    globalThis.fetch = oldFetch;
+    if (oldKey === undefined) delete process.env.DIDIT_API_KEY; else process.env.DIDIT_API_KEY = oldKey;
+    if (oldSecret === undefined) delete process.env.DIDIT_WEBHOOK_SECRET; else process.env.DIDIT_WEBHOOK_SECRET = oldSecret;
+  }
 });

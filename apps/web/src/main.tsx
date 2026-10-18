@@ -187,15 +187,22 @@ function Network({ compact = false }: { compact?: boolean }) {
   );
 }
 function usePath() {
-  const [path, setPath] = useState(location.pathname);
+  const personalPath = (value: string) => /^\/(?:business|app|connect|login|docs|ramp)(?:\/|$)/.test(value) ? '/personal/login' : value;
+  const [path, setPath] = useState(personalPath(location.pathname));
   useEffect(() => {
-    const change = () => setPath(location.pathname);
+    if (personalPath(location.pathname) !== location.pathname) history.replaceState(null, '', '/personal/login');
+    const change = () => {
+      const next = personalPath(location.pathname);
+      if (next !== location.pathname) history.replaceState(null, '', next);
+      setPath(next);
+    };
     window.addEventListener('popstate', change);
     return () => window.removeEventListener('popstate', change);
   }, []);
   const go = (next: string) => {
-    history.pushState(null, '', next);
-    setPath(next);
+    const destination = personalPath(next);
+    history.pushState(null, '', destination);
+    setPath(destination);
     window.scrollTo(0, 0);
   };
   return [path, go] as const;
@@ -2009,8 +2016,6 @@ function App() {
           </>
         )}
         <button onClick={() => go('/personal/login')}>Personal</button>
-        <button onClick={() => go('/business')}>Business</button>
-        <button onClick={() => go('/docs')}>Developers</button>
       </nav>
       {!session?.authenticated && (
         <button className="public-login text-button" onClick={() => go('/personal/login')}>
@@ -2019,9 +2024,9 @@ function App() {
       )}
       <button
         className="button primary"
-        onClick={() => go(session?.authenticated ? '/app/overview' : '/personal/login')}
+        onClick={() => go('/personal/login')}
       >
-        {session?.authenticated ? 'Open workspace' : 'Get started'}
+        Get started
         <ArrowRight size={16} />
       </button>
     </header>

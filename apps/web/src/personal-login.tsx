@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { ArrowLeft, ArrowUpRight, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ShieldCheck } from 'lucide-react';
 import { MicrosendrAuth } from './auth-shell.js';
 
 type Props = {
@@ -40,7 +40,6 @@ export function PersonalLogin({ brand, go, error, onComplete }: Props) {
           {error && <p className="personal-error" role="alert">{error}</p>}
           <MicrosendrAuth mode="personal" onComplete={onComplete} />
           <div className="ms-personal-login-note"><ShieldCheck size={18}/><span>Sandbox access only. Balances and transfers are simulated.</span></div>
-          <div className="ms-personal-login-switch">Here for business? <button onClick={() => go('/business')}>Talk to us <ArrowUpRight size={15}/></button></div>
         </div>
       </section>
     </main>

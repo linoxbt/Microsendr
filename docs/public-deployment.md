@@ -14,12 +14,19 @@ Create an ignored, mode `600` `.env.public` at the repository root. Set
 random secrets. Set `KORA_CONSOLE_ORIGINS` to the exact Netlify HTTPS origin.
 Keep `KORA_MODE=sandbox`, and leave `PAYSTACK_SECRET_KEY` blank for the simulator.
 Never commit this file. The Compose file supplies the internal `DATABASE_URL`.
-Personal and Business sign-in use Privy. Set `PRIVY_APP_ID` and the server-side
+Personal sign-in uses Privy. Set `PRIVY_APP_ID` and the server-side
 `PRIVY_VERIFICATION_KEY`; optionally set `PRIVY_CLIENT_ID`. Enable Privy email
 login and identity tokens, and allow the exact Netlify HTTPS origin in Privy.
 Without these settings, sign-in fails closed and the Developer Sandbox remains
 available. Legacy email-code sessions can continue only when the optional
-SMTP settings are configured; new sign-in pages use Privy.
+SMTP settings are configured; the Personal sign-in page uses Privy.
+
+For Personal identity checks, set `DIDIT_API_KEY` and `DIDIT_WEBHOOK_SECRET` in
+`.env.public`. Register `https://kora-api.13-140-188-185.sslip.io/personal/api/webhooks/didit`
+as the HTTPS webhook destination in Didit. The selected Free KYC workflow ID is
+configured per session in the API code. Both secrets are required before the
+verification button appears; the signed webhook is the only source of approval.
+Didit approval never turns on real payments in this sandbox.
 
 The HTTPS reverse proxy needs a host entry equivalent to:
 

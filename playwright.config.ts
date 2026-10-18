@@ -2,6 +2,7 @@ import { defineConfig } from '@playwright/test';
 export default defineConfig({
   testDir: 'tests/browser',
   testIgnore: [
+    '**/product.spec.ts',
     '**/rail.spec.ts',
     '**/stellar.spec.ts',
     '**/controls.spec.ts',

@@ -57,6 +57,7 @@ import type { StellarTestnetConnector } from '../../../connectors/stellar/src/in
 import { registerRails } from './rails.js';
 import { registerProduct } from './product.js';
 import { registerPersonal, type PersonalOptions } from './personal.js';
+import { registerDidit } from './didit.js';
 import { page, type ListTable } from './pagination.js';
 declare module 'fastify' {
   interface FastifyRequest {
@@ -626,6 +627,7 @@ export async function buildApi(options: ApiOptions = {}) {
   await registerStellar(app, options.stellarConnector);
   await registerProduct(app);
   await registerPersonal(app, options.personal, options.privyConfig);
+  registerDidit(app);
   await registerSessions(app, options.privyConfig, options.personal);
   app.get('/openapi.json', async () => app.swagger());
   await app.ready();
