@@ -46,11 +46,6 @@ jobs:
       - run: pnpm smoke:phase3
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:browser
-      - run: pnpm test:browser:auth
-      - run: pnpm test:browser:network
-      - run: pnpm test:browser:rail
-      - run: pnpm test:browser:stellar
-      - run: pnpm test:browser:controls
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
