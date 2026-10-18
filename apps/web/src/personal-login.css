@@ -197,6 +197,10 @@
 .ms-personal-login .ms-auth-form .personal-primary:not(:disabled):hover { background: #336f9e; }
 .ms-personal-login .ms-auth-form .personal-primary:disabled { opacity: .55; }
 .ms-personal-login .ms-auth-form .personal-text { color: #386f99; font-weight: 650; }
+.ms-personal-login .ms-auth-finishing { display: flex; align-items: center; gap: 10px; margin: 18px 0 0; color: #42657e; font-size: 14px; }
+.ms-personal-login .ms-auth-finishing::before { content: ''; width: 15px; height: 15px; border: 2px solid #b9d3e4; border-top-color: #4682b4; border-radius: 50%; animation: ms-auth-spin .8s linear infinite; }
+@keyframes ms-auth-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ms-personal-login .ms-auth-finishing::before { animation: none; } }
 
 .ms-personal-login .ms-auth-unavailable p,
 .ms-personal-login .ms-auth-sent {

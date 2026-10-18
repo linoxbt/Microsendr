@@ -16,16 +16,20 @@ Keep `KORA_MODE=sandbox`, and leave `PAYSTACK_SECRET_KEY` blank for the simulato
 Never commit this file. The Compose file supplies the internal `DATABASE_URL`.
 Personal sign-in uses Privy. Set `PRIVY_APP_ID`; optionally set
 `PRIVY_CLIENT_ID` and a pinned server-side `PRIVY_VERIFICATION_KEY` (the API
-otherwise uses Privy's app-scoped public JWKS). Enable Privy email
-login and identity tokens, and allow the exact Netlify HTTPS origin in Privy.
-In the Privy Dashboard, open **User management → Authentication → Advanced**
-and turn on **Return user data in an identity token** for the Microsendr app.
-This is required even when the email code succeeds: the API accepts only the
-signed email claim in that identity token, tied to the Privy access token's
-user ID. If the setting is off, the Personal page shows an account setup error
-after email login. Refreshing or signing in again cannot resolve that setting.
-After saving it, sign out of the incomplete Privy session and sign in again.
-Without these settings, sign-in fails closed and the Developer Sandbox remains
+otherwise uses Privy's app-scoped public JWKS). Enable Privy email login and
+allow the exact Netlify HTTPS origin in Privy. The API verifies the Privy
+access token, then obtains the verified email from a matching signed identity
+token when enabled. If identity tokens are unavailable, it uses Privy's
+authenticated current-user endpoint with that access token and requires a
+matching user ID and verified email timestamp. No browser-supplied email can
+create or claim a Personal account. Privy's current-user endpoint is used by
+the installed web SDK; monitor this fallback when updating the SDK.
+If Privy's current-user lookup is unavailable, the verified Privy user ID can
+still create a Personal sandbox account without an email. Email-based receipt
+and Paystack test collection stay unavailable until a later login links a
+server-verified email. A later signed identity token or successful current-user
+lookup links that email to the same account.
+Without Privy email login and an allowed origin, sign-in fails closed and the Developer Sandbox remains
 available. Legacy email-code sessions can continue only when the optional
 SMTP settings are configured; the Personal sign-in page uses Privy.
 

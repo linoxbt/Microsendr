@@ -86,3 +86,23 @@ test('Personal money page keeps Paystack test mode gated when credentials are ab
   await expect(page.getByText('No real money moves.')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
 });
+
+test('Personal opens a verified Privy account before email linking without exposing test collection', async ({ page }) => {
+  await page.route('**/personal/api/**', async route => {
+    const path = new URL(route.request().url()).pathname;
+    const body = path === '/personal/api/auth/config' ? { enabled: false } :
+      path === '/personal/api/session' ? { authenticated: true, csrf_token: 'a'.repeat(64), email: null, kyc_state: 'sandbox_approved', display_currency: 'NGN' } :
+      path === '/personal/api/home' ? { email: null, kyc_state: 'sandbox_approved', sandbox_funded: false, balance: { available_minor: '0', pending_minor: '0', held_minor: '0', simulated: true } } :
+      path === '/personal/api/activity' ? { data: [] } :
+      path === '/personal/api/paystack/config' ? { configured: true, mode: 'test', currency: 'NGN', simulated: true } :
+      path === '/personal/api/paystack/operations' || path === '/personal/api/paystack/banks' ? { data: [] } : {};
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  });
+  await page.goto('/personal/profile');
+  await expect(page.getByRole('heading', { name: 'Account details.' })).toBeVisible();
+  await expect(page.getByText('Not linked to Microsendr')).toBeVisible();
+  await expect(page.locator('.personal-avatar')).toHaveText('M');
+  await page.goto('/personal/money');
+  await expect(page.getByText('Test checkout becomes available when your email is linked to this account.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Create test checkout' })).toHaveCount(0);
+});

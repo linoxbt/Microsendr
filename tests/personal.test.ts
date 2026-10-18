@@ -88,6 +88,49 @@ test('Privy Personal requires a matching signed identity token with verified ema
     assert.equal(first.statusCode, 200, first.body);
     assert.equal(first.json().email, email);
     assert.match(String(first.headers['set-cookie']), /HttpOnly/);
+    const previousFetch = globalThis.fetch;
+    try {
+      globalThis.fetch = async (input, init) => {
+        assert.equal(input, 'https://auth.privy.io/api/v1/users/me');
+        assert.equal((init?.headers as Record<string, string>).authorization, `Bearer ${access_token}`);
+        assert.equal((init?.headers as Record<string, string>)['privy-app-id'], appId);
+        assert.equal((init?.headers as Record<string, string>).origin, origin);
+        return new Response(JSON.stringify({ user: { id: subject, linked_accounts: [{ type: 'email', address: email, latest_verified_at: Math.floor(Date.now() / 1000) }] } }), { status: 200 });
+      };
+      const withoutIdentityToken = await configured.inject({ method: 'POST', url: '/personal/api/auth/privy', headers: { origin }, payload: { access_token } });
+      assert.equal(withoutIdentityToken.statusCode, 200, withoutIdentityToken.body);
+      assert.equal(withoutIdentityToken.json().account_id, first.json().account_id);
+      globalThis.fetch = async () => new Response(JSON.stringify({ user: { id: `did:privy:${id('other')}`, linked_accounts: [{ type: 'email', address: email, latest_verified_at: 1 }] } }), { status: 200 });
+      assert.equal((await configured.inject({ method: 'POST', url: '/personal/api/auth/privy', headers: { origin }, payload: { access_token } })).statusCode, 401);
+      globalThis.fetch = async () => new Response(JSON.stringify({ user: { id: subject, linked_accounts: [{ type: 'email', address: email }] } }), { status: 200 });
+      const noEmail = await configured.inject({ method: 'POST', url: '/personal/api/auth/privy', headers: { origin }, payload: { access_token } });
+      assert.equal(noEmail.statusCode, 200, noEmail.body);
+      assert.equal(noEmail.json().email, email);
+      const provisionalSubject = `did:privy:${id('provisional')}`;
+      const provisionalAccess = await sign(provisionalSubject, { sid: id('sid') });
+      globalThis.fetch = async () => new Response('{}', { status: 503 });
+      const provisional = await configured.inject({ method: 'POST', url: '/personal/api/auth/privy', headers: { origin }, payload: { access_token: provisionalAccess } });
+      assert.equal(provisional.statusCode, 200, provisional.body);
+      assert.equal(provisional.json().email, null);
+      assert.ok(provisional.json().account_id);
+      const provisionalAuth = { cookie: cookie(provisional), csrf: provisional.json().csrf_token };
+      assert.equal((await write(provisionalAuth, '/personal/api/sandbox/verify', { residence_country: 'NG', acknowledge_simulation: true })).statusCode, 200);
+      assert.equal((await write(provisionalAuth, '/personal/api/paystack/collections', { amount_minor: '10000' }, id('key'))).statusCode, 403);
+      assert.equal((await write(provisionalAuth, '/personal/api/sandbox/fund', {})).statusCode, 200);
+      const firstAuth = { cookie: cookie(first), csrf: first.json().csrf_token };
+      assert.equal((await write(firstAuth, '/personal/api/sandbox/verify', { residence_country: 'NG', acknowledge_simulation: true })).statusCode, 200);
+      assert.equal((await write(provisionalAuth, '/personal/api/transfers', { recipient_email: email, amount_minor: '100' }, id('key'))).statusCode, 200);
+      const received = await configured.inject({ url: '/personal/api/activity', headers: { cookie: firstAuth.cookie } });
+      assert.equal(received.json().data[0].counterparty, 'Microsendr member');
+      const provisionalEmail = `${id('linked')}@example.test`;
+      const linked = await configured.inject({ method: 'POST', url: '/personal/api/auth/privy', headers: { origin }, payload: {
+        access_token: provisionalAccess,
+        identity_token: await sign(provisionalSubject, { linked_accounts: JSON.stringify([{ type: 'email', address: provisionalEmail, lv: Math.floor(Date.now() / 1000) }]) }),
+      } });
+      assert.equal(linked.statusCode, 200, linked.body);
+      assert.equal(linked.json().account_id, provisional.json().account_id);
+      assert.equal(linked.json().email, provisionalEmail);
+    } finally { globalThis.fetch = previousFetch; }
     const again = await login(identity_token);
     assert.equal(again.statusCode, 200, again.body);
     assert.equal(again.json().account_id, first.json().account_id);

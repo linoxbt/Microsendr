@@ -25,7 +25,7 @@ export function PersonalLogin({ brand, go, error, onComplete, authConfig }: Prop
     </header>
     <main className="ms-personal-login-main">
       <section className="ms-personal-login-visual" aria-label="Microsendr Personal sandbox preview">
-        <img src="/images/payment-cafe.webp" alt="Customer making a payment at a café" />
+        <img src="/images/payment-cafe.webp" alt="" />
         <div className="ms-personal-login-scrim" />
         <span className="ms-personal-login-image-label">MICROSENDR / PERSONAL</span>
         <div className="ms-personal-login-visual-copy">

@@ -1,5 +1,5 @@
-import React, { useState, type FormEvent } from 'react';
-import { Captcha, PrivyProvider, getIdentityToken, useLoginWithEmail, usePrivy, useUser } from '@privy-io/react-auth';
+import React, { useEffect, useRef, useState, type FormEvent } from 'react';
+import { Captcha, PrivyProvider, getIdentityToken, useLoginWithEmail, usePrivy } from '@privy-io/react-auth';
 import { ArrowRight } from 'lucide-react';
 import { qieMainnet } from './qie-chain.js';
 
@@ -9,8 +9,8 @@ type Props = AuthProps & { config: AuthConfig };
 
 export function MicrosendrAuthForm({ mode, onComplete, csrf, inviteToken, saveWorkspace }: AuthProps) {
   const { ready, authenticated, getAccessToken, logout } = usePrivy();
-  const { refreshUser } = useUser();
   const { sendCode, loginWithCode } = useLoginWithEmail();
+  const attempted = useRef(false);
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [sent, setSent] = useState(false);
@@ -20,20 +20,10 @@ export function MicrosendrAuthForm({ mode, onComplete, csrf, inviteToken, saveWo
     const access_token = await getAccessToken();
     if (!access_token) throw new Error('Your session expired. Sign in again.');
     const personal = mode === 'personal';
-    let identity_token = personal ? await getIdentityToken() : undefined;
-    if (personal && !identity_token) {
-      // Privy may publish the identity token just after completing email login.
-      // Refresh the signed user data once before reporting an app setup issue.
-      await refreshUser().catch(() => undefined);
-      identity_token = await getIdentityToken();
-    }
-    if (personal && !identity_token) {
-      console.error('Personal sign-in cannot continue: Privy did not return an identity token. Check the Privy identity-token setting.');
-      throw new Error('We could not finish setting up your Personal account. Please contact support.');
-    }
+    const identity_token = personal ? await getIdentityToken().catch(() => null) : undefined;
     const response = await fetch(personal ? '/personal/api/auth/privy' : '/console/auth/privy', {
       method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json', ...(csrf ? { 'x-kora-csrf': csrf } : {}) },
-      body: JSON.stringify(personal ? { access_token, identity_token } : {
+      body: JSON.stringify(personal ? { access_token, ...(identity_token ? { identity_token } : {}) } : {
         access_token, business_account: true, link_current: !!saveWorkspace,
         ...(inviteToken ? { invite_token: inviteToken } : {}),
       }),
@@ -51,18 +41,27 @@ export function MicrosendrAuthForm({ mode, onComplete, csrf, inviteToken, saveWo
     try { await action(); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Try again.'); }
     finally { setBusy(false); }
   }
+  useEffect(() => {
+    if (mode !== 'personal') return;
+    if (!authenticated) { attempted.current = false; return; }
+    if (ready && !busy && !attempted.current) {
+      attempted.current = true;
+      void run(exchange);
+    }
+  }, [authenticated, ready, busy, mode]);
   const submit = (event: FormEvent) => {
     event.preventDefault();
     void run(async () => {
       if (authenticated) return exchange();
       if (!sent) { await sendCode({ email: email.trim() }); setSent(true); }
-      else { await loginWithCode({ code }); await exchange(); }
+      else { await loginWithCode({ code }); if (mode !== 'personal') await exchange(); }
     });
   };
   return <div className="ms-auth-form">
     {error && <p className="personal-error" role="alert">{error}</p>}
     {authenticated ? <>
-      <button className="personal-primary" disabled={busy || !ready} onClick={() => void run(exchange)}>Continue to {mode} <ArrowRight size={17}/></button>
+      {mode === 'personal' ? error ? <button className="personal-primary" disabled={busy || !ready} onClick={() => void run(exchange)}>Retry sign-in <ArrowRight size={17}/></button> : <p className="ms-auth-finishing" role="status">Finishing sign-in…</p> :
+        <button className="personal-primary" disabled={busy || !ready} onClick={() => void run(exchange)}>Continue to {mode} <ArrowRight size={17}/></button>}
       <button className="personal-text" disabled={busy} onClick={() => void run(async () => { await logout(); setSent(false); setCode(''); setEmail(''); })}>Use another email</button>
     </> :
       <form onSubmit={submit}>

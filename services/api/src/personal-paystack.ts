@@ -7,7 +7,7 @@ import { id, pool, transaction, type Client } from '../../../packages/database/s
 import { postJournal } from '../../../packages/ledger/src/index.js';
 import { PaymentError } from '../../../packages/payments/src/errors.js';
 
-type Person = { user_id: string; account_id: string; email: string; kyc_state: string };
+type Person = { user_id: string; account_id: string; email: string | null; kyc_state: string };
 type Dependencies = {
   required: (request: FastifyRequest, write?: boolean) => Promise<Person>;
   origin: (request: FastifyRequest) => string;
@@ -96,7 +96,9 @@ export async function registerPersonalPaystack(app: FastifyInstance, dependencie
   });
 
   app.post('/personal/api/paystack/collections', async (request) => {
-    const person = await eligible(request, true), key = idempotencyKey(request), client = provider();
+    const person = await eligible(request, true);
+    if (!person.email) throw new PaymentError(403, 'verified_email_required', 'Link a verified email before starting a collection');
+    const key = idempotencyKey(request), client = provider();
     const { amount_minor } = z.object({ amount_minor: amountSchema }).strict().parse(request.body);
     const fingerprint = digest(JSON.stringify({ amount_minor, email: person.email }));
     const row = await transaction(async (c) => {
@@ -123,7 +125,9 @@ export async function registerPersonalPaystack(app: FastifyInstance, dependencie
   });
 
   app.post('/personal/api/paystack/collections/:id/verify', async (request) => {
-    const person = await eligible(request, true), client = provider();
+    const person = await eligible(request, true);
+    if (!person.email) throw new PaymentError(403, 'verified_email_required', 'Link a verified email before verifying a collection');
+    const client = provider();
     const row = await owned(person, (request.params as {id: string}).id, 'collection');
     if (row.status === 'completed' || row.status === 'failed') return publicOperation(row);
     const raw = await client.verifyCollection(row.reference);

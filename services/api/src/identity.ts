@@ -107,6 +107,39 @@ export function privyVerifier(config: PrivyConfig) {
         throw new PaymentError(401, 'invalid_identity_token', 'Your email could not be verified. Sign in again.');
       }
     },
+    async verifyEmailFromPrivy(accessToken: string, expectedSubject: string, requestOrigin: string) {
+      // Privy's web SDK reads the current user through this app-scoped endpoint.
+      // Use the verified access token to resolve linked accounts server-side when
+      // an application has not enabled identity tokens in its dashboard.
+      let user: unknown;
+      try {
+        const response = await fetch('https://auth.privy.io/api/v1/users/me', {
+          headers: {
+            authorization: `Bearer ${accessToken}`,
+            'privy-app-id': config.appId,
+            origin: requestOrigin,
+            accept: 'application/json',
+          },
+          signal: AbortSignal.timeout(5000),
+          redirect: 'error',
+        });
+        if (!response.ok) throw new Error('Privy user lookup failed');
+        const result: unknown = await response.json();
+        user = result && typeof result === 'object' && 'user' in result ? result.user : result;
+      } catch {
+        throw new PaymentError(502, 'identity_lookup_unavailable', 'Sign-in could not finish. Try again.');
+      }
+      if (!user || typeof user !== 'object' || !('id' in user) || user.id !== expectedSubject ||
+          !('linked_accounts' in user) || !Array.isArray(user.linked_accounts))
+        throw new PaymentError(401, 'invalid_identity', 'Your account could not be verified. Sign in again.');
+      const email = user.linked_accounts.find((account: unknown) => account && typeof account === 'object' &&
+        'type' in account && account.type === 'email' && 'address' in account && typeof account.address === 'string' &&
+        (('latest_verified_at' in account && typeof account.latest_verified_at === 'number' && account.latest_verified_at > 0) ||
+         ('verified_at' in account && typeof account.verified_at === 'number' && account.verified_at > 0)));
+      if (!email || typeof email.address !== 'string')
+        throw new PaymentError(401, 'verified_email_required', 'No verified email is linked to this account.');
+      return email.address.trim().toLowerCase();
+    },
   };
 }
 

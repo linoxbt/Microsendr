@@ -74,7 +74,7 @@ async function required(request: FastifyRequest, write = false) {
   const row = await session(request);
   if (!row) throw new PaymentError(401, 'personal_login_required', 'Sign in to your Personal account');
   if (write) csrf(request, row);
-  return row as { csrf_token: string; user_id: string; account_id: string; email: string; residence_country: string | null; display_currency: string; kyc_state: string; privy_subject: string | null };
+  return row as { csrf_token: string; user_id: string; account_id: string; email: string | null; residence_country: string | null; display_currency: string; kyc_state: string; privy_subject: string | null };
 }
 function publicSession(row: Awaited<ReturnType<typeof required>>) {
   return { authenticated: true, csrf_token: row.csrf_token, email: row.email,
@@ -92,26 +92,37 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
   const verifier = privyVerifier(privyConfig);
   app.get('/personal/api/auth/config', async () => ({ enabled: await verifier.ready(), method: 'privy', app_id: privyConfig.appId, client_id: privyConfig.clientId ?? null }));
   app.post('/personal/api/auth/privy', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
-    origin(request);
-    const { access_token, identity_token } = z.object({ access_token: z.string().min(1).max(8192), identity_token: z.string().min(1).max(32768) }).strict().parse(request.body);
+    const requestOrigin = origin(request);
+    const { access_token, identity_token } = z.object({ access_token: z.string().min(1).max(8192), identity_token: z.string().min(1).max(32768).optional() }).strict().parse(request.body);
     const verified = await verifier.verify(access_token);
-    const email = emailSchema.parse(await verifier.verifyEmailIdentity(identity_token, verified.subject));
+    let email: string | null = null;
+    if (identity_token) email = emailSchema.parse(await verifier.verifyEmailIdentity(identity_token, verified.subject));
+    else {
+      try { email = emailSchema.parse(await verifier.verifyEmailFromPrivy(access_token, verified.subject, requestOrigin)); }
+      catch (cause) {
+        if (!(cause instanceof PaymentError) || !['identity_lookup_unavailable', 'verified_email_required'].includes(cause.code)) throw cause;
+      }
+    }
     const result = await transaction(async (c) => {
       await c.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [`personal-privy:${verified.app_id}:${verified.subject}`]);
-      await c.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [`personal-email:${email}`]);
+      if (email) await c.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [`personal-email:${email}`]);
       let user = (await c.query('SELECT * FROM personal_users WHERE privy_app_id=$1 AND privy_subject=$2 FOR UPDATE', [verified.app_id, verified.subject])).rows[0];
-      if (user && user.email !== email) {
+      if (email && user && user.email !== email) {
         if ((await c.query('SELECT 1 FROM personal_users WHERE email=$1', [email])).rowCount)
           throw new PaymentError(409, 'identity_conflict', 'This email is linked to another account');
         await c.query('UPDATE personal_users SET email=$2,email_verified_at=now(),updated_at=now() WHERE id=$1', [user.id, email]);
       }
-      if (!user) {
+      if (!user && email) {
         await c.query('INSERT INTO personal_users(id,email,email_verified_at,privy_app_id,privy_subject) VALUES($1,$2,now(),$3,$4) ON CONFLICT(email) DO NOTHING', [id('usr'), email, verified.app_id, verified.subject]);
         user = (await c.query('SELECT * FROM personal_users WHERE email=$1 FOR UPDATE', [email])).rows[0];
       }
+      if (!user) {
+        await c.query('INSERT INTO personal_users(id,privy_app_id,privy_subject) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [id('usr'), verified.app_id, verified.subject]);
+        user = (await c.query('SELECT * FROM personal_users WHERE privy_app_id=$1 AND privy_subject=$2 FOR UPDATE', [verified.app_id, verified.subject])).rows[0];
+      }
       if (user.privy_subject && (user.privy_subject !== verified.subject || user.privy_app_id !== verified.app_id))
         throw new PaymentError(409, 'identity_conflict', 'This email is linked to another account');
-      await c.query('UPDATE personal_users SET privy_app_id=$2,privy_subject=$3,email_verified_at=now(),updated_at=now() WHERE id=$1', [user.id, verified.app_id, verified.subject]);
+      await c.query('UPDATE personal_users SET privy_app_id=$2,privy_subject=$3,updated_at=now() WHERE id=$1', [user.id, verified.app_id, verified.subject]);
       await c.query("INSERT INTO kora_accounts(id,owner_type,personal_user_id) VALUES($1,'personal',$2) ON CONFLICT(personal_user_id) DO NOTHING", [id('acct'), user.id]);
       const account = (await c.query('SELECT id FROM kora_accounts WHERE personal_user_id=$1', [user.id])).rows[0];
       await c.query('INSERT INTO ledger_accounts(id,owner_account_id,asset_position_id,asset,purpose) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING', [personalAccount(account.id), account.id, ngn, 'NGN', 'available']);
@@ -121,6 +132,7 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
       return { token, csrfToken, userId: user.id };
     });
     setCookie(request, reply, result.token);
+    reply.header('cache-control', 'no-store');
     const user = (await pool.query('SELECT u.*,a.id AS account_id FROM personal_users u JOIN kora_accounts a ON a.personal_user_id=u.id WHERE u.id=$1', [result.userId])).rows[0];
     return publicSession({ ...user, user_id: user.id, csrf_token: result.csrfToken });
   });
@@ -256,7 +268,7 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
     const row = await required(request);
     const result = await pool.query(`SELECT t.id,t.amount_minor::text,t.created_at,
       CASE WHEN t.sender_account_id=$1 THEN 'sent' ELSE 'received' END AS direction,
-      CASE WHEN t.sender_account_id=$1 THEN recipient.email ELSE sender.email END AS counterparty
+      CASE WHEN t.sender_account_id=$1 THEN COALESCE(recipient.email,'Microsendr member') ELSE COALESCE(sender.email,'Microsendr member') END AS counterparty
       FROM personal_transfers t
       JOIN kora_accounts sa ON sa.id=t.sender_account_id JOIN personal_users sender ON sender.id=sa.personal_user_id
       JOIN kora_accounts ra ON ra.id=t.receiver_account_id JOIN personal_users recipient ON recipient.id=ra.personal_user_id
