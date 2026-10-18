@@ -139,7 +139,11 @@ test('request logs omit credentials, payloads, and query values while retaining 
   const f = await fixture();
   await f.post('/v1/customers', { name: 'payload_private_marker' });
   await f.get('/v1/intents?search=query_private_marker');
-  const r = await f.get('/v1/request_logs');
+  let r = await f.get('/v1/request_logs');
+  for (let attempt = 0; attempt < 40 && !r.json().data.some((row: { path: string }) => row.path === '/v1/customers'); attempt++) {
+    await new Promise(resolve => setTimeout(resolve, 25));
+    r = await f.get('/v1/request_logs');
+  }
   assert.equal(r.statusCode, 200);
   for (const secret of [f.key.secret, 'payload_private_marker', 'query_private_marker'])
     assert.equal(r.body.includes(secret), false);
