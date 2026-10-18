@@ -4,10 +4,10 @@ import { ArrowRight } from 'lucide-react';
 import { qieMainnet } from './qie-chain.js';
 
 export type AuthConfig = { enabled: boolean; app_id?: string | null; client_id?: string | null };
-export type AuthProps = { mode: 'personal' | 'business'; onComplete: (result: any) => void; csrf?: string; inviteToken?: string; saveWorkspace?: boolean };
+export type AuthProps = { mode: 'personal' | 'business'; onComplete: (result: any) => void; csrf?: string; inviteToken?: string; saveWorkspace?: boolean; restoreExisting?: boolean };
 type Props = AuthProps & { config: AuthConfig };
 
-export function MicrosendrAuthForm({ mode, onComplete, csrf, inviteToken, saveWorkspace }: AuthProps) {
+export function MicrosendrAuthForm({ mode, onComplete, csrf, inviteToken, saveWorkspace, restoreExisting }: AuthProps) {
   const { ready, authenticated, getAccessToken, logout } = usePrivy();
   const { sendCode, loginWithCode } = useLoginWithEmail();
   const attempted = useRef(false);
@@ -23,7 +23,7 @@ export function MicrosendrAuthForm({ mode, onComplete, csrf, inviteToken, saveWo
     const identity_token = personal ? await getIdentityToken().catch(() => null) : undefined;
     const response = await fetch(personal ? '/personal/api/auth/privy' : '/console/auth/privy', {
       method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json', ...(csrf ? { 'x-kora-csrf': csrf } : {}) },
-      body: JSON.stringify(personal ? { access_token, ...(identity_token ? { identity_token } : {}) } : {
+      body: JSON.stringify(personal ? { access_token, ...(restoreExisting ? { restore_existing: true } : {}), ...(identity_token ? { identity_token } : {}) } : {
         access_token, business_account: true, link_current: !!saveWorkspace,
         ...(inviteToken ? { invite_token: inviteToken } : {}),
       }),
@@ -78,7 +78,7 @@ export function MicrosendrAuth(props: Props) {
   const config = props.config;
   return <PrivyProvider appId={config.app_id!} clientId={config.client_id ?? undefined} config={{
     loginMethods: ['email'],
-    embeddedWallets: { ethereum: { createOnLogin: props.mode === 'personal' ? 'users-without-wallets' : 'off' }, solana: { createOnLogin: 'off' } },
+    embeddedWallets: { ethereum: { createOnLogin: props.mode === 'personal' && !props.restoreExisting ? 'users-without-wallets' : 'off' }, solana: { createOnLogin: 'off' } },
     supportedChains: [qieMainnet], defaultChain: qieMainnet,
     appearance: { theme: 'light', accentColor: '#4682B4' },
   }}><MicrosendrAuthForm {...props} /></PrivyProvider>;

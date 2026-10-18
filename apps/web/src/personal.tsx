@@ -1,104 +1,968 @@
-import React, { useEffect, useState, type FormEvent } from 'react';
-import { ArrowLeft, ArrowRight, ArrowUpRight, CheckCircle2, History, Home, LogOut, Menu, Send, ShieldCheck, UserRound, Wallet } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  ArrowLeftRight,
+  ArrowRight,
+  Plus,
+  Home,
+  ReceiptText,
+  UserRound,
+  Wallet,
+  LogOut,
+  ShieldCheck,
+  ChevronRight,
+  Eye,
+  EyeOff,
+  Check,
+  CreditCard,
+  Globe2,
+  Search,
+  RefreshCw,
+  LockKeyhole,
+  Copy,
+  CheckCircle2,
+  Download,
+  ArrowLeft,
+} from 'lucide-react';
 import { PersonalLogin } from './personal-login.js';
 import { PersonalKyc } from './personal-kyc.js';
-import { usePersonalPrivy } from './personal-context.js';
-import type { AuthConfig } from './microsendr-auth.js';
+import { ConsumerProfileForm, ConsumerSecurity } from './consumer-profile.js';
+import { consumerRequest, type ConsumerProfile } from './consumer-api.js';
 import { MicrosendrMark } from './microsendr-logo.js';
 import './personal.css';
-const PersonalWallet = React.lazy(() => import('./personal-wallet.js').then(module => ({ default: module.PersonalWallet })));
-const PersonalMoney = React.lazy(() => import('./personal-money.js').then(module => ({ default: module.PersonalMoney })));
-const PersonalProvider = React.lazy(() => import('./personal-provider.js').then(module => ({ default: module.PersonalProvider })));
+import './consumer.css';
 
-function PersonalLoading() {
-  return <div className="personal-loading" role="status" aria-label="Opening Personal">
-    <span className="personal-loading-mark"><MicrosendrMark /></span>
-  </div>;
-}
-
-type Session = { authenticated: boolean; csrf_token?: string; account_id?: string; email?: string | null; kyc_state?: string; residence_country?: string | null; display_currency?: string; privy_subject?: string | null };
-type HomeData = { email: string; kyc_state: string; sandbox_funded: boolean; balance: { available_minor: string; pending_minor: string; held_minor: string; simulated: true } };
-type Transfer = { id: string; amount_minor: string; direction: 'sent' | 'received'; counterparty: string; created_at: string; status: string };
-const money = (minor: string) => {
-  const amount = BigInt(minor), sign = amount < 0n ? '-' : '', absolute = amount < 0n ? -amount : amount;
-  return `${sign}₦${new Intl.NumberFormat('en-NG').format(absolute / 100n)}.${(absolute % 100n).toString().padStart(2, '0')}`;
+type Session = { authenticated: boolean; csrf_token?: string; email?: string; account_id?: string };
+type Capability = { available: boolean; reason: string };
+type Movement = {
+  id: string;
+  status: string;
+  to: string;
+  amount_atomic: string;
+  asset: string;
+  decimals: number;
+  network: string;
+  created_at: string;
+  tx_hash: string | null;
+  explorer_url: string | null;
+  confirmations: number;
+  required_confirmations: number;
 };
-
-async function request<T>(path: string, method = 'GET', body?: object, csrf?: string, key?: string): Promise<T> {
-  const response = await fetch(path, { method, credentials: 'include', headers: {
-    ...(body ? { 'content-type': 'application/json' } : {}),
-    ...(csrf ? { 'x-kora-csrf': csrf } : {}),
-    ...(key ? { 'idempotency-key': key } : {}),
-  }, ...(body ? { body: JSON.stringify(body) } : {}) });
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.error?.message ?? 'Request failed');
-  return result as T;
+type Overview = {
+  balances: unknown[];
+  total: null;
+  activity: Movement[];
+  capabilities: Record<string, Capability>;
+};
+const statusLabel = (status: string) =>
+  ({
+    confirmed: 'Completed',
+    awaiting_submission: 'Awaiting authorization',
+    submitted: 'Processing',
+    pending: 'Processing',
+    unknown: 'Under review',
+    failed: 'Failed',
+    expired: 'Expired',
+  })[status] ?? status;
+const formatAmount = (item: Movement) => {
+  const unit = 10n ** BigInt(item.decimals ?? 0);
+  const n = BigInt(item.amount_atomic);
+  return `${n / unit}.${(n % unit).toString().padStart(item.decimals, '0').slice(0, 6).replace(/0+$/, '') || '00'}`;
+};
+function PersonalLoading() {
+  return (
+    <div className="personal-loading" role="status" aria-label="Loading account">
+      <span className="personal-loading-mark">
+        <MicrosendrMark />
+      </span>
+    </div>
+  );
 }
+const actions = [
+  ['deposit', 'Add money', Plus],
+  ['send', 'Send', ArrowUpRight],
+  ['convert', 'Convert', ArrowLeftRight],
+  ['withdraw', 'Withdraw', ArrowDownLeft],
+] as const;
 
-export function PersonalPage({ go, path, brand, themeToggle, onAuthChange }: { go: (path: string) => void; path: string; brand: React.ReactNode; themeToggle: React.ReactNode; onAuthChange: (authenticated: boolean) => void }) {
-  const [authConfig, setAuthConfig] = useState<AuthConfig>();
-  useEffect(() => {
-    void fetch('/personal/api/auth/config').then(response => response.json()).then(setAuthConfig).catch(() => setAuthConfig({ enabled: false }));
-  }, []);
-  if (!authConfig) return <PersonalLoading />;
-  return <React.Suspense fallback={<PersonalLoading />}><PersonalProvider config={authConfig}><PersonalContent go={go} path={path} brand={brand} themeToggle={themeToggle} onAuthChange={onAuthChange} authConfig={authConfig}/></PersonalProvider></React.Suspense>;
-}
-
-function PersonalContent({ go, path, brand, themeToggle, onAuthChange, authConfig }: { go: (path: string) => void; path: string; brand: React.ReactNode; themeToggle: React.ReactNode; onAuthChange: (authenticated: boolean) => void; authConfig: AuthConfig }) {
-  const { logout: privyLogout } = usePersonalPrivy();
-  const [session, setSession] = useState<Session>();
-  const [home, setHome] = useState<HomeData>();
-  const [activity, setActivity] = useState<Transfer[]>([]);
-  const [recipient, setRecipient] = useState('');
-  const [amount, setAmount] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
-  const [menu, setMenu] = useState(false);
-  const tab = path.split('/')[2] || 'home';
-  const refresh = async () => {
-    const s = await request<Session>('/personal/api/session');
+export function PersonalPage({
+  go,
+  path,
+  brand,
+  themeToggle,
+  onAuthChange,
+}: {
+  go: (path: string) => void;
+  path: string;
+  brand: React.ReactNode;
+  themeToggle: React.ReactNode;
+  onAuthChange: (authenticated: boolean) => void;
+}) {
+  const [session, setSession] = useState<Session>(),
+    [profile, setProfile] = useState<ConsumerProfile>(),
+    [overview, setOverview] = useState<Overview>();
+  const [error, setError] = useState(''),
+    [hidden, setHidden] = useState(false),
+    [copied, setCopied] = useState(false),
+    [search, setSearch] = useState(''),
+    [filter, setFilter] = useState('all');
+  const [selected, setSelected] = useState<string | null>(null),
+    [refreshing, setRefreshing] = useState(false);
+  const rawTab = path.split('/')[2]?.split('?')[0] || 'home';
+  const tab = rawTab === 'login' ? 'home' : rawTab === 'money' ? 'deposit' : rawTab;
+  const navTab = ['profile', 'identity', 'security', 'onboarding'].includes(tab)
+    ? 'profile'
+    : ['deposit', 'withdraw', 'send', 'convert'].includes(tab)
+      ? 'payments'
+      : tab;
+  async function refresh() {
+    const s = await consumerRequest<Session>('session');
     setSession(s);
     if (s.authenticated) {
-      const [h, a] = await Promise.all([request<HomeData>('/personal/api/home'), request<{ data: Transfer[] }>('/personal/api/activity')]);
-      setHome(h); setActivity(a.data);
+      const [p, o] = await Promise.all([
+        consumerRequest<ConsumerProfile>('profile'),
+        consumerRequest<Overview>('overview'),
+      ]);
+      setProfile(p);
+      setOverview(o);
+    }
+  }
+  useEffect(() => {
+    void refresh().catch((e) => {
+      setError(e.message);
+    });
+  }, []);
+  useEffect(() => {
+    if (session) onAuthChange(session.authenticated);
+  }, [session?.authenticated, onAuthChange]);
+  useEffect(() => {
+    if (tab !== 'activity') setSelected(null);
+    setError('');
+    window.scrollTo(0, 0);
+  }, [tab]);
+  useEffect(() => {
+    if (!session?.authenticated) return;
+    const timer = setInterval(() => {
+      void consumerRequest<Overview>('overview')
+        .then(setOverview)
+        .catch(() => {});
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [session?.authenticated]);
+  const retry = async () => {
+    setRefreshing(true);
+    setError('');
+    try {
+      await refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setRefreshing(false);
     }
   };
-  useEffect(() => { void refresh().catch((e) => { setError(e.message); setSession({ authenticated: false }); }); }, []);
-  useEffect(() => { if (session) onAuthChange(!!session.authenticated); }, [session?.authenticated, onAuthChange]);
-  const run = async (fn: () => Promise<void>) => {
-    setBusy(true); setError(''); setNotice('');
-    try { await fn(); } catch (e) { setError(e instanceof Error ? e.message : 'Something went wrong'); }
-    finally { setBusy(false); }
-  };
-  const verifySandbox = () => void run(async () => {
-    await request('/personal/api/sandbox/verify', 'POST', { residence_country: 'NG', acknowledge_simulation: true }, session?.csrf_token);
-    await refresh(); setNotice('Sandbox verification fixture enabled. This does not verify your real identity.');
-  });
-  const fund = () => void run(async () => {
-    await request('/personal/api/sandbox/fund', 'POST', {}, session?.csrf_token);
-    await refresh(); setNotice('₦100,000.00 in simulated funds added.');
-  });
-  const send = (e: FormEvent) => { e.preventDefault(); void run(async () => {
-    if (!/^\d+(?:\.\d{1,2})?$/.test(amount)) throw new Error('Enter a valid NGN amount');
-    const [whole, fraction = ''] = amount.split('.');
-    const amount_minor = (BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0'))).toString();
-    if (amount_minor === '0') throw new Error('Enter an amount greater than zero');
-    await request('/personal/api/transfers', 'POST', { recipient_email: recipient, amount_minor }, session?.csrf_token, crypto.randomUUID());
-    setAmount(''); setRecipient(''); await refresh(); go('/personal/activity'); setNotice('Transfer completed.');
-  }); };
-  const logout = () => void run(async () => { await request('/personal/api/logout', 'POST', {}, session?.csrf_token); await privyLogout().catch(() => undefined); setSession({ authenticated: false }); setHome(undefined); go('/personal/login'); });
-  const nav = [ ['home', 'Home', Home], ['send', 'Send', Send], ['activity', 'Activity', History], ['profile', 'Profile', UserRound] ] as const;
-  if (!session) return <PersonalLoading />;
-  if (!session.authenticated) return <PersonalLogin brand={brand} go={go} error={error} authConfig={authConfig} onComplete={next => { setSession(next); void refresh(); go('/personal/home'); }} />;
-  return <div className="personal-shell"><aside className={`personal-sidebar ${menu ? 'open' : ''}`}><button className="personal-brand" onClick={() => go('/personal/home')}>{brand}</button><div className="personal-sidebar-caption">PERSONAL ACCOUNT <span>Sandbox + QIE</span></div><nav>{nav.map(([id,label,Icon]) => <button key={id} className={tab===id || (tab==='money' && id==='home')?'active':''} onClick={() => {go('/personal/'+id);setMenu(false);}}><Icon size={19}/>{label}</button>)}</nav><div className="personal-sidebar-bottom"><div className="personal-sandbox-note"><ShieldCheck size={18}/><span>NGN flows are simulated<br/><small>QIE wallet transfers are live</small></span></div><button onClick={logout}><LogOut size={18}/> Sign out</button></div></aside>
-    {menu && <button className="personal-scrim" aria-label="Close menu" onClick={() => setMenu(false)}/>}
-    <div className="personal-main"><header className="personal-topbar"><button className="personal-mobile-menu" aria-label="Open menu" onClick={() => setMenu(true)}><Menu size={22}/></button><span>Personal <b>/ {tab==='money'?'Move money':nav.find(([id])=>id===tab)?.[1] ?? 'Home'}</b></span><div>{themeToggle}<span className="personal-avatar">{(session.email?.slice(0,1) ?? 'M').toUpperCase()}</span></div></header><main className="personal-content">
-      {error && <p className="personal-error" role="alert">{error}</p>}{notice && <p className="personal-success" role="status">{notice}</p>}
-      {tab==='home' && <><div className="personal-heading"><span className="personal-eyebrow">YOUR ACCOUNT</span><h1>Your money, at a glance.</h1><p></p></div><div className="personal-balance"><div><span>AVAILABLE · SIMULATED NGN</span><strong>{money(home?.balance.available_minor ?? '0')}</strong><small>Simulated NGN</small></div><Wallet size={38}/></div><div className="personal-actions"><button onClick={() => go('/personal/money')}><Wallet size={20}/> Add / Withdraw <ArrowRight size={17}/></button><button onClick={() => go('/personal/send')}><Send size={20}/> Send <ArrowRight size={17}/></button></div><section className="personal-card"><h2>Getting started</h2>{home?.kyc_state !== 'sandbox_approved' ? <><p>Enable sandbox access to try transfers.</p><button className="personal-primary" onClick={verifySandbox} disabled={busy}>Enable sandbox verification <ArrowRight size={17}/></button></> : home.sandbox_funded ? <><p>Ready to send.</p><button className="personal-primary" onClick={() => go('/personal/send')}>Send simulated NGN <ArrowRight size={17}/></button></> : <><p>Add test funds to begin.</p><button className="personal-primary" onClick={fund} disabled={busy}>Add ₦100,000 test funds <ArrowRight size={17}/></button><small>Simulated balance only.</small></>}</section></>}
-      {tab==='money' && <React.Suspense fallback={<section className="personal-card">Loading payment tests…</section>}><PersonalMoney csrf={session.csrf_token} kycState={home?.kyc_state} emailLinked={!!session.email} onBalanceChanged={refresh}/></React.Suspense>}
-      {tab==='send' && <><div className="personal-heading"><span className="personal-eyebrow">SEND</span><h1>Who are you paying?</h1><p>Choose simulated NGN or a QIE Mainnet wallet transfer.</p></div><section className="personal-card personal-form-card"><h2>Simulated NGN</h2><form onSubmit={send}><label>Recipient email<input type="email" value={recipient} onChange={(e)=>setRecipient(e.target.value)} placeholder="friend@example.com" required/></label><label>Amount in NGN<input inputMode="decimal" value={amount} onChange={(e)=>setAmount(e.target.value)} placeholder="0.00" required/></label><div className="personal-form-summary"><span>Fee</span><b>₦0.00 · Sandbox</b></div><button className="personal-primary" disabled={busy || home?.kyc_state!=='sandbox_approved'}>Send simulated NGN <ArrowRight size={17}/></button>{home?.kyc_state!=='sandbox_approved' && <p className="personal-muted">Enable sandbox verification on Home first.</p>}</form></section>{authConfig.enabled && authConfig.app_id && <React.Suspense fallback={<section className="personal-card">Loading QIE wallet…</section>}><PersonalWallet subject={session.privy_subject ?? null} accountId={session.account_id ?? ''} csrf={session.csrf_token ?? ''} showSend/></React.Suspense>}</>}
-      {tab==='activity' && <><div className="personal-heading"><span className="personal-eyebrow">ACTIVITY</span><h1>Your money, in motion.</h1><p>Your recent transfers.</p></div><section className="personal-card personal-activity"><h2>Recent activity</h2>{activity.length ? activity.map((item)=><div key={item.id} className="personal-activity-row"><span className="personal-activity-icon">{item.direction==='sent'?<ArrowUpRight size={20}/>:<ArrowLeft size={20}/>}</span><span><b>{item.direction==='sent'?'Sent to':'Received from'} {item.counterparty}</b><small>{new Date(item.created_at).toLocaleString()} · Simulated · Completed</small></span><strong>{item.direction==='sent'?'-':'+'}{money(item.amount_minor)}</strong></div>) : <p className="personal-muted">No transfers yet. Your first simulated payment will appear here.</p>}</section></>}
-      {tab==='profile' && <><div className="personal-heading"><span className="personal-eyebrow">PROFILE</span><h1>Account details.</h1><p></p></div><section className="personal-card personal-profile"><div><span>Email</span><b>{session.email ?? 'Not linked to Microsendr'}</b></div><div><span>Residence</span><b>{session.residence_country==='NG'?'Nigeria':'Not set'}</b></div><div><span>Display currency</span><b>{session.display_currency ?? 'NGN'}</b></div><div><span>Sandbox access</span><b>{session.kyc_state==='sandbox_approved'?'Enabled':'Not started'}</b></div><p>Sandbox access only allows simulated transfers.</p></section>{authConfig.enabled && authConfig.app_id && <React.Suspense fallback={<section className="personal-card"><h2>Settlement address</h2><p>Loading…</p></section>}><PersonalWallet subject={session.privy_subject ?? null} accountId={session.account_id ?? ''} csrf={session.csrf_token ?? ''}/></React.Suspense>}<PersonalKyc csrf={session.csrf_token}/></>}
-    </main></div></div>;
+  async function logout() {
+    try {
+      await consumerRequest('logout', 'POST', {}, session?.csrf_token);
+      setSession({ authenticated: false });
+      setProfile(undefined);
+      setOverview(undefined);
+      go('/personal/login');
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(`@${profile!.username}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError('Copy is unavailable in this browser. Your username is shown below.');
+    }
+  }
+  if (!session || (session.authenticated && (!profile || !overview)))
+    return error ? (
+      <div className="fin-connection">
+        <MicrosendrMark />
+        <h1>Let’s reconnect.</h1>
+        <p role="alert">{error}</p>
+        <button className="fin-primary" onClick={retry}>
+          Try again
+        </button>
+      </div>
+    ) : (
+      <PersonalLoading />
+    );
+  if (!session.authenticated)
+    return (
+      <PersonalLogin
+        brand={brand}
+        go={go}
+        onComplete={async (s, isNew) => {
+          setSession(s);
+          setError('');
+          try {
+            await refresh();
+            go(isNew ? '/personal/onboarding' : '/personal/home');
+          } catch (e) {
+            setError((e as Error).message);
+          }
+        }}
+      />
+    );
+  const p = profile!,
+    o = overview!,
+    csrf = session.csrf_token!,
+    identityDone = p.identity_status === 'Approved';
+  const movements = o.activity.filter(
+    (item) =>
+      (filter === 'all' ||
+        (filter === 'completed'
+          ? item.status === 'confirmed'
+          : !['confirmed', 'failed', 'expired'].includes(item.status))) &&
+      `${item.id} ${item.to} ${statusLabel(item.status)}`
+        .toLowerCase()
+        .includes(search.toLowerCase()),
+  );
+  const receipt = selected ? o.activity.find((x) => x.id === selected) : undefined;
+  const activity = (compact = false) => (
+    <div className="fin-activity-list">
+      {(compact ? o.activity.slice(0, 4) : movements).length ? (
+        (compact ? o.activity.slice(0, 4) : movements).map((item) => (
+          <button
+            className="fin-transaction"
+            key={item.id}
+            onClick={() => {
+              setSelected(item.id);
+              if (compact) go('/personal/activity');
+            }}
+          >
+            <span className="fin-tx-icon">
+              <ArrowUpRight size={19} />
+            </span>
+            <span>
+              <b>Wallet transfer</b>
+              <small>
+                {new Date(item.created_at).toLocaleDateString(undefined, {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                })}
+              </small>
+            </span>
+            <span>
+              <b>{statusLabel(item.status)}</b>
+              <small>
+                View details <ChevronRight size={12} />
+              </small>
+            </span>
+          </button>
+        ))
+      ) : (
+        <div className="fin-empty">
+          <span>
+            <ReceiptText size={25} />
+          </span>
+          <h3>{search ? 'No matching payments' : 'Your story starts here'}</h3>
+          <p>
+            {search
+              ? 'Try a different name or reference.'
+              : 'Completed and pending payments will appear here.'}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+  return (
+    <div className="fin-app">
+      <aside className="fin-sidebar">
+        <button className="fin-brand" onClick={() => go('/personal/home')}>
+          {brand}
+        </button>
+        <span className="fin-sidebar-label">PERSONAL ACCOUNT</span>
+        <nav aria-label="Account navigation">
+          {[
+            ['home', 'Home', Home],
+            ['payments', 'Payments', ArrowLeftRight],
+            ['activity', 'Activity', ReceiptText],
+            ['profile', 'Account', UserRound],
+          ].map(([key, label, Icon]) => {
+            const I = Icon as typeof Home;
+            return (
+              <button
+                key={key as string}
+                className={navTab === key ? 'active' : ''}
+                aria-current={navTab === key ? 'page' : undefined}
+                onClick={() => go(`/personal/${key}`)}
+              >
+                <I size={20} />
+                <span>{label as string}</span>
+                {navTab === key && <i />}
+              </button>
+            );
+          })}
+        </nav>
+        <div className="fin-sidebar-bottom">
+          <div className="fin-sidebar-note">
+            <ShieldCheck size={22} />
+            <b>Make it yours.</b>
+            <p>Keep your account details and security up to date.</p>
+            <button onClick={() => go('/personal/security')}>
+              Manage security <ArrowRight size={14} />
+            </button>
+          </div>
+          <button className="fin-signout" onClick={logout}>
+            <LogOut size={18} /> Sign out
+          </button>
+        </div>
+      </aside>
+      <div className="fin-workspace">
+        <header className="fin-topbar">
+          <div>
+            <span className="fin-mobile-logo">
+              <MicrosendrMark />
+            </span>
+            <span>
+              Personal <span className="fin-topbar-divider">/</span>{' '}
+              <b>
+                {(
+                  {
+                    home: 'Overview',
+                    payments: 'Payments',
+                    activity: 'Activity',
+                    profile: 'My account',
+                    security: 'Security',
+                    identity: 'Identity',
+                    onboarding: 'Welcome',
+                    deposit: 'Add money',
+                    send: 'Send money',
+                    convert: 'Convert',
+                    withdraw: 'Withdraw',
+                  } as Record<string, string>
+                )[tab] ?? 'Overview'}
+              </b>
+            </span>
+          </div>
+          <div>
+            {themeToggle}
+            <button
+              className="fin-avatar"
+              onClick={() => go('/personal/profile')}
+              aria-label="Open your profile"
+            >
+              {(p.first_name?.[0] ?? 'M') + (p.last_name?.[0] ?? '')}
+            </button>
+          </div>
+        </header>
+        <main className="fin-content" id="main-content">
+          {error && (
+            <div role="alert" className="fin-error">
+              {error}
+            </div>
+          )}
+          {tab === 'home' && (
+            <>
+              <div className="fin-heading">
+                <div>
+                  <span className="fin-kicker">YOUR EVERYDAY, SIMPLIFIED</span>
+                  <h1>
+                    Hello{p.first_name ? `, ${p.first_name}` : ''}
+                    <span className="fin-greeting-dot">.</span>
+                  </h1>
+                  <p>Make your next money move.</p>
+                </div>
+                <button
+                  className="fin-icon-button"
+                  onClick={retry}
+                  disabled={refreshing}
+                  aria-label="Refresh account"
+                >
+                  <RefreshCw size={18} className={refreshing ? 'fin-spin' : ''} />
+                </button>
+              </div>
+              <div className="fin-home-grid">
+                <div>
+                  <section className="fin-balance-card">
+                    <div className="fin-balance-top">
+                      <span>Total balance</span>
+                      <button
+                        aria-label={hidden ? 'Show balance' : 'Hide balance'}
+                        onClick={() => setHidden(!hidden)}
+                      >
+                        {hidden ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                      <span className="fin-currency-pill">{p.display_currency || 'USD'}</span>
+                    </div>
+                    <strong>{hidden ? '••••' : '—'}</strong>
+                    <p>
+                      {hidden
+                        ? 'Your balance is hidden'
+                        : 'Your available balances will appear here'}
+                    </p>
+                    <div className="fin-balance-foot">
+                      <span>
+                        <LockKeyhole size={13} /> Personal account
+                      </span>
+                      <span>microsendr</span>
+                    </div>
+                  </section>
+                  <div className="fin-quick-actions">
+                    {actions.map(([key, label, Icon]) => (
+                      <button key={key} onClick={() => go('/personal/' + key)}>
+                        <span>
+                          <Icon size={22} />
+                        </span>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <section className="fin-panel fin-balances">
+                    <div className="fin-section-head">
+                      <h2>Your money</h2>
+                      <Wallet size={18} />
+                    </div>
+                    <div className="fin-currency-row">
+                      <span className="fin-dollar">$</span>
+                      <span>
+                        <b>Digital dollars</b>
+                        <small>Account not yet available</small>
+                      </span>
+                      <strong>—</strong>
+                    </div>
+                    <div className="fin-currency-row">
+                      <span className="fin-naira">₦</span>
+                      <span>
+                        <b>Nigerian naira</b>
+                        <small>Account not yet available</small>
+                      </span>
+                      <strong>—</strong>
+                    </div>
+                  </section>
+                </div>
+                <aside className="fin-stack">
+                  <section className="fin-onboarding-card">
+                    <div className="fin-section-head">
+                      <span className="fin-kicker">GET STARTED</span>
+                      <span className="fin-step-count">
+                        {Number(!!p.first_name) +
+                          Number(!!p.email_verified_at) +
+                          Number(identityDone)}
+                        /3
+                      </span>
+                    </div>
+                    <h2>
+                      A few steps. <br />
+                      All yours.
+                    </h2>
+                    <div className="fin-checklist">
+                      {[
+                        [
+                          !!p.first_name,
+                          'Complete your profile',
+                          'Your details, all in one place.',
+                          'profile',
+                        ],
+                        [
+                          !!p.email_verified_at,
+                          'Verify your email',
+                          'Keep your account connected.',
+                          'security',
+                        ],
+                        [
+                          identityDone,
+                          'Verify your identity',
+                          'Get ready for available services.',
+                          'identity',
+                        ],
+                      ].map(([done, title, desc, destination]) => (
+                        <button
+                          key={title as string}
+                          onClick={() => go(`/personal/${destination}`)}
+                        >
+                          <span className={done ? 'done' : ''}>
+                            {done ? <Check size={14} /> : <span />}
+                          </span>
+                          <span>
+                            <b>{title as string}</b>
+                            <small>{desc as string}</small>
+                          </span>
+                          <ChevronRight size={16} />
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                  <section className="fin-identity-card">
+                    <div className="fin-id-mark">
+                      <MicrosendrMark />
+                    </div>
+                    <span>YOUR MICROSENDR ID</span>
+                    <h3>{p.username ? `@${p.username}` : 'Make it personal'}</h3>
+                    <p>A name that’s yours.</p>
+                    <button
+                      className="fin-secondary"
+                      onClick={p.username ? copy : () => go('/personal/profile')}
+                    >
+                      {copied ? <CheckCircle2 size={15} /> : <Copy size={15} />}{' '}
+                      {copied ? 'Copied' : p.username ? 'Copy username' : 'Choose username'}
+                    </button>
+                  </section>
+                </aside>
+              </div>
+              <section className="fin-panel fin-recent">
+                <div className="fin-section-head">
+                  <h2>Recent activity</h2>
+                  <button className="fin-text" onClick={() => go('/personal/activity')}>
+                    View all <ArrowRight size={15} />
+                  </button>
+                </div>
+                {activity(true)}
+              </section>
+            </>
+          )}
+          {tab === 'payments' && (
+            <>
+              <PageHeading
+                kicker="MOVE MONEY"
+                title="Your next move."
+                text="Add, send, convert or withdraw from one place."
+              />
+              <div className="fin-payment-tiles">
+                {actions.map(([key, label, Icon], i) => (
+                  <button key={key} onClick={() => go('/personal/' + key)}>
+                    <span>
+                      <Icon size={25} />
+                    </span>
+                    <h2>{label}</h2>
+                    <p>
+                      {
+                        [
+                          'Choose a bank or crypto deposit.',
+                          'Pay someone or an external account.',
+                          'Review an exchange before you confirm.',
+                          'Move money to your bank account.',
+                        ][i]
+                      }
+                    </p>
+                    <ArrowRight size={19} />
+                  </button>
+                ))}
+              </div>
+              <section className="fin-panel fin-recent">
+                <div className="fin-section-head">
+                  <h2>Before you move money</h2>
+                  <ShieldCheck size={20} />
+                </div>
+                <p>
+                  Complete your identity check and confirm that the payment method is available for
+                  your account.
+                </p>
+                <button className="fin-text" onClick={() => go('/personal/identity')}>
+                  Check verification <ArrowRight size={16} />
+                </button>
+              </section>
+            </>
+          )}
+          {['deposit', 'send', 'withdraw', 'convert'].includes(tab) && (
+            <MoneyFlow
+              key={tab}
+              kind={tab}
+              capabilities={o.capabilities}
+              csrf={csrf}
+              go={go}
+              identityDone={identityDone}
+            />
+          )}
+          {tab === 'activity' && (
+            <>
+              <PageHeading
+                kicker="YOUR RECORDS"
+                title="Every move, in one place."
+                text="Track your payments and open a receipt for the details."
+              />
+              <section className="fin-panel">
+                <div className="fin-activity-tools">
+                  <label className="fin-search">
+                    <Search size={18} />
+                    <input
+                      aria-label="Search payments"
+                      placeholder="Search reference or recipient"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                    />
+                  </label>
+                  <select
+                    aria-label="Payment status"
+                    value={filter}
+                    onChange={(e) => setFilter(e.target.value)}
+                  >
+                    <option value="all">All statuses</option>
+                    <option value="completed">Completed</option>
+                    <option value="pending">In progress</option>
+                  </select>
+                </div>
+                {activity()}
+              </section>
+              {receipt && (
+                <section className="fin-panel fin-receipt">
+                  <div className="fin-section-head">
+                    <h2>Transfer details</h2>
+                    <button className="fin-text" onClick={() => setSelected(null)}>
+                      Close
+                    </button>
+                  </div>
+                  <dl>
+                    {Object.entries({
+                      Status: statusLabel(receipt.status),
+                      Amount: `${formatAmount(receipt)} ${receipt.asset}`,
+                      Recipient: receipt.to,
+                      Reference: receipt.id,
+                      Network: receipt.network,
+                      'Transaction reference': receipt.tx_hash ?? 'Not submitted',
+                      Confirmations: `${receipt.confirmations} / ${receipt.required_confirmations}`,
+                    }).map(([k, v]) => (
+                      <div key={k}>
+                        <dt>{k}</dt>
+                        <dd>{v}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  <div className="fin-form-actions">
+                    {receipt.explorer_url && (
+                      <a
+                        className="fin-secondary"
+                        href={receipt.explorer_url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        View transaction <ArrowUpRight size={15} />
+                      </a>
+                    )}
+                    <button
+                      className="fin-secondary"
+                      onClick={() => {
+                        const url = URL.createObjectURL(
+                          new Blob([JSON.stringify(receipt, null, 2)], {
+                            type: 'application/json',
+                          }),
+                        );
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `microsendr-${receipt.id}.json`;
+                        a.click();
+                        setTimeout(() => URL.revokeObjectURL(url), 1000);
+                      }}
+                    >
+                      <Download size={15} /> Download record
+                    </button>
+                  </div>
+                </section>
+              )}
+            </>
+          )}
+          {tab === 'profile' && (
+            <>
+              <PageHeading
+                kicker="MY ACCOUNT"
+                title="Made personal."
+                text="Your details, preferences and account security."
+              />
+              <ConsumerProfileForm profile={p} csrf={csrf} onSaved={refresh} go={go} />
+              <button className="fin-secondary fin-profile-logout" onClick={logout}>
+                <LogOut size={16} /> Sign out
+              </button>
+            </>
+          )}
+          {tab === 'security' && (
+            <>
+              <PageHeading
+                kicker="ACCOUNT SECURITY"
+                title="Stay in control."
+                text="Manage your email and password."
+              />
+              <ConsumerSecurity profile={p} csrf={csrf} onSaved={refresh} />
+            </>
+          )}
+          {['identity', 'onboarding'].includes(tab) && (
+            <>
+              <PageHeading
+                kicker={tab === 'onboarding' ? 'WELCOME TO MICROSENDR' : 'ACCOUNT VERIFICATION'}
+                title={
+                  tab === 'onboarding'
+                    ? `You’re in${p.first_name ? `, ${p.first_name}` : ''}.`
+                    : 'Let’s make it official.'
+                }
+                text="Verify your identity now, or return to this step when you’re ready."
+              />
+              <div className="fin-verification">
+                <section className="fin-panel">
+                  <span className="fin-verification-icon">
+                    <ShieldCheck size={35} />
+                  </span>
+                  <h2>Your account, verified.</h2>
+                  <p>
+                    Have a valid identity document ready. You may also be asked to take a selfie.
+                  </p>
+                  <div className="fin-verification-points">
+                    <span>
+                      <Check size={16} /> Your documents stay with the verification provider.
+                    </span>
+                    <span>
+                      <Check size={16} /> You can explore your account before verification.
+                    </span>
+                  </div>
+                </section>
+                <PersonalKyc csrf={csrf} />
+                <button className="fin-text" onClick={() => go('/personal/home')}>
+                  {tab === 'onboarding' ? 'Do this later' : 'Back to overview'}{' '}
+                  <ArrowRight size={16} />
+                </button>
+              </div>
+            </>
+          )}
+          {![
+            'home',
+            'payments',
+            'deposit',
+            'send',
+            'withdraw',
+            'convert',
+            'activity',
+            'profile',
+            'security',
+            'identity',
+            'onboarding',
+          ].includes(tab) && (
+            <section className="fin-panel">
+              <h1>Page not found</h1>
+              <button className="fin-primary" onClick={() => go('/personal/home')}>
+                Back to overview
+              </button>
+            </section>
+          )}
+          <footer className="fin-app-footer">
+            <span>© {new Date().getFullYear()} Microsendr</span>
+            <button onClick={() => go('/personal/security')}>
+              <LockKeyhole size={12} /> Account security
+            </button>
+          </footer>
+        </main>
+      </div>
+    </div>
+  );
+}
+function PageHeading({ kicker, title, text }: { kicker: string; title: string; text: string }) {
+  return (
+    <div className="fin-heading">
+      <div>
+        <span className="fin-kicker">{kicker}</span>
+        <h1>{title}</h1>
+        <p>{text}</p>
+      </div>
+    </div>
+  );
+}
+function MoneyFlow({
+  kind,
+  capabilities,
+  csrf,
+  go,
+  identityDone,
+}: {
+  kind: string;
+  capabilities: Record<string, Capability>;
+  csrf: string;
+  go: (path: string) => void;
+  identityDone: boolean;
+}) {
+  const [method, setMethod] = useState('bank'),
+    [source, setSource] = useState('USD'),
+    [amount, setAmount] = useState(''),
+    [error, setError] = useState(''),
+    [busy, setBusy] = useState(false);
+  const destination = source === 'USD' ? 'NGN' : 'USD';
+  const capability =
+    capabilities[
+      kind === 'deposit'
+        ? method === 'bank'
+          ? 'fiat_deposit'
+          : 'crypto_deposit'
+        : kind === 'convert'
+          ? 'conversion'
+          : kind === 'send'
+            ? 'transfer'
+            : 'withdrawal'
+    ];
+  const title =
+    kind === 'deposit'
+      ? 'Add money.'
+      : kind === 'convert'
+        ? 'A clearer exchange.'
+        : kind === 'send'
+          ? 'Who are you paying?'
+          : 'Withdraw to your bank.';
+  async function quote(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      await consumerRequest('conversion/quotes', 'POST', { source, destination, amount }, csrf);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <>
+      <button className="fin-text fin-back" onClick={() => go('/personal/payments')}>
+        <ArrowLeft size={16} /> Payments
+      </button>
+      <PageHeading
+        kicker="MOVE MONEY"
+        title={title}
+        text={
+          kind === 'convert'
+            ? 'See the rate, fees and final amount before you confirm.'
+            : kind === 'deposit'
+              ? 'Choose how you want to fund your account.'
+              : kind === 'send'
+                ? 'Send to a Microsendr username or external account.'
+                : 'Send available naira to a verified bank account.'
+        }
+      />
+      <div className="fin-flow-layout">
+        <section className="fin-panel fin-flow">
+          {kind === 'deposit' && (
+            <div className="fin-methods" role="group" aria-label="Deposit method">
+              <button
+                className={method === 'bank' ? 'active' : ''}
+                onClick={() => setMethod('bank')}
+              >
+                <CreditCard size={20} /> Bank / card
+              </button>
+              <button
+                className={method === 'crypto' ? 'active' : ''}
+                onClick={() => setMethod('crypto')}
+              >
+                <Globe2 size={20} /> Crypto transfer
+              </button>
+            </div>
+          )}
+          {kind === 'convert' ? (
+            <form onSubmit={quote}>
+              <div className="fin-amount-input">
+                <label>
+                  You exchange
+                  <input
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    inputMode="decimal"
+                    pattern="[1-9][0-9]*(\.[0-9]{1,2})?"
+                    required
+                    placeholder="0.00"
+                  />
+                </label>
+                <select
+                  aria-label="Source currency"
+                  value={source}
+                  onChange={(e) => {
+                    setSource(e.target.value);
+                    setError('');
+                  }}
+                >
+                  <option value="USD">USD</option>
+                  <option value="NGN">NGN</option>
+                </select>
+              </div>
+              <button
+                type="button"
+                className="fin-swap"
+                aria-label="Reverse conversion"
+                onClick={() => {
+                  setSource(destination);
+                  setError('');
+                }}
+              >
+                <ArrowLeftRight size={18} />
+              </button>
+              <div className="fin-receive">
+                <span>
+                  You receive<strong>—</strong>
+                </span>
+                <b>{destination}</b>
+              </div>
+              <div className="fin-fee-row">
+                <span>Rate & total fees</span>
+                <b>Calculated with your quote</b>
+              </div>
+              <p className="fin-small">
+                A digital dollar balance is an asset balance, not a bank deposit. Conversion
+                requires an available provider route.
+              </p>
+              {error && (
+                <div className="fin-error" role="alert">
+                  {error}
+                </div>
+              )}
+              <button className="fin-primary" disabled={busy}>
+                {busy ? 'Checking availability…' : 'Check exchange availability'}
+                <ArrowRight size={17} />
+              </button>
+            </form>
+          ) : (
+            <div className="fin-method-detail">
+              <span className="fin-method-icon">
+                {kind === 'deposit' ? (
+                  method === 'bank' ? (
+                    <CreditCard size={30} />
+                  ) : (
+                    <Globe2 size={30} />
+                  )
+                ) : kind === 'send' ? (
+                  <ArrowUpRight size={30} />
+                ) : (
+                  <ArrowDownLeft size={30} />
+                )}
+              </span>
+              <h2>
+                {kind === 'deposit'
+                  ? method === 'bank'
+                    ? 'Local deposits'
+                    : 'Receive digital dollars'
+                  : kind === 'send'
+                    ? 'Send with Microsendr'
+                    : 'Bank withdrawal'}
+              </h2>
+              <p>{capability?.reason ?? 'This payment method is not available yet.'}</p>
+              <span className="fin-status">Not available</span>
+              {kind === 'deposit' && method === 'crypto' && (
+                <p className="fin-small">
+                  The deposit instructions will specify the supported asset and network. Only use
+                  the address shown for that network.
+                </p>
+              )}
+            </div>
+          )}
+        </section>
+        <aside className="fin-stack">
+          {!identityDone && (
+            <section className="fin-panel">
+              <ShieldCheck size={25} />
+              <h2>First, make it official.</h2>
+              <p>Verify your identity before using available payment services.</p>
+              <button className="fin-link-row" onClick={() => go('/personal/identity')}>
+                Verify identity <ArrowRight size={16} />
+              </button>
+            </section>
+          )}
+          <section className="fin-panel fin-flow-note">
+            <LockKeyhole size={22} />
+            <h3>You’re in control</h3>
+            <p>You’ll review the recipient, amount and fees before authorizing any payment.</p>
+          </section>
+        </aside>
+      </div>
+    </>
+  );
 }

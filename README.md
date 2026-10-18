@@ -1,15 +1,15 @@
 # Microsendr
 
-**Your money, without borders.** Microsendr is a consumer finance application and settlement foundation. The current public Personal experience uses Privy sign-in, an embedded QIE wallet, and clearly labeled sandbox money flows. Earlier Business, Stellar Testnet and developer sandbox modules remain in the repository for regression coverage.
+**Your money, without borders.** Microsendr is a consumer finance application and settlement foundation. The public Personal experience uses custom email/password accounts, optional Didit identity verification, editable profiles and a responsive finance dashboard. Earlier Business, Stellar Testnet and developer sandbox modules remain in the repository for regression coverage.
 
-> **Current status:** NGN balances and Paystack test transactions are simulated. Personal also supports user-authorized native QIEV3 wallet transfers on QIE Mainnet with durable receipt tracking. Digital-dollar deposits, exchange and live bank payouts are not enabled. See [settlement status](docs/microsendr-settlement-status.md).
+> **Current status:** Registration, profile editing and account security are implemented. Didit opens hosted identity verification when server credentials are configured. Live deposits, conversion and bank withdrawals remain unavailable pending payment and custody integrations. The consumer dashboard excludes all test balances. The existing native Mainnet settlement backend remains available for integration. See [settlement status](docs/microsendr-settlement-status.md).
 
 ## Product surface
 
 | Area | Current behavior |
 | --- | --- |
-| Personal | Privy login, embedded wallet, home, activity, profile, sandbox payments and Paystack test collection/payout |
-| QIE | Mainnet address and native balance, signed native-wallet send, persisted instruction, receipt matching and worker reconciliation; no ledger credit |
+| Personal | Custom account creation, password sign-in, optional identity verification, editable profile, payments navigation and receipts |
+| Settlement backend | QIE Mainnet native transfer instructions, receipt matching and worker reconciliation; no customer ledger credit. Custom-auth wallet provisioning is not yet connected. |
 | Paystack | Test-key-only checkout, bank name enquiry and payout; explicit status verification |
 | Financial core | PostgreSQL double-entry ledger, idempotency, reservations, outbox, immutable journals and reconciliation controls |
 | Historical modules | Business workspace, Stellar Testnet KUSD and multi-provider sandbox routing |
@@ -45,7 +45,9 @@ pnpm db:migrate
 pnpm dev
 ```
 
-Open the URL printed by Vite. Copy `.env.example` for optional integrations and keep credentials in ignored server-side environment files. `PRIVY_APP_ID` enables hosted login. `PAYSTACK_SECRET_KEY` accepts **test keys only**. No provider key or wallet secret belongs in browser variables.
+Open the URL printed by Vite. Copy `.env.example` for optional integrations and keep credentials in ignored server-side environment files. Personal registration works without Privy. Configure `SMTP_*` and `KORA_AUTH_SECRET` for email verification and password recovery. Legacy Privy endpoints remain for compatibility. `PAYSTACK_SECRET_KEY` accepts **test keys only**. No provider key or wallet secret belongs in browser variables.
+
+See [consumer account implementation](docs/consumer-accounts.md) for routes, deployment requirements and remaining payment dependencies.
 
 ## Checks
 

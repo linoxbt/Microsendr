@@ -1,11 +1,11 @@
 # Microsendr settlement status
 
-The Personal product currently posts only **simulated NGN** to its double-entry ledger. The landing page and account must not describe the sandbox balance as fiat or digital dollars held for a customer.
+The consumer dashboard now uses custom accounts and excludes all simulated ledger balances. Live fiat balances, crypto deposit accounts and conversion are unavailable. Historical sandbox modules remain isolated for testing. See [consumer accounts](consumer-accounts.md).
 
 ## QIE mainnet
 
 - Chain ID 1990 and the RPC endpoint are configured from QIE's public documentation.
-- Privy provisions an EVM wallet on Personal login. The Profile page shows its QIE address and live native QIEV3 balance. The Send page can initiate a user-authorized native QIEV3 transfer; the embedded wallet signs and broadcasts it.
+- The legacy Privy integration can provision an EVM wallet and authorize native transfers. It is no longer part of consumer login. Custom-auth wallet provisioning and signing must be integrated before exposing this capability in the redesigned dashboard.
 - The API requires a wallet signature over the account, network, chain ID, sender, recipient, atomic amount, idempotency key and short expiry. It persists the instruction and the current QIE block before the browser broadcasts. One transaction hash can be attached only once.
 - The worker verifies chain ID, transaction sender/recipient/amount, receipt, canonical block hash, creation block floor and 12 confirmations. RPC errors or mismatches enter an `unknown` state for repeated reconciliation; no automatic resubmission occurs.
 - Native QIEV3 stays in the user's Privy wallet. The settlement record is evidence of an external wallet transfer, **not** a customer ledger balance or digital-dollar credit. The sandbox NGN ledger remains separate.
@@ -17,12 +17,16 @@ Future chains implement the `ChainSettlementAdapter` contract in `packages/settl
 ## Paystack
 
 - The provider connector supports **Paystack test mode** for Business rail workflows. Personal now has separate test-mode collection and withdrawal instructions with idempotency keys, provider credential binding, reserved balances, verified receipts, explicit provider fee journals, and unknown-outcome quarantine.
-- Personal offers Paystack test checkout and bank recipient name enquiry. The user must select **Check status** after checkout or payout; provider verification then posts or releases the corresponding ledger amount. Automatic webhook/poll reconciliation remains a production-readiness gap.
+- Historical Personal API modules support Paystack test checkout and bank recipient name enquiry; these are excluded from the redesigned consumer UI. The user must select **Check status** after checkout or payout; provider verification then posts or releases the corresponding ledger amount. Automatic webhook/poll reconciliation remains a production-readiness gap.
 - `PAYSTACK_SECRET_KEY` is absent on the deployed server. Only a test secret key can be used by the current connector.
-- Paystack test transactions move no real NGN. The Personal balance continues to be labeled simulated, including after a verified test transaction. Paystack does not convert a QIE asset to NGN.
+- Paystack test transactions move no real NGN. They remain marked simulated in backend records and are never shown as customer balances in the new dashboard. Paystack does not convert a QIE asset to NGN.
 - Production use requires partner approval and a separately verified crypto-to-fiat settlement route.
 
 ## Privy
 
-- The Personal backend verifies access and identity tokens with Privy's app-scoped public JWKS. The app secret is unnecessary for this flow and must remain server-side.
+- Legacy Personal endpoints verify access and identity tokens with Privy's app-scoped public JWKS. The app secret is unnecessary for this flow and must remain server-side.
 - The deployment app ID is in the ignored `.env.public`; the app secret supplied in chat was **not** stored in the repository or deployment. Rotate that exposed secret in Privy before using it for any server API calls.
+
+## Identity and email
+
+Didit workflow and webhook credentials are configured on the deployment. A user must consent before opening hosted verification; signed webhook decisions remain authoritative. Actual verification completion requires the user's own documents and has not been performed by the coding agent. SMTP is not configured, so email verification and recovery currently show an unavailable state. New password registration and password sign-in do not depend on SMTP.

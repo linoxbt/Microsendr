@@ -54,13 +54,16 @@ export function registerDidit(app: FastifyInstance) {
   app.get('/personal/api/kyc', async request => {
     const userId = await personal(request);
     const latest = (await pool.query('SELECT status,verification_url,updated_at FROM personal_didit_sessions WHERE personal_user_id=$1 ORDER BY created_at DESC,id DESC LIMIT 1', [userId])).rows[0];
-    return { status: latest?.status ?? 'Not Started', url: latest && active.includes(latest.status) ? latest.verification_url : null, updated_at: latest?.updated_at ?? null,
+    const identity = (await pool.query('SELECT email_verified_at FROM personal_users WHERE id=$1',[userId])).rows[0];
+    return { email_verified: !!identity.email_verified_at, status: latest?.status ?? 'Not Started', url: latest && active.includes(latest.status) ? latest.verification_url : null, updated_at: latest?.updated_at ?? null,
       configured: !!process.env.DIDIT_API_KEY && !!process.env.DIDIT_WEBHOOK_SECRET };
   });
 
   app.post('/personal/api/kyc/session', { config: { rateLimit: { max: 3, timeWindow: '1 hour' } } }, async request => {
     const userId = await personal(request, true);
     z.object({ consent: z.literal(true) }).strict().parse(request.body);
+    const owner = (await pool.query('SELECT email_verified_at FROM personal_users WHERE id=$1',[userId])).rows[0];
+    if (!owner.email_verified_at) throw new PaymentError(403,'verified_email_required','Verify your email before starting identity verification.');
     const apiKey = process.env.DIDIT_API_KEY;
     if (!apiKey || !process.env.DIDIT_WEBHOOK_SECRET) throw new PaymentError(503, 'kyc_unavailable', 'Identity verification is being set up');
     const origin = allowedOrigin(request);

@@ -11,6 +11,7 @@ import { QieClient, QIE_CHAIN_ID, QIE_EXPLORER } from '../../../packages/qie/src
 import { createNativeSettlement, publicSettlement, submitNativeSettlement } from '../../../packages/settlement/src/service.js';
 import type { PaystackClient } from '../../../connectors/paystack/src/index.js';
 import { registerPersonalPaystack } from './personal-paystack.js';
+import { registerConsumer } from './consumer.js';
 
 const emailSchema = z.string().trim().toLowerCase().email().max(254);
 const minorSchema = z.string().regex(/^[1-9][0-9]{0,11}$/);
@@ -91,11 +92,15 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
   const secret = options.codeSecret ?? process.env.KORA_AUTH_SECRET;
   const sendCode = options.sendCode ?? mailer();
   const verifier = privyVerifier(privyConfig);
-  app.get('/personal/api/auth/config', async () => ({ enabled: await verifier.ready(), method: 'privy', app_id: privyConfig.appId, client_id: privyConfig.clientId ?? null }));
+  registerConsumer(app, { required, origin, setCookie, emailEnabled: !!secret && !!sendCode });
+  app.get('/personal/api/auth/config', async () => ({ enabled: true, method: 'password', email_verification_available: !!secret && !!sendCode }));
+  app.get('/personal/api/auth/legacy-config', async () => ({ enabled: await verifier.ready(), app_id: privyConfig.appId, client_id: privyConfig.clientId ?? null }));
   app.post('/personal/api/auth/privy', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
     const requestOrigin = origin(request);
-    const { access_token, identity_token } = z.object({ access_token: z.string().min(1).max(8192), identity_token: z.string().min(1).max(32768).optional() }).strict().parse(request.body);
+    const { access_token, identity_token, restore_existing } = z.object({ restore_existing: z.boolean().optional(), access_token: z.string().min(1).max(8192), identity_token: z.string().min(1).max(32768).optional() }).strict().parse(request.body);
     const verified = await verifier.verify(access_token);
+    if (restore_existing && !(await pool.query('SELECT 1 FROM personal_users WHERE privy_app_id=$1 AND privy_subject=$2',[verified.app_id,verified.subject])).rowCount)
+      throw new PaymentError(404,'previous_account_not_found','No previous account was found. Use Create an account.');
     let email: string | null = null;
     if (identity_token) email = emailSchema.parse(await verifier.verifyEmailIdentity(identity_token, verified.subject));
     else {
@@ -123,6 +128,10 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
       }
       if (user.privy_subject && (user.privy_subject !== verified.subject || user.privy_app_id !== verified.app_id))
         throw new PaymentError(409, 'identity_conflict', 'This email is linked to another account');
+      if (email && user.email === email && !user.email_verified_at) {
+        await c.query('UPDATE personal_users SET password_hash=NULL,email_verified_at=now() WHERE id=$1',[user.id]);
+        await c.query('DELETE FROM personal_sessions WHERE personal_user_id=$1',[user.id]);
+      }
       await c.query('UPDATE personal_users SET privy_app_id=$2,privy_subject=$3,updated_at=now() WHERE id=$1', [user.id, verified.app_id, verified.subject]);
       await c.query("INSERT INTO kora_accounts(id,owner_type,personal_user_id) VALUES($1,'personal',$2) ON CONFLICT(personal_user_id) DO NOTHING", [id('acct'), user.id]);
       const account = (await c.query('SELECT id FROM kora_accounts WHERE personal_user_id=$1', [user.id])).rows[0];
@@ -130,6 +139,7 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
       await c.query('INSERT INTO ledger_accounts(id,asset_position_id,asset,purpose) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING', ['sys:NGN:funding',ngn,'NGN','funding']);
       const token = randomBytes(32).toString('hex'), csrfToken = randomBytes(32).toString('hex');
       await c.query("INSERT INTO personal_sessions(token_hash,personal_user_id,csrf_token,expires_at) VALUES($1,$2,$3,now()+interval '1 day')", [hashKey(token), user.id, csrfToken]);
+      if (restore_existing) await c.query("UPDATE personal_sessions SET auth_method='restore' WHERE token_hash=$1",[hashKey(token)]);
       return { token, csrfToken, userId: user.id };
     });
     setCookie(request, reply, result.token);
@@ -171,13 +181,19 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
       }
       await c.query('UPDATE personal_email_challenges SET consumed_at=now() WHERE id=$1', [challenge_id]);
       await c.query('INSERT INTO personal_users(id,email,email_verified_at) VALUES($1,$2,now()) ON CONFLICT(email) DO NOTHING', [id('usr'), challenge.email]);
-      const user = (await c.query('SELECT id FROM personal_users WHERE email=$1', [challenge.email])).rows[0];
+      const user = (await c.query('SELECT id,email_verified_at FROM personal_users WHERE email=$1 FOR UPDATE', [challenge.email])).rows[0];
+      // Claiming a previously unverified email invalidates any password planted by another person.
+      if (!user.email_verified_at) {
+        await c.query('UPDATE personal_users SET password_hash=NULL,email_verified_at=now() WHERE id=$1',[user.id]);
+        await c.query('DELETE FROM personal_sessions WHERE personal_user_id=$1',[user.id]);
+      }
       await c.query("INSERT INTO kora_accounts(id,owner_type,personal_user_id) VALUES($1,'personal',$2) ON CONFLICT(personal_user_id) DO NOTHING", [id('acct'), user.id]);
       const account = (await c.query('SELECT id FROM kora_accounts WHERE personal_user_id=$1', [user.id])).rows[0];
       await c.query('INSERT INTO ledger_accounts(id,owner_account_id,asset_position_id,asset,purpose) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING', [personalAccount(account.id), account.id, ngn, 'NGN', 'available']);
       await c.query('INSERT INTO ledger_accounts(id,asset_position_id,asset,purpose) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING', ['sys:NGN:funding',ngn,'NGN','funding']);
       const token = randomBytes(32).toString('hex'), csrfToken = randomBytes(32).toString('hex');
       await c.query("INSERT INTO personal_sessions(token_hash,personal_user_id,csrf_token,expires_at) VALUES($1,$2,$3,now()+interval '1 day')", [hashKey(token), user.id, csrfToken]);
+      await c.query("UPDATE personal_sessions SET auth_method='email' WHERE token_hash=$1",[hashKey(token)]);
       return { token, csrfToken, userId: user.id };
     });
     if (!result) throw new PaymentError(401, 'invalid_code', 'Code is invalid or expired');

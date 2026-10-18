@@ -139,6 +139,17 @@ test('Privy Personal requires a matching signed identity token with verified ema
     assert.equal(changed.statusCode, 200, changed.body);
     assert.equal(changed.json().account_id, first.json().account_id);
     assert.equal(changed.json().email, changedEmail);
+    const restoreIdentity = await sign(subject, { linked_accounts: JSON.stringify([{ type:'email',address:changedEmail,lv:Math.floor(Date.now()/1000) }]) });
+    const restored = await configured.inject({method:'POST',url:'/personal/api/auth/privy',remoteAddress:'127.0.0.2',headers:{origin},payload:{access_token,identity_token:restoreIdentity,restore_existing:true}});
+    assert.equal(restored.statusCode,200,restored.body);
+    assert.equal(restored.json().account_id,first.json().account_id);
+    const password = await configured.inject({method:'POST',url:'/personal/api/profile/password',headers:{origin,cookie:cookie(restored),'x-kora-csrf':restored.json().csrf_token},payload:{password:'restored-account-password-2026'}});
+    assert.equal(password.statusCode,200,password.body);
+    const freshSubject=`did:privy:${id('notregistered')}`;
+    const absent=await configured.inject({method:'POST',url:'/personal/api/auth/privy',remoteAddress:'127.0.0.2',headers:{origin},payload:{access_token:await sign(freshSubject,{sid:id('sid')}),restore_existing:true}});
+    assert.equal(absent.statusCode,404,absent.body);
+    assert.equal((await pool.query('SELECT 1 FROM personal_users WHERE privy_subject=$1',[freshSubject])).rowCount,0);
+
   } finally { await configured.close(); }
 });
 
