@@ -1,5 +1,5 @@
 import React, { useState, type FormEvent } from 'react';
-import { Captcha, PrivyProvider, getIdentityToken, useLoginWithEmail, usePrivy } from '@privy-io/react-auth';
+import { Captcha, PrivyProvider, getIdentityToken, useLoginWithEmail, usePrivy, useUser } from '@privy-io/react-auth';
 import { ArrowRight } from 'lucide-react';
 import { qieMainnet } from './qie-chain.js';
 
@@ -9,6 +9,7 @@ type Props = AuthProps & { config: AuthConfig };
 
 export function MicrosendrAuthForm({ mode, onComplete, csrf, inviteToken, saveWorkspace }: AuthProps) {
   const { ready, authenticated, getAccessToken, logout } = usePrivy();
+  const { refreshUser } = useUser();
   const { sendCode, loginWithCode } = useLoginWithEmail();
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
@@ -19,8 +20,17 @@ export function MicrosendrAuthForm({ mode, onComplete, csrf, inviteToken, saveWo
     const access_token = await getAccessToken();
     if (!access_token) throw new Error('Your session expired. Sign in again.');
     const personal = mode === 'personal';
-    const identity_token = personal ? await getIdentityToken() : undefined;
-    if (personal && !identity_token) throw new Error('Email verification is unavailable. Sign in again.');
+    let identity_token = personal ? await getIdentityToken() : undefined;
+    if (personal && !identity_token) {
+      // Privy may publish the identity token just after completing email login.
+      // Refresh the signed user data once before reporting an app setup issue.
+      await refreshUser().catch(() => undefined);
+      identity_token = await getIdentityToken();
+    }
+    if (personal && !identity_token) {
+      console.error('Personal sign-in cannot continue: Privy did not return an identity token. Check the Privy identity-token setting.');
+      throw new Error('We could not finish setting up your Personal account. Please contact support.');
+    }
     const response = await fetch(personal ? '/personal/api/auth/privy' : '/console/auth/privy', {
       method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json', ...(csrf ? { 'x-kora-csrf': csrf } : {}) },
       body: JSON.stringify(personal ? { access_token, identity_token } : {
@@ -51,7 +61,10 @@ export function MicrosendrAuthForm({ mode, onComplete, csrf, inviteToken, saveWo
   };
   return <div className="ms-auth-form">
     {error && <p className="personal-error" role="alert">{error}</p>}
-    {authenticated ? <button className="personal-primary" disabled={busy || !ready} onClick={() => void run(exchange)}>Continue to {mode} <ArrowRight size={17}/></button> :
+    {authenticated ? <>
+      <button className="personal-primary" disabled={busy || !ready} onClick={() => void run(exchange)}>Continue to {mode} <ArrowRight size={17}/></button>
+      <button className="personal-text" disabled={busy} onClick={() => void run(async () => { await logout(); setSent(false); setCode(''); setEmail(''); })}>Use another email</button>
+    </> :
       <form onSubmit={submit}>
         {sent ? <><p className="ms-auth-sent" role="status">We sent a code to <strong>{email.trim()}</strong>.</p><label>Verification code<input type="text" autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" value={code} onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} maxLength={6} required /></label></> :
           <label>Email address<input type="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required /></label>}

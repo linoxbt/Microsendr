@@ -17,6 +17,13 @@ Never commit this file. The Compose file supplies the internal `DATABASE_URL`.
 Personal sign-in uses Privy. Set `PRIVY_APP_ID` and the server-side
 `PRIVY_VERIFICATION_KEY`; optionally set `PRIVY_CLIENT_ID`. Enable Privy email
 login and identity tokens, and allow the exact Netlify HTTPS origin in Privy.
+In the Privy Dashboard, open **User management → Authentication → Advanced**
+and turn on **Return user data in an identity token** for the Microsendr app.
+This is required even when the email code succeeds: the API accepts only the
+signed email claim in that identity token, tied to the Privy access token's
+user ID. If the setting is off, the Personal page shows an account setup error
+after email login. Refreshing or signing in again cannot resolve that setting.
+After saving it, sign out of the incomplete Privy session and sign in again.
 Without these settings, sign-in fails closed and the Developer Sandbox remains
 available. Legacy email-code sessions can continue only when the optional
 SMTP settings are configured; the Personal sign-in page uses Privy.
