@@ -4,10 +4,17 @@ import { PersonalLogin } from './personal-login.js';
 import { PersonalKyc } from './personal-kyc.js';
 import { usePersonalPrivy } from './personal-context.js';
 import type { AuthConfig } from './microsendr-auth.js';
+import { MicrosendrMark } from './microsendr-logo.js';
 import './personal.css';
 const PersonalWallet = React.lazy(() => import('./personal-wallet.js').then(module => ({ default: module.PersonalWallet })));
 const PersonalMoney = React.lazy(() => import('./personal-money.js').then(module => ({ default: module.PersonalMoney })));
 const PersonalProvider = React.lazy(() => import('./personal-provider.js').then(module => ({ default: module.PersonalProvider })));
+
+function PersonalLoading() {
+  return <div className="personal-loading" role="status" aria-label="Opening Personal">
+    <span className="personal-loading-mark"><MicrosendrMark /></span>
+  </div>;
+}
 
 type Session = { authenticated: boolean; csrf_token?: string; email?: string; kyc_state?: string; residence_country?: string | null; display_currency?: string; privy_subject?: string | null };
 type HomeData = { email: string; kyc_state: string; sandbox_funded: boolean; balance: { available_minor: string; pending_minor: string; held_minor: string; simulated: true } };
@@ -33,8 +40,8 @@ export function PersonalPage({ go, path, brand, themeToggle, onAuthChange }: { g
   useEffect(() => {
     void fetch('/personal/api/auth/config').then(response => response.json()).then(setAuthConfig).catch(() => setAuthConfig({ enabled: false }));
   }, []);
-  if (!authConfig) return <div className="personal-loading">{brand}<p>Opening Personal…</p></div>;
-  return <React.Suspense fallback={<div className="personal-loading">{brand}<p>Opening Personal…</p></div>}><PersonalProvider config={authConfig}><PersonalContent go={go} path={path} brand={brand} themeToggle={themeToggle} onAuthChange={onAuthChange} authConfig={authConfig}/></PersonalProvider></React.Suspense>;
+  if (!authConfig) return <PersonalLoading />;
+  return <React.Suspense fallback={<PersonalLoading />}><PersonalProvider config={authConfig}><PersonalContent go={go} path={path} brand={brand} themeToggle={themeToggle} onAuthChange={onAuthChange} authConfig={authConfig}/></PersonalProvider></React.Suspense>;
 }
 
 function PersonalContent({ go, path, brand, themeToggle, onAuthChange, authConfig }: { go: (path: string) => void; path: string; brand: React.ReactNode; themeToggle: React.ReactNode; onAuthChange: (authenticated: boolean) => void; authConfig: AuthConfig }) {
@@ -82,7 +89,7 @@ function PersonalContent({ go, path, brand, themeToggle, onAuthChange, authConfi
   }); };
   const logout = () => void run(async () => { await request('/personal/api/logout', 'POST', {}, session?.csrf_token); await privyLogout().catch(() => undefined); setSession({ authenticated: false }); setHome(undefined); go('/personal/login'); });
   const nav = [ ['home', 'Home', Home], ['send', 'Send', Send], ['activity', 'Activity', History], ['profile', 'Profile', UserRound] ] as const;
-  if (!session) return <div className="personal-loading">{brand}<p>Opening Personal…</p></div>;
+  if (!session) return <PersonalLoading />;
   if (!session.authenticated) return <PersonalLogin brand={brand} go={go} error={error} authConfig={authConfig} onComplete={next => { setSession(next); void refresh(); go('/personal/home'); }} />;
   return <div className="personal-shell"><aside className={`personal-sidebar ${menu ? 'open' : ''}`}><button className="personal-brand" onClick={() => go('/personal/home')}>{brand}</button><div className="personal-sidebar-caption">PERSONAL ACCOUNT <span>Sandbox</span></div><nav>{nav.map(([id,label,Icon]) => <button key={id} className={tab===id || (tab==='money' && id==='home')?'active':''} onClick={() => {go('/personal/'+id);setMenu(false);}}><Icon size={19}/>{label}</button>)}</nav><div className="personal-sidebar-bottom"><div className="personal-sandbox-note"><ShieldCheck size={18}/><span>Simulated NGN only<br/><small>No live money movement</small></span></div><button onClick={logout}><LogOut size={18}/> Sign out</button></div></aside>
     {menu && <button className="personal-scrim" aria-label="Close menu" onClick={() => setMenu(false)}/>}
