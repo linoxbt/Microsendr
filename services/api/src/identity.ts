@@ -1,4 +1,4 @@
-import { importSPKI, jwtVerify } from 'jose';
+import { createRemoteJWKSet, importSPKI, jwtVerify } from 'jose';
 import { id, type Client } from '../../../packages/database/src/index.js';
 import {
   accountId,
@@ -38,16 +38,24 @@ export function privyConfiguration(): PrivyConfig {
   };
 }
 export function privyVerifier(config: PrivyConfig) {
-  const configured = /^[A-Za-z0-9_-]{1,120}$/.test(config.appId) && !!config.verificationKey;
-  const key = configured
+  const configured = /^[A-Za-z0-9_-]{1,120}$/.test(config.appId);
+  // Privy's app-scoped public keys rotate. A pinned PEM remains supported for
+  // offline deployments; otherwise use only the fixed Privy HTTPS endpoint.
+  const key = configured && config.verificationKey
     ? importSPKI(config.verificationKey, 'ES256').catch(() => null)
     : Promise.resolve(null);
+  const remoteKey = configured && !config.verificationKey
+    ? createRemoteJWKSet(new URL(`https://api.privy.io/v1/apps/${config.appId}/jwks.json`), {
+        timeoutDuration: 5000,
+        cooldownDuration: 30000,
+      })
+    : null;
   return {
     async ready() {
-      return (await key) !== null;
+      return configured && ((await key) !== null || remoteKey !== null);
     },
     async verify(token: string) {
-      const publicKey = await key;
+      const publicKey = (await key) ?? remoteKey;
       if (!publicKey)
         throw new PaymentError(
           503,
@@ -81,7 +89,7 @@ export function privyVerifier(config: PrivyConfig) {
       }
     },
     async verifyEmailIdentity(token: string, expectedSubject: string) {
-      const publicKey = await key;
+      const publicKey = (await key) ?? remoteKey;
       if (!publicKey) throw new PaymentError(503, 'login_not_configured', 'Privy login is not configured');
       try {
         const { payload } = await jwtVerify(token, publicKey, {

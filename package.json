@@ -29,7 +29,7 @@
     "generate": "tsx scripts/generate-contract.ts",
     "contract:check": "tsx scripts/generate-contract.ts --check",
     "sdk:build": "tsup --config sdks/typescript/tsup.config.ts",
-    "test": "tsx --test tests/core.test.ts tests/signer.test.ts tests/didit.test.ts",
+    "test": "tsx --test tests/core.test.ts tests/signer.test.ts tests/didit.test.ts tests/qie.test.ts",
     "test:integration": "tsx --test --test-concurrency=1 tests/integration.test.ts tests/engine.test.ts tests/product.test.ts tests/rails.test.ts tests/stellar.test.ts tests/controls.test.ts tests/network.test.ts tests/routing.test.ts tests/queue.test.ts tests/auth.test.ts tests/personal.test.ts tests/business-email.test.ts",
     "test:browser": "playwright test",
     "check": "pnpm typecheck && pnpm test && pnpm test:integration",

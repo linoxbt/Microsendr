@@ -1,15 +1,17 @@
 import React, { useEffect } from 'react';
 import { ArrowLeft, ShieldCheck } from 'lucide-react';
 import { MicrosendrAuth } from './auth-shell.js';
+import type { AuthConfig } from './microsendr-auth.js';
 
 type Props = {
   brand: React.ReactNode;
   go: (path: string) => void;
   error?: string;
   onComplete: (session: any) => void;
+  authConfig: AuthConfig;
 };
 
-export function PersonalLogin({ brand, go, error, onComplete }: Props) {
+export function PersonalLogin({ brand, go, error, onComplete, authConfig }: Props) {
   useEffect(() => {
     const previousTitle = document.title;
     document.title = 'Sign in to Personal | Microsendr';
@@ -38,7 +40,7 @@ export function PersonalLogin({ brand, go, error, onComplete }: Props) {
           <h1 id="personal-signin-title">Sign in to Personal.</h1>
           <p className="ms-personal-login-intro">Use your email to sign in or create an account.</p>
           {error && <p className="personal-error" role="alert">{error}</p>}
-          <MicrosendrAuth mode="personal" onComplete={onComplete} />
+          <MicrosendrAuth mode="personal" onComplete={onComplete} config={authConfig} sharedProvider />
           <div className="ms-personal-login-note"><ShieldCheck size={18}/><span>Sandbox access only. Balances and transfers are simulated.</span></div>
         </div>
       </section>

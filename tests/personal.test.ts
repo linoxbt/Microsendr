@@ -125,7 +125,7 @@ test('Didit session and signed decisions remain separate from sandbox access', a
     assert.equal(before.json().status, 'Not Started');
     const user = (await pool.query('SELECT id FROM personal_users WHERE email=$1', [(await app.inject({ url: '/personal/api/session', headers: { cookie: auth.cookie } })).json().email])).rows[0];
     const send = (event_id: string, status: string, timestamp = Math.floor(Date.now() / 1000), valid = true) => {
-      const event = { event_id, session_id: providerId, status, timestamp, vendor_data: user.id };
+      const event = { event_id: `${providerId}:${event_id}`, session_id: providerId, status, timestamp, vendor_data: user.id };
       const canonical = JSON.stringify(Object.fromEntries(Object.entries(event).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)));
       const signature = valid ? createHmac('sha256', 'test-webhook-secret-only').update(canonical).digest('hex') : '0'.repeat(64);
       return app.inject({ method: 'POST', url: '/personal/api/webhooks/didit', headers: { 'x-signature-v2': signature }, payload: event });

@@ -1,12 +1,13 @@
 import React, { useState, type FormEvent } from 'react';
 import { Captcha, PrivyProvider, getIdentityToken, useLoginWithEmail, usePrivy } from '@privy-io/react-auth';
 import { ArrowRight } from 'lucide-react';
+import { qieMainnet } from './qie-chain.js';
 
 export type AuthConfig = { enabled: boolean; app_id?: string | null; client_id?: string | null };
 export type AuthProps = { mode: 'personal' | 'business'; onComplete: (result: any) => void; csrf?: string; inviteToken?: string; saveWorkspace?: boolean };
 type Props = AuthProps & { config: AuthConfig };
 
-function Form({ mode, onComplete, csrf, inviteToken, saveWorkspace }: Props) {
+export function MicrosendrAuthForm({ mode, onComplete, csrf, inviteToken, saveWorkspace }: AuthProps) {
   const { ready, authenticated, getAccessToken, logout } = usePrivy();
   const { sendCode, loginWithCode } = useLoginWithEmail();
   const [email, setEmail] = useState('');
@@ -29,7 +30,9 @@ function Form({ mode, onComplete, csrf, inviteToken, saveWorkspace }: Props) {
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error?.message ?? 'Sign-in failed');
-    await logout().catch(() => undefined);
+    // Keep the Personal Privy session alive so its embedded wallet remains
+    // available after the account session is established.
+    if (!personal) await logout().catch(() => undefined);
     onComplete(result);
   }
   async function run(action: () => Promise<void>) {
@@ -62,7 +65,9 @@ function Form({ mode, onComplete, csrf, inviteToken, saveWorkspace }: Props) {
 export function MicrosendrAuth(props: Props) {
   const config = props.config;
   return <PrivyProvider appId={config.app_id!} clientId={config.client_id ?? undefined} config={{
-    loginMethods: ['email'], embeddedWallets: { ethereum: { createOnLogin: 'off' }, solana: { createOnLogin: 'off' } },
+    loginMethods: ['email'],
+    embeddedWallets: { ethereum: { createOnLogin: props.mode === 'personal' ? 'users-without-wallets' : 'off' }, solana: { createOnLogin: 'off' } },
+    supportedChains: [qieMainnet], defaultChain: qieMainnet,
     appearance: { theme: 'light', accentColor: '#4682B4' },
-  }}><Form {...props} /></PrivyProvider>;
+  }}><MicrosendrAuthForm {...props} /></PrivyProvider>;
 }

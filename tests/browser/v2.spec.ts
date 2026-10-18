@@ -2,12 +2,12 @@ import { test, expect } from '@playwright/test';
 
 test('landing presents Microsendr Personal and routes prompts', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('Money moves');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Your money.');
   await expect(page.locator('.public-header .logo')).toHaveText('microsendr');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await expect(page.getByRole('button', { name: 'Switch to dark theme' })).toHaveCount(0);
   await expect(page.locator('.ms-hero-visual img')).toBeVisible();
-  await page.locator('.ms-hero-actions').getByRole('button', { name: 'Get started' }).click();
+  await page.locator('.ms-hero-actions').getByRole('button', { name: 'Explore Microsendr' }).click();
   await expect(page).toHaveURL(/\/personal\/login$/);
   await expect(page.getByRole('heading', { name: 'Sign in to Personal.' })).toBeVisible();
   await expect(page.getByText('Sign-in is being set up. Please check back soon.')).toBeVisible();
@@ -54,7 +54,7 @@ test('default theme uses a cream canvas across Microsendr Personal pages', async
     await expect(page.locator(surface)).toHaveCSS('background-color', 'rgb(247, 243, 233)');
   }
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Money moves with you.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Your money. More places.' })).toBeVisible();
   await expect(page.locator('.ms-button').first()).toHaveCSS('background-color', 'rgb(70, 130, 180)');
   await page.evaluate(() => localStorage.setItem('microsendr-theme', 'dark'));
   await page.reload();

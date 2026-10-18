@@ -7,6 +7,7 @@ import { balance, postJournal } from '../../../packages/ledger/src/index.js';
 import { hashKey } from '../../../packages/payments/src/auth.js';
 import { PaymentError } from '../../../packages/payments/src/errors.js';
 import { privyConfiguration, privyVerifier, type PrivyConfig } from './identity.js';
+import { QieClient, QIE_CHAIN_ID, QIE_EXPLORER } from '../../../packages/qie/src/index.js';
 
 const emailSchema = z.string().trim().toLowerCase().email().max(254);
 const minorSchema = z.string().regex(/^[1-9][0-9]{0,11}$/);
@@ -52,7 +53,7 @@ async function session(request: FastifyRequest) {
   const token = request.cookies.kora_personal;
   if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;
   const row = (await pool.query(
-    `SELECT s.csrf_token,u.id AS user_id,u.email,u.residence_country,u.display_currency,u.kyc_state,
+    `SELECT s.csrf_token,u.id AS user_id,u.email,u.residence_country,u.display_currency,u.kyc_state,u.privy_subject,
             a.id AS account_id FROM personal_sessions s JOIN personal_users u ON u.id=s.personal_user_id
             JOIN kora_accounts a ON a.personal_user_id=u.id
             WHERE s.token_hash=$1 AND s.expires_at>now() AND a.status='active'`,
@@ -71,12 +72,12 @@ async function required(request: FastifyRequest, write = false) {
   const row = await session(request);
   if (!row) throw new PaymentError(401, 'personal_login_required', 'Sign in to your Personal account');
   if (write) csrf(request, row);
-  return row as { csrf_token: string; user_id: string; account_id: string; email: string; residence_country: string | null; display_currency: string; kyc_state: string };
+  return row as { csrf_token: string; user_id: string; account_id: string; email: string; residence_country: string | null; display_currency: string; kyc_state: string; privy_subject: string | null };
 }
 function publicSession(row: Awaited<ReturnType<typeof required>>) {
   return { authenticated: true, csrf_token: row.csrf_token, email: row.email,
     residence_country: row.residence_country, display_currency: row.display_currency,
-    kyc_state: row.kyc_state, account_id: row.account_id, mode: 'sandbox' };
+    kyc_state: row.kyc_state, account_id: row.account_id, privy_subject: row.privy_subject ?? null, mode: 'sandbox' };
 }
 function setCookie(request: FastifyRequest, reply: FastifyReply, token: string) {
   reply.setCookie('kora_personal', token, { httpOnly: true, sameSite: 'strict',
@@ -191,6 +192,13 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
         display_currency: row.display_currency, sandbox_funded: funded,
         balance: { asset_position_id: ngn, asset: 'NGN', available_minor: amount.toString(), pending_minor: '0', held_minor: '0', simulated: true } };
     } finally { available.release(); }
+  });
+  app.get('/personal/api/qie/balance', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request) => {
+    await required(request);
+    const { address } = z.object({ address: z.string().regex(/^0x[a-fA-F0-9]{40}$/) }).strict().parse(request.query);
+    const observed = await new QieClient().nativeBalance(address);
+    return { chain_id: Number(QIE_CHAIN_ID), address, asset: 'QIEV3', decimals: 18,
+      ...observed, explorer_url: `${QIE_EXPLORER}address/${address}`, ledger_credited: false };
   });
   app.post('/personal/api/sandbox/verify', async (request) => {
     const row = await required(request, true);
