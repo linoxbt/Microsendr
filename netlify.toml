@@ -40,28 +40,33 @@
 
 [[redirects]]
   from = "/docs"
-  to = "/index.html"
-  status = 200
+  to = "/personal/login"
+  status = 301
+  force = true
 
 [[redirects]]
   from = "/connect"
-  to = "/index.html"
-  status = 200
+  to = "/personal/login"
+  status = 301
+  force = true
 
 [[redirects]]
   from = "/login"
-  to = "/index.html"
-  status = 200
+  to = "/personal/login"
+  status = 301
+  force = true
 
 [[redirects]]
   from = "/login/save"
-  to = "/index.html"
-  status = 200
+  to = "/personal/login"
+  status = 301
+  force = true
 
 [[redirects]]
   from = "/app/*"
-  to = "/index.html"
-  status = 200
+  to = "/personal/login"
+  status = 301
+  force = true
 
 [[redirects]]
   from = "/personal/*"
@@ -69,11 +74,19 @@
   status = 200
 
 [[redirects]]
+  from = "/business"
+  to = "/personal/login"
+  status = 301
+  force = true
+
+[[redirects]]
   from = "/business/*"
-  to = "/index.html"
-  status = 200
+  to = "/personal/login"
+  status = 301
+  force = true
 
 [[redirects]]
   from = "/ramp"
-  to = "/index.html"
-  status = 200
+  to = "/personal/login"
+  status = 301
+  force = true
