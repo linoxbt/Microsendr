@@ -2,15 +2,12 @@ import { test, expect } from '@playwright/test';
 
 test('landing presents Microsendr Personal and routes prompts', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('Your money.');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Money for');
   await expect(page.locator('.public-header .logo')).toHaveText('microsendr');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await expect(page.getByRole('button', { name: 'Switch to dark theme' })).toHaveCount(0);
-  await expect(page.locator('.ms-hero-visual img')).toBeVisible();
-  await page
-    .locator('.ms-hero-actions')
-    .getByRole('button', { name: 'Explore Microsendr' })
-    .click();
+  await expect(page.locator('.lp-photo img')).toBeVisible();
+  await page.locator('.lp-hero-actions').getByRole('button', { name: 'Get started' }).click();
   await expect(page).toHaveURL(/\/personal\/login$/);
   await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
   await expect(page.getByLabel('Email address')).toBeEnabled();
@@ -24,6 +21,43 @@ test('landing presents Microsendr Personal and routes prompts', async ({ page })
   await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
   await page.goto('/app/overview');
   await expect(page).toHaveURL(/\/personal\/login$/);
+});
+
+test('landing product tour, FAQs and mobile navigation work', async ({ page }) => {
+  await page.goto('/');
+  await expect(page).toHaveTitle('Microsendr | Money for the life you’re building.');
+  await page.getByRole('tab', { name: 'Exchange', exact: true }).click();
+  await expect(page.getByRole('tabpanel')).toContainText('Know what you’ll get.');
+  await page.getByRole('tab', { name: 'Exchange', exact: true }).press('ArrowRight');
+  await expect(page.getByRole('tab', { name: 'Withdraw', exact: true })).toBeFocused();
+  await expect(page.getByRole('tabpanel')).toContainText('From your screen to real life.');
+  await page.getByText('What can I do on Microsendr today?', { exact: true }).click();
+  await expect(page.locator('details[open]')).toContainText('not yet enabled');
+  await expect(page.locator('#availability')).toContainText('Personal account & profile');
+  await page.screenshot({ path: '/tmp/microsendr-landing-desktop.png', fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => scrollTo(0, 0));
+  await page.getByRole('button', { name: 'Open navigation' }).click();
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('link', { name: 'FAQs' })
+    .click();
+  await expect(page).toHaveURL(/#questions$/);
+  await expect(page.getByRole('button', { name: 'Open navigation' })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
+  await page.evaluate(() => scrollTo(0, 0));
+  await page.screenshot({ path: '/tmp/microsendr-landing-phone.png', fullPage: true });
+  for (const width of [320, 390, 768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth - innerWidth),
+      String(width),
+    ).toBeLessThanOrEqual(1);
+  }
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(page.locator('.lp-floating')).toHaveCSS('animation-name', 'none');
 });
 
 test('phone pages fit without horizontal overflow', async ({ page }) => {
@@ -57,8 +91,10 @@ test('default theme uses a cream canvas across Microsendr Personal pages', async
     await expect(page.locator(surface)).toHaveCSS('background-color', 'rgb(247, 243, 233)');
   }
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Your money. More places.' })).toBeVisible();
-  await expect(page.locator('.ms-button').first()).toHaveCSS(
+  await expect(
+    page.getByRole('heading', { name: 'Money for the life you’re building.' }),
+  ).toBeVisible();
+  await expect(page.locator('.lp-button').first()).toHaveCSS(
     'background-color',
     'rgb(70, 130, 180)',
   );
@@ -103,9 +139,9 @@ test('custom registration, optional identity, profile editing and mobile money n
   await expect(page.getByText('sandbox', { exact: false })).toHaveCount(0);
   await expect(page.getByText('QIE', { exact: false })).toHaveCount(0);
   await page.screenshot({ path: '/tmp/microsendr-dashboard-desktop.png', fullPage: true });
-  await page.getByRole('button',{name:'Switch to dark theme'}).click();
-  await expect(page.locator('.fin-app')).toHaveCSS('background-color','rgb(9, 9, 9)');
-  await page.getByRole('button',{name:'Switch to light theme'}).click();
+  await page.getByRole('button', { name: 'Switch to dark theme' }).click();
+  await expect(page.locator('.fin-app')).toHaveCSS('background-color', 'rgb(9, 9, 9)');
+  await page.getByRole('button', { name: 'Switch to light theme' }).click();
   await page.getByRole('button', { name: 'Hide balance' }).click();
   await expect(page.getByRole('button', { name: 'Show balance' })).toBeVisible();
   await page.getByRole('button', { name: 'Open your profile' }).click();
