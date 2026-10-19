@@ -44,7 +44,7 @@ import { BusinessPage } from './business.js';
 import { PersonalPage } from './personal.js';
 import { BusinessLogin } from './business-login.js';
 import './microsendr.css';
-import { MicrosendrMark } from './microsendr-logo.js';
+import { MicrosendrWordmark } from './microsendr-logo.js';
 import './personal-login.css';
 type Intent = Model<'Intent'>;
 type Asset = Model<'AssetList'>['data'][number];
@@ -82,13 +82,9 @@ const date = (value: string) =>
   new Date(value).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 const message = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong');
 function Logo() {
-  return (
-    <span className="logo">
-      <MicrosendrMark />
-      microsendr
-    </span>
-  );
+  return <MicrosendrWordmark />;
 }
+
 function Badge({ state }: { state: string }) {
   return (
     <span className={`badge ${state}`}>

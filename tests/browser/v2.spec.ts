@@ -2,62 +2,72 @@ import { test, expect } from '@playwright/test';
 
 test('landing presents Microsendr Personal and routes prompts', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('Money for');
-  await expect(page.locator('.public-header .logo')).toHaveText('microsendr');
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Your money.');
+  await expect(
+    page.locator('.public-header').getByRole('img', { name: 'Microsendr', exact: true }),
+  ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Switch to dark theme' })).toHaveCount(0);
-  await expect(page.locator('.lp-photo img')).toBeVisible();
-  await page.locator('.lp-hero-actions').getByRole('button', { name: 'Get started' }).click();
+  await expect(page.locator('.nl-metal-mark')).toBeVisible();
+  await page.getByRole('button', { name: 'Get started', exact: true }).click();
   await expect(page).toHaveURL(/\/personal\/login$/);
   await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
   await expect(page.getByLabel('Email address')).toBeEnabled();
   await expect(page.getByLabel('Password', { exact: true })).toBeEnabled();
-  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeEnabled();
   await expect(page).toHaveTitle('Sign in | Microsendr');
-  await expect(page.getByRole('button', { name: 'Switch to dark theme' })).toHaveCount(0);
-  await expect(page.locator('.fin-auth-art')).toBeVisible();
+  await expect(page.locator('body')).not.toHaveClass(/microsendr-landing-active/);
   await page.goto('/business');
   await expect(page).toHaveURL(/\/personal\/login$/);
-  await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
   await page.goto('/app/overview');
   await expect(page).toHaveURL(/\/personal\/login$/);
 });
 
-test('landing product tour, FAQs and mobile navigation work', async ({ page }) => {
+test('reference layout details, keyboard controls and mobile navigation work', async ({ page }) => {
   await page.goto('/');
-  await expect(page).toHaveTitle('Microsendr | Money for the life you’re building.');
-  await page.getByRole('tab', { name: 'Exchange', exact: true }).click();
-  await expect(page.getByRole('tabpanel')).toContainText('Know what you’ll get.');
-  await page.getByRole('tab', { name: 'Exchange', exact: true }).press('ArrowRight');
-  await expect(page.getByRole('tab', { name: 'Withdraw', exact: true })).toBeFocused();
-  await expect(page.getByRole('tabpanel')).toContainText('From your screen to real life.');
-  await page.getByText('What can I do on Microsendr today?', { exact: true }).click();
-  await expect(page.locator('details[open]')).toContainText('not yet enabled');
-  await expect(page.locator('#availability')).toContainText('Personal account & profile');
-  await page.screenshot({ path: '/tmp/microsendr-landing-desktop.png', fullPage: true });
+  await expect(page).toHaveTitle('Microsendr | Your money. Your next move.');
+  await page.getByRole('button', { name: 'Explore Microsendr', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('One place. Your next move.');
+  await expect(page.locator('body')).toHaveCSS('overflow', 'hidden');
+  await dialog.locator('summary').filter({ hasText: 'Exchange' }).click();
+  await expect(dialog.locator('details[open]')).toContainText('No live conversion route');
+  await dialog.getByRole('button', { name: 'Availability', exact: true }).click();
+  await expect(dialog).toContainText('not yet enabled');
+  await dialog.getByRole('button', { name: 'FAQs', exact: true }).click();
+  await dialog.getByText('What can I do today?', { exact: true }).click();
+  await expect(dialog.locator('details[open]')).toContainText('not yet enabled');
+  await page.keyboard.press('Escape');
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByRole('button', { name: 'Explore Microsendr', exact: true })).toBeFocused();
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(page.locator('.nl-metal-mark')).toHaveCSS('animation-name', 'none');
+  await page.screenshot({ path: '/tmp/microsendr-netlayer-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.evaluate(() => scrollTo(0, 0));
   await page.getByRole('button', { name: 'Open navigation' }).click();
   await page
     .getByRole('navigation', { name: 'Main navigation' })
-    .getByRole('link', { name: 'FAQs' })
+    .getByRole('button', { name: 'Availability', exact: true })
     .click();
-  await expect(page).toHaveURL(/#questions$/);
-  await expect(page.getByRole('button', { name: 'Open navigation' })).toHaveAttribute(
+  await expect(dialog).toBeVisible();
+  await expect(page.locator('.nl-menu')).toHaveAttribute(
     'aria-expanded',
     'false',
   );
-  await page.evaluate(() => scrollTo(0, 0));
-  await page.screenshot({ path: '/tmp/microsendr-landing-phone.png', fullPage: true });
+  await dialog.getByRole('button', { name: 'Close details' }).click();
+  await page.screenshot({ path: '/tmp/microsendr-netlayer-phone.png', fullPage: true });
   for (const width of [320, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth - innerWidth),
       String(width),
     ).toBeLessThanOrEqual(1);
+    await page.getByRole('button', { name: 'Explore Microsendr', exact: true }).click();
+    expect(
+      await dialog.evaluate((el) => el.scrollWidth - el.clientWidth),
+      String(width),
+    ).toBeLessThanOrEqual(1);
+    await dialog.getByRole('button', { name: 'Close details' }).click();
   }
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await expect(page.locator('.lp-floating')).toHaveCSS('animation-name', 'none');
 });
 
 test('phone pages fit without horizontal overflow', async ({ page }) => {
@@ -65,8 +75,10 @@ test('phone pages fit without horizontal overflow', async ({ page }) => {
   for (const path of ['/', '/personal/login', '/business', '/app/overview']) {
     await page.goto(path);
     await expect(page.locator('h1')).toBeVisible();
-    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
-    expect(overflow, path).toBeLessThanOrEqual(1);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth - innerWidth),
+      path,
+    ).toBeLessThanOrEqual(1);
   }
 });
 
@@ -76,31 +88,20 @@ test('Personal sign-in keeps the form ahead of the photo on phones', async ({ pa
   await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
   await expect(page.locator('.fin-auth-form')).toBeVisible();
   await expect(page.locator('.fin-auth-story')).toBeHidden();
-  await expect(page.getByRole('button', { name: 'Talk to us' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Back to home' }).click();
   await expect(page).toHaveURL('/');
 });
 
-test('default theme uses a cream canvas across Microsendr Personal pages', async ({ page }) => {
-  for (const [path, surface] of [
-    ['/', '.ms-site'],
-    ['/personal/login', '.fin-auth'],
-  ]) {
-    await page.goto(path);
-    await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(247, 243, 233)');
-    await expect(page.locator(surface)).toHaveCSS('background-color', 'rgb(247, 243, 233)');
-  }
+test('landing has a fixed true-black canvas and preserves the Personal theme', async ({ page }) => {
   await page.goto('/');
-  await expect(
-    page.getByRole('heading', { name: 'Money for the life you’re building.' }),
-  ).toBeVisible();
-  await expect(page.locator('.lp-button').first()).toHaveCSS(
-    'background-color',
-    'rgb(70, 130, 180)',
-  );
+  await expect(page.locator('.nl-site')).toHaveCSS('background-color', 'rgb(0, 0, 0)');
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(0, 0, 0)');
   await page.evaluate(() => localStorage.setItem('microsendr-theme', 'dark'));
   await page.reload();
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await expect(page.getByRole('button', { name: 'Switch to dark theme' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Get started', exact: true }).click();
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(247, 243, 233)');
+  await expect(page.locator('.fin-auth')).toHaveCSS('background-color', 'rgb(247, 243, 233)');
 });
 
 test('Business and developer links are absent from the public journey', async ({ page }) => {

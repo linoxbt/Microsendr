@@ -1,7 +1,19 @@
+/** An open, geometric M: the two forward strokes are Microsendr's signature. */
+export const microsendrMarkPath = 'M2 30 8 2h5l5 15L23 2h5l6 28h-6l-3-17-5 14h-4l-5-14-3 17Z';
+
 export function MicrosendrMark() {
-  return <svg viewBox="0 0 36 36" aria-hidden="true" focusable="false">
-    <rect width="36" height="36" rx="9" fill="#4682B4" />
-    <path d="M7 25V11l11 10 11-10v14" fill="none" stroke="#FFF8EA" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M22 27h7m0 0-3-3m3 3-3 3" fill="none" stroke="#FFF8EA" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>;
+  return (
+    <svg viewBox="0 0 36 32" aria-hidden="true" focusable="false">
+      <path d={microsendrMarkPath} fill="currentColor" />
+    </svg>
+  );
+}
+
+export function MicrosendrWordmark() {
+  return (
+    <span className="logo microsendr-wordmark" role="img" aria-label="Microsendr">
+      <MicrosendrMark />
+      <span aria-hidden="true">ICROSENDR</span>
+    </span>
+  );
 }

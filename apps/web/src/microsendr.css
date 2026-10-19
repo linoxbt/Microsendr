@@ -24,3 +24,9 @@ body{background:#f7f3e9;color:#183247}
 :root[data-theme='dark'] .ms-hero-visual{background:#284d69}:root[data-theme='dark'] .ms-preview,:root[data-theme='dark'] .ms-network-card{background:#f7f3e9;color:#173347}:root[data-theme='dark'] .ms-preview .logo{color:#173347}
 :root[data-theme='dark'] .ms-site .public-header nav :is(a,button),:root[data-theme='dark'] .ms-footer nav button{color:#e2ebef}
 @media(max-width:780px){.personal-shell .personal-sidebar{background:#294d69}.personal-mobile-menu{color:#183247}:root[data-theme='dark'] .personal-mobile-menu{color:#f8f3e9}}
+
+/* Shared monochrome wordmark; the M is a letter, not a separate app badge. */
+.logo.microsendr-wordmark{display:inline-flex;align-items:center;gap:1px;font-family:Arial,Helvetica,sans-serif;font-size:25px;font-weight:750;letter-spacing:-.8px;line-height:1;color:#171714;white-space:nowrap}
+.logo.microsendr-wordmark>svg{width:1.08em;height:.96em;flex-shrink:0;margin-right:0}
+.logo.microsendr-wordmark>span{font:inherit;letter-spacing:inherit;color:inherit}
+:root[data-theme='dark'] .logo.microsendr-wordmark{color:#f7f3e9}
