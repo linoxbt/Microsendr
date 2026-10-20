@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 
 test('landing presents Microsendr Personal and routes prompts', async ({ page }) => {
   await page.goto('/');
@@ -34,7 +35,7 @@ test('landing product tour, FAQs and mobile navigation work', async ({ page }) =
   await expect(page.getByRole('tab', { name: 'Withdraw', exact: true })).toBeFocused();
   await expect(page.getByRole('tabpanel')).toContainText('From your screen to real life.');
   await page.getByText('What can I do on Microsendr today?', { exact: true }).click();
-  await expect(page.locator('details[open]')).toContainText('not yet enabled');
+  await expect(page.locator('details[open]')).toContainText('native QIEV3 on QIE Mainnet');
   await expect(page.locator('#availability')).toContainText('Personal account & profile');
   await page.screenshot({ path: '/tmp/microsendr-landing-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
@@ -142,7 +143,7 @@ test('custom registration, optional identity, profile editing and mobile money n
   await expect(page.getByRole('button', { name: /Explore crypto deposits/ })).toContainText('COMING');
   await expect(page.getByRole('button', { name: /Explore withdrawals/ })).toContainText('COMING');
   await expect(page.getByText('sandbox', { exact: false })).toHaveCount(0);
-  await expect(page.getByText('QIE', { exact: false })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'QIE wallet' })).toBeVisible();
   await page.screenshot({ path: '/tmp/microsendr-dashboard-desktop.png', fullPage: true });
   await page.getByRole('button', { name: 'Switch to dark theme' }).click();
   await expect(page.locator('.fin-app')).toHaveCSS('background-color', 'rgb(9, 9, 9)');
@@ -192,10 +193,26 @@ test('custom registration, optional identity, profile editing and mobile money n
   await expect(page.getByRole('alert')).toContainText('No funds have been moved');
   await page.goto('/personal/deposit');
   await page.getByRole('button', { name: 'Crypto transfer', exact: true }).click();
-  await expect(
-    page.getByText('Do not send funds until an address and supported network are displayed.', {
-      exact: false,
+  await expect(page.getByRole('button', { name: 'Link QIE wallet' })).toBeVisible();
+  const wallet = privateKeyToAccount(generatePrivateKey());
+  await page.exposeFunction('testWalletSign', (message: string) => wallet.signMessage({ message }));
+  await page.evaluate((address) => Object.assign(window, { ethereum: {
+    request: async ({ method, params }: { method: string; params?: unknown[] }) => {
+      if (method === 'eth_chainId') return '0x7c6';
+      if (method === 'eth_requestAccounts') return [address];
+      if (method === 'personal_sign') return (window as any).testWalletSign(params?.[0]);
+      throw new Error(`Unexpected wallet call: ${method}`);
+    },
+  } }), wallet.address);
+  await page.route('**/personal/api/wallets/*/balance', route => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({
+      balance_wei: '0', block_number: '100', asset: 'QIEV3',
+      explorer_url: `https://mainnet.qie.digital/address/${wallet.address}`,
     }),
-  ).toBeVisible();
+  }));
+  await page.getByRole('button', { name: 'Link QIE wallet' }).click();
+  await expect(page.getByText('QIE wallet linked to your account.')).toBeVisible();
+  await expect(page.getByRole('img', { name: 'QR code for the QIE wallet address shown below' })).toBeVisible();
+  await expect(page.locator('.fin-chain-receive code')).toHaveText(wallet.address);
   expect(errors).toEqual([]);
 });

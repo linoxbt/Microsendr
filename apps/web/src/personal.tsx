@@ -33,6 +33,7 @@ import { PersonalKyc } from './personal-kyc.js';
 import { ConsumerProfileForm, ConsumerSecurity } from './consumer-profile.js';
 import { consumerRequest, type ConsumerProfile } from './consumer-api.js';
 import { MicrosendrMark } from './microsendr-logo.js';
+import { ConsumerChainWallet } from './consumer-chain-wallet.js';
 import './personal.css';
 import './consumer.css';
 
@@ -426,6 +427,7 @@ export function PersonalPage({
                   </button>
                 ))}
               </div>
+              <ConsumerChainWallet csrf={csrf} mode="summary" go={go} onChanged={refresh} />
               <div className="fin-feature-grid">
                 <button
                   className="fin-feature-card fin-feature-crypto"
@@ -573,6 +575,7 @@ export function PersonalPage({
               csrf={csrf}
               go={go}
               identityDone={identityDone}
+              onChanged={refresh}
             />
           )}
           {tab === 'activity' && (
@@ -770,12 +773,14 @@ function MoneyFlow({
   csrf,
   go,
   identityDone,
+  onChanged,
 }: {
   kind: string;
   capabilities: Record<string, Capability>;
   csrf: string;
   go: (path: string) => void;
   identityDone: boolean;
+  onChanged: () => Promise<void>;
 }) {
   const [method, setMethod] = useState('crypto'),
     [source, setSource] = useState('USD'),
@@ -827,9 +832,9 @@ function MoneyFlow({
           kind === 'convert'
             ? 'See the rate, fees and final amount before you confirm.'
             : kind === 'deposit'
-              ? 'Choose how you want to fund your account.'
+              ? 'Choose a network wallet or a local funding method.'
               : kind === 'send'
-                ? 'Send to a Microsendr username or external account.'
+                ? 'Send native QIE to a wallet on QIE Mainnet.'
                 : 'Send available naira to a verified bank account.'
         }
       />
@@ -851,7 +856,14 @@ function MoneyFlow({
               </button>
             </div>
           )}
-          {kind === 'convert' ? (
+          {(kind === 'send' || (kind === 'deposit' && method === 'crypto')) ? (
+            <ConsumerChainWallet
+              csrf={csrf}
+              mode={kind === 'send' ? 'send' : 'receive'}
+              go={go}
+              onChanged={onChanged}
+            />
+          ) : kind === 'convert' ? (
             <form onSubmit={quote}>
               <div className="fin-amount-input">
                 <label>

@@ -2,14 +2,14 @@
 
 **Your money, without borders.** Microsendr is a consumer finance application and settlement foundation. The public Personal experience uses custom email/password accounts, optional Didit identity verification, editable profiles and a responsive finance dashboard. Earlier Business, Stellar Testnet and developer sandbox modules remain in the repository for regression coverage.
 
-> **Current status:** Registration, profile editing and account security are implemented. Didit opens hosted identity verification when server credentials are configured. Live deposits, conversion and bank withdrawals remain unavailable pending payment and custody integrations. The consumer dashboard excludes all test balances. The existing native Mainnet settlement backend remains available for integration. See [settlement status](docs/microsendr-settlement-status.md).
+> **Current status:** Registration, profile editing, and account security are implemented. Personal accounts can link user controlled EVM wallets by signature, receive native QIEV3 on QIE Mainnet with an address and QR code, and authorize native QIEV3 transfers in the wallet. Onchain funds remain in the linked wallet and are displayed separately from Microsendr balances. Didit opens hosted identity verification when server credentials are configured. Digital-dollar deposits, conversion, fiat deposits, and bank withdrawals remain unavailable pending verified asset and provider integrations. See [settlement status](docs/microsendr-settlement-status.md).
 
 ## Product surface
 
 | Area | Current behavior |
 | --- | --- |
 | Personal | Custom account creation, password sign-in, optional identity verification, editable profile, payments navigation and receipts |
-| Settlement backend | QIE Mainnet native transfer instructions, receipt matching and worker reconciliation; no customer ledger credit. Custom-auth wallet provisioning is not yet connected. |
+| Settlement backend | QIE Mainnet linked wallets, signed native transfer instructions, receipt matching and worker reconciliation; no customer ledger credit. Automatic embedded wallet provisioning remains separate work. |
 | Paystack | Test-key-only checkout, bank name enquiry and payout; explicit status verification |
 | Financial core | PostgreSQL double-entry ledger, idempotency, reservations, outbox, immutable journals and reconciliation controls |
 | Historical modules | Business workspace, Stellar Testnet KUSD and multi-provider sandbox routing |

@@ -1,16 +1,18 @@
 # Microsendr settlement status
 
-The consumer dashboard now uses custom accounts and excludes all simulated ledger balances. Live fiat balances, crypto deposit accounts and conversion are unavailable. Historical sandbox modules remain isolated for testing. See [consumer accounts](consumer-accounts.md).
+The consumer dashboard uses custom accounts and excludes simulated ledger balances. Native QIEV3 can be received and sent through an account linked, user controlled wallet. Digital-dollar deposits, live fiat balances and conversion are unavailable. Historical sandbox modules remain isolated for testing. See [consumer accounts](consumer-accounts.md).
 
 ## QIE mainnet
 
 - Chain ID 1990 and the RPC endpoint are configured from QIE's public documentation.
-- The legacy Privy integration can provision an EVM wallet and authorize native transfers. It is no longer part of consumer login. Custom-auth wallet provisioning and signing must be integrated before exposing this capability in the redesigned dashboard.
+- Personal accounts link one or more existing EVM wallets through a five-minute, single-use signed challenge. The private key remains with the wallet provider. A wallet cannot be active on two Microsendr accounts at once. Registration does not require a wallet.
+- The linked address and QR code receive native QIEV3 on QIE Mainnet. The app reads the onchain balance without posting a Microsendr customer liability. It does not claim to custody the funds or credit digital dollars.
+- Sending native QIEV3 requires a linked wallet, a fresh signed settlement authorization and an explicit transaction confirmation in that wallet. It is not a gasless transfer; the user needs QIEV3 for network fees.
 - The API requires a wallet signature over the account, network, chain ID, sender, recipient, atomic amount, idempotency key and short expiry. It persists the instruction and the current QIE block before the browser broadcasts. One transaction hash can be attached only once.
 - The worker verifies chain ID, transaction sender/recipient/amount, receipt, canonical block hash, creation block floor and 12 confirmations. RPC errors or mismatches enter an `unknown` state for repeated reconciliation; no automatic resubmission occurs.
-- Native QIEV3 stays in the user's Privy wallet. The settlement record is evidence of an external wallet transfer, **not** a customer ledger balance or digital-dollar credit. The sandbox NGN ledger remains separate.
+- Native QIEV3 stays in the user's linked wallet. The settlement record is evidence of an external wallet transfer, **not** a customer ledger balance or digital-dollar credit. The sandbox NGN ledger remains separate.
 - Digital-dollar deposits and transfers remain disabled until the supported QUSDC contract, decimals, provenance, liquidity, custody, wallet signing behavior, and reconciliation path are verified. Search results for one commonly repeated QUSDC address resolve to an ordinary account on the QIE explorer.
-- The signed instruction binds the sending wallet to one Microsendr Account for that transfer. Incoming deposits are not monitored or credited, and unsupported tokens are never treated as QIEV3 or digital dollars.
+- The signed instruction binds the sending wallet to one Microsendr Account for that transfer. Incoming transfers update the wallet's observed onchain balance; they are not independently indexed into Microsendr activity or credited. Unsupported tokens are never treated as QIEV3 or digital dollars.
 
 Future chains implement the `ChainSettlementAdapter` contract in `packages/settlement`, receive a canonical `asset_positions` entry, and register only after their own receipt, custody, liquidity and reconciliation controls are tested. The QIE adapter does not imply another chain is enabled.
 

@@ -3,6 +3,7 @@ export async function consumerRequest<T = any>(
   method = 'GET',
   body?: object,
   csrf?: string,
+  headers?: Record<string, string>,
 ): Promise<T> {
   const response = await fetch(`/personal/api/${path}`, {
     method,
@@ -10,6 +11,7 @@ export async function consumerRequest<T = any>(
     headers: {
       ...(body ? { 'content-type': 'application/json' } : {}),
       ...(csrf ? { 'x-kora-csrf': csrf } : {}),
+      ...headers,
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
   });

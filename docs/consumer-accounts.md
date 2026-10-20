@@ -38,7 +38,7 @@ Server settings:
 
 The Paystack implementation in this repository is test-only and is deliberately excluded from the consumer payment flow. Live funding/payout requires a separately verified live adapter, approved account, credentials, production asset positions, reconciliation, funding/limits and refund handling. A Paystack key alone must not switch simulated journals to live money.
 
-Crypto deposits require wallet/custody provisioning tied to custom authentication, a verified token contract, finality monitoring and deposit attribution. Native QIEV3 is not a digital dollar. Existing Privy wallet signing was tied to Privy login and is not silently reused for custom accounts.
+Personal users can link existing QIE-compatible EVM wallets with a signed, single-use challenge. A linked wallet can receive native QIEV3 through its address and QR code, and can authorize a native QIEV3 transfer. The wallet provider holds the private key; Microsendr reads its onchain balance and reconciles outbound receipts without creating a customer ledger balance. Incoming transfers are visible in the wallet balance and explorer but are not independently indexed as Microsendr deposits. Native QIEV3 is not a digital dollar. Stablecoin deposits still require an approved token contract, custody/attribution model, finality monitoring and reconciliation. Automatic embedded wallet provisioning for custom accounts remains separate work.
 
 Crypto↔fiat conversion needs a contracted provider and an executable supported asset/network/currency route. No such provider is currently configured. There is no fabricated rate, bank payout, deposit address or success receipt. KYC approval alone does not enable a financial route.
 

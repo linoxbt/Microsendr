@@ -17,6 +17,8 @@ test('signed QIE settlement is idempotent, hash-unique, and reconciles only matc
   await pool.query('INSERT INTO personal_users(id,email,email_verified_at) VALUES($1,$2,now())', [userId,`${userId}@example.test`]);
   await pool.query('UPDATE personal_users SET privy_app_id=$2,privy_subject=$3 WHERE id=$1',[userId,'settlement-test',`did:privy:${userId}`]);
   await pool.query("INSERT INTO kora_accounts(id,owner_type,personal_user_id) VALUES($1,'personal',$2)",[accountId,userId]);
+  await pool.query("INSERT INTO personal_chain_wallets(id,personal_user_id,account_id,network,address) VALUES($1,$2,$3,$4,$5)",
+    [id('cwa'),userId,accountId,QIE_NETWORK,account.address.toLowerCase()]);
   const to = '0x2222222222222222222222222222222222222222';
   const key = id('key'), expiresAt = new Date(Date.now()+4*60_000).toISOString(), amountAtomic = 100000000000000000n;
   const signed = (idempotencyKey: string, amount = amountAtomic) => account.signMessage({ message: nativeTransferAuthorization({
@@ -77,4 +79,49 @@ test('signed QIE settlement is idempotent, hash-unique, and reconciles only matc
       assert.ok(listed.json().data.some((item: { id: string }) => item.id === createdByApi.json().id));
     } finally { await app.close(); }
   } finally { chainAdapters[QIE_NETWORK] = previous; }
+});
+
+test('QIE wallet linking requires an owned account, a fresh challenge and a valid signature', async () => {
+  const account = privateKeyToAccount(generatePrivateKey());
+  const userId = id('usr'), accountId = id('acct');
+  const token = randomBytes(32).toString('hex'), csrf = randomBytes(32).toString('hex');
+  await pool.query('INSERT INTO personal_users(id,email) VALUES($1,$2)', [userId,`${userId}@example.test`]);
+  await pool.query("INSERT INTO kora_accounts(id,owner_type,personal_user_id) VALUES($1,'personal',$2)",[accountId,userId]);
+  await pool.query("INSERT INTO personal_sessions(token_hash,personal_user_id,csrf_token,expires_at) VALUES($1,$2,$3,now()+interval '1 day')",[hashKey(token),userId,csrf]);
+  const app = await buildApi({ serveWeb: false, rateLimitMax: 10000 });
+  const headers = { cookie:`kora_personal=${token}`,origin:'http://127.0.0.1:4310','x-kora-csrf':csrf };
+  try {
+    const challenge = await app.inject({ method:'POST',url:'/personal/api/wallets/challenge',headers,payload:{ address:account.address } });
+    assert.equal(challenge.statusCode,200,challenge.body);
+    assert.match(challenge.json().message,/Chain ID: 1990/);
+    const invalid = await app.inject({ method:'POST',url:'/personal/api/wallets',headers,payload:{
+      challenge_id:challenge.json().challenge_id,
+      signature:await privateKeyToAccount(generatePrivateKey()).signMessage({ message:challenge.json().message }),
+    } });
+    assert.equal(invalid.statusCode,401,invalid.body);
+    const signature = await account.signMessage({ message:challenge.json().message });
+    const linked = await app.inject({ method:'POST',url:'/personal/api/wallets',headers,payload:{
+      challenge_id:challenge.json().challenge_id,signature,
+    } });
+    assert.equal(linked.statusCode,200,linked.body);
+    assert.equal(linked.json().address,account.address);
+    assert.equal((await app.inject({ method:'POST',url:'/personal/api/wallets',headers,payload:{
+      challenge_id:challenge.json().challenge_id,signature,
+    } })).statusCode,409);
+    const listed = await app.inject({ url:'/personal/api/wallets',headers });
+    assert.equal(listed.json().data.length,1);
+    assert.equal(listed.json().data[0].id,linked.json().id);
+    const auth = await app.inject({ method:'POST',url:'/personal/api/settlements/authorization',headers,payload:{
+      from:account.address,to:'0x2222222222222222222222222222222222222222',amount_atomic:'1000000000000000',
+    } });
+    assert.equal(auth.statusCode,200,auth.body);
+    assert.match(auth.json().message,/Amount \(atomic units\): 1000000000000000/);
+    const notOwned = await app.inject({ method:'POST',url:'/personal/api/settlements/authorization',headers,payload:{
+      from:'0x3333333333333333333333333333333333333333',to:account.address,amount_atomic:'1',
+    } });
+    assert.equal(notOwned.statusCode,403);
+    const removed = await app.inject({ method:'DELETE',url:`/personal/api/wallets/${linked.json().id}`,headers });
+    assert.equal(removed.statusCode,200,removed.body);
+    assert.equal((await app.inject({ url:'/personal/api/wallets',headers })).json().data.length,0);
+  } finally { await app.close(); }
 });

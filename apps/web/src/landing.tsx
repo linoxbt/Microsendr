@@ -61,7 +61,7 @@ type Preview = keyof typeof previews;
 const questions = [
   [
     'What can I do on Microsendr today?',
-    'You can create your Personal account, complete and edit your profile, and explore the app. Deposits, transfers, exchange and bank withdrawals are not yet enabled in the Personal app. We’ll show availability inside the app as each service becomes ready.',
+    'You can create your Personal account, complete your profile, link a QIE wallet, and receive or send native QIEV3 on QIE Mainnet. Digital-dollar deposits, exchange, and bank payments are still coming.',
   ],
   [
     'Do I need a crypto wallet to register?',
@@ -69,7 +69,7 @@ const questions = [
   ],
   [
     'When do I verify my identity?',
-    'You can create your account and complete your profile first. Identity verification is required before eligible financial services can be enabled. You can return to the Identity section in your account when you’re ready.',
+    'You can create your account and complete your profile first. Identity verification may be required for regulated services as they become available. You can return to the Identity section when you’re ready.',
   ],
   [
     'Is a digital-dollar balance a bank account?',
@@ -484,6 +484,10 @@ export function LandingPage({ brand, go, authenticated }: Props) {
               <b className="lp-open">Available</b>
             </div>
             <div>
+              <span>Native QIE wallet transfers</span>
+              <b className="lp-open">Available</b>
+            </div>
+            <div>
               <span>Digital-dollar deposits & transfers</span>
               <b>Coming</b>
             </div>
@@ -496,9 +500,8 @@ export function LandingPage({ brand, go, authenticated }: Props) {
               <b>Coming</b>
             </div>
             <p>
-              Money services are not yet enabled in the Personal app. Availability will depend on
-              your location, verification and supported providers. Digital assets are not insured
-              bank deposits.
+              Native QIE transfers use your linked wallet. Digital-dollar and fiat services depend
+              on supported assets, providers and verification. Digital assets are not insured bank deposits.
             </p>
           </div>
         </section>

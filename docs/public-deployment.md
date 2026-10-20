@@ -3,8 +3,8 @@
 The frontend is published at `https://kora-sandbox-linoxbt.netlify.app` and
 proxies API paths to `https://kora-api.13-140-188-185.sslip.io`. The API, worker,
 and PostgreSQL run on the Microsendr host with `compose.public.yaml`. The database is
-stored in the `kora-public-postgres` Docker volume. All funds and providers in
-this deployment are simulated.
+stored in the `kora-public-postgres` Docker volume. Fiat providers remain in
+test mode. Linked native QIEV3 wallets use QIE Mainnet and can move real assets.
 
 ## Host configuration
 
@@ -14,24 +14,13 @@ Create an ignored, mode `600` `.env.public` at the repository root. Set
 random secrets. Set `KORA_CONSOLE_ORIGINS` to the exact Netlify HTTPS origin.
 Keep `KORA_MODE=sandbox`, and leave `PAYSTACK_SECRET_KEY` blank for the simulator.
 Never commit this file. The Compose file supplies the internal `DATABASE_URL`.
-Personal sign-in uses Privy. Set `PRIVY_APP_ID`; optionally set
-`PRIVY_CLIENT_ID` and a pinned server-side `PRIVY_VERIFICATION_KEY` (the API
-otherwise uses Privy's app-scoped public JWKS). Enable Privy email login and
-allow the exact Netlify HTTPS origin in Privy. The API verifies the Privy
-access token, then obtains the verified email from a matching signed identity
-token when enabled. If identity tokens are unavailable, it uses Privy's
-authenticated current-user endpoint with that access token and requires a
-matching user ID and verified email timestamp. No browser-supplied email can
-create or claim a Personal account. Privy's current-user endpoint is used by
-the installed web SDK; monitor this fallback when updating the SDK.
-If Privy's current-user lookup is unavailable, the verified Privy user ID can
-still create a Personal sandbox account without an email. Email-based receipt
-and Paystack test collection stay unavailable until a later login links a
-server-verified email. A later signed identity token or successful current-user
-lookup links that email to the same account.
-Without Privy email login and an allowed origin, sign-in fails closed and the Developer Sandbox remains
-available. Legacy email-code sessions can continue only when the optional
-SMTP settings are configured; the Personal sign-in page uses Privy.
+Personal registration and login use email and password with a server-side scrypt
+hash. Configure `SMTP_*` and `KORA_AUTH_SECRET` for email verification and
+password recovery. A wallet is optional at signup. Later, a user can link an
+existing QIE-compatible EVM wallet by signing an account-specific challenge.
+The wallet provider holds the signing key; the application never receives it.
+Legacy Privy authentication endpoints remain for older accounts but are not used
+by new Personal registration.
 
 For Personal identity checks, set `DIDIT_API_KEY` and `DIDIT_WEBHOOK_SECRET` in
 `.env.public`. Register `https://kora-api.13-140-188-185.sslip.io/personal/api/webhooks/didit`

@@ -2290,3 +2290,169 @@
     transition: none;
   }
 }
+
+/* Account linked, user controlled QIE wallet. */
+.fin-chain-wallet {
+  max-width: 900px;
+  margin: 0 auto 17px;
+  padding: 24px;
+}
+.fin-chain-wallet .fin-section-head {
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+.fin-chain-wallet .fin-section-head h2 {
+  font-size: 20px;
+  margin: 4px 0 0;
+}
+.fin-chain-wallet .fin-section-head > svg {
+  color: var(--fin-blue);
+}
+.fin-chain-empty p,
+.fin-chain-send p,
+.fin-chain-receive p {
+  color: var(--fin-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.fin-chain-empty .fin-primary {
+  margin-top: 12px;
+}
+.fin-chain-select {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.fin-chain-select label,
+.fin-chain-send label {
+  display: grid;
+  gap: 7px;
+  color: var(--fin-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.fin-chain-select select,
+.fin-chain-send input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--fin-line);
+  border-radius: 10px;
+  background: var(--fin-input);
+  color: var(--fin-ink);
+  padding: 11px 13px;
+  font-size: 13px;
+}
+.fin-chain-balance {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--fin-line);
+  padding-top: 17px;
+}
+.fin-chain-balance > span {
+  color: var(--fin-muted);
+  font-size: 11px;
+}
+.fin-chain-balance strong {
+  font-size: 23px;
+  letter-spacing: -.7px;
+}
+.fin-chain-balance strong small {
+  font-size: 11px;
+  color: var(--fin-muted);
+  letter-spacing: 0;
+}
+.fin-chain-balance button {
+  margin-left: auto;
+}
+.fin-chain-receive {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 13px;
+  margin-top: 20px;
+}
+.fin-chain-receive img {
+  background: white;
+  border: 1px solid var(--fin-line);
+  border-radius: 12px;
+  padding: 6px;
+  max-width: 100%;
+  height: auto;
+}
+.fin-chain-receive code {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  padding: 12px;
+  border: 1px solid var(--fin-line);
+  border-radius: 10px;
+  background: var(--fin-soft);
+  color: var(--fin-ink);
+  font-size: 12px;
+}
+.fin-chain-receive a,
+.fin-chain-pending a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  text-decoration: none;
+}
+.fin-chain-send {
+  display: grid;
+  gap: 16px;
+}
+.fin-chain-send p {
+  margin: 0;
+}
+.fin-chain-send .fin-primary {
+  justify-self: start;
+}
+.fin-chain-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px;
+  margin-top: 18px;
+}
+.fin-chain-notice {
+  color: #257262;
+  font-size: 12px;
+  margin: 14px 0 0;
+}
+.fin-chain-pending {
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+  border: 1px solid var(--fin-line);
+  border-radius: 11px;
+  padding: 14px;
+  margin-top: 17px;
+  font-size: 11px;
+}
+.fin-chain-pending > svg {
+  color: var(--fin-blue);
+  flex: 0 0 auto;
+}
+.fin-chain-pending p {
+  color: var(--fin-muted);
+  margin: 4px 0;
+}
+.fin-flow > .fin-chain-wallet {
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+}
+@media (max-width: 650px) {
+  .fin-chain-wallet { padding: 20px; }
+  .fin-chain-select { align-items: stretch; flex-direction: column; }
+  .fin-chain-select label { width: 100%; }
+  .fin-chain-balance { align-items: baseline; }
+  .fin-chain-balance > span { flex-basis: 100%; }
+}

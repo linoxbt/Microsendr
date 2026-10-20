@@ -46,6 +46,11 @@ export async function createNativeSettlement(input: CreateNativeSettlement) {
   if (!valid) throw new SettlementError(401, 'wallet_signature_invalid', 'The sending wallet did not authorize this transfer');
   return transaction(async c => {
     await c.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [`chain:${input.userId}:${input.idempotencyKey}`]);
+    const linked = await c.query(`SELECT 1 FROM personal_chain_wallets
+      WHERE personal_user_id=$1 AND account_id=$2 AND network=$3 AND address=$4 AND status='active'`,
+      [input.userId,input.accountId,input.network,input.from.toLowerCase()]);
+    if (!linked.rowCount)
+      throw new SettlementError(403, 'wallet_not_linked', 'Link this wallet to your account first');
     const existing = (await c.query('SELECT * FROM chain_settlements WHERE personal_user_id=$1 AND idempotency_key=$2', [input.userId,input.idempotencyKey])).rows[0];
     if (existing) {
       if (existing.account_id !== input.accountId || existing.network !== input.network ||

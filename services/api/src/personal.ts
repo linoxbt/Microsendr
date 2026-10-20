@@ -9,9 +9,11 @@ import { PaymentError } from '../../../packages/payments/src/errors.js';
 import { privyConfiguration, privyVerifier, type PrivyConfig } from './identity.js';
 import { QieClient, QIE_CHAIN_ID, QIE_EXPLORER } from '../../../packages/qie/src/index.js';
 import { createNativeSettlement, publicSettlement, submitNativeSettlement } from '../../../packages/settlement/src/service.js';
+import { nativeTransferAuthorization } from '../../../packages/settlement/src/index.js';
 import type { PaystackClient } from '../../../connectors/paystack/src/index.js';
 import { registerPersonalPaystack } from './personal-paystack.js';
 import { registerConsumer } from './consumer.js';
+import { registerPersonalWallets, requireLinkedWallet } from './personal-wallets.js';
 
 const emailSchema = z.string().trim().toLowerCase().email().max(254);
 const minorSchema = z.string().regex(/^[1-9][0-9]{0,11}$/);
@@ -93,6 +95,7 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
   const sendCode = options.sendCode ?? mailer();
   const verifier = privyVerifier(privyConfig);
   registerConsumer(app, { required, origin, setCookie, emailEnabled: !!secret && !!sendCode });
+  registerPersonalWallets(app, required);
   app.get('/personal/api/auth/config', async () => ({ enabled: true, method: 'password', email_verification_available: !!secret && !!sendCode }));
   app.get('/personal/api/auth/legacy-config', async () => ({ enabled: await verifier.ready(), app_id: privyConfig.appId, client_id: privyConfig.clientId ?? null }));
   app.post('/personal/api/auth/privy', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
@@ -225,18 +228,34 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
     } finally { available.release(); }
   });
   app.get('/personal/api/qie/balance', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request) => {
-    await required(request);
+    const person = await required(request);
     const { address } = z.object({ address: z.string().regex(/^0x[a-fA-F0-9]{40}$/) }).strict().parse(request.query);
+    await requireLinkedWallet(person, address);
     const observed = await new QieClient().nativeBalance(address);
     return { chain_id: Number(QIE_CHAIN_ID), address, asset: 'QIEV3', decimals: 18,
       ...observed, explorer_url: `${QIE_EXPLORER}address/${address}`, ledger_credited: false };
   });
+  app.post('/personal/api/settlements/authorization', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async request => {
+    const row = await required(request, true);
+    const input = z.object({ from: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+      to: z.string().regex(/^0x[a-fA-F0-9]{40}$/), amount_atomic: z.string().regex(/^[1-9][0-9]{0,77}$/) }).strict().parse(request.body);
+    await requireLinkedWallet(row, input.from);
+    if (input.from.toLowerCase() === input.to.toLowerCase() || BigInt(input.amount_atomic) > (1n << 256n) - 1n)
+      throw new PaymentError(400, 'invalid_transfer', 'Choose a different recipient and valid amount');
+    const idempotencyKey = id('qie');
+    const expiresAt = new Date(Date.now() + 4 * 60_000).toISOString();
+    return { network: 'qie-mainnet', chain_id: Number(QIE_CHAIN_ID),
+      idempotency_key: idempotencyKey, expires_at: expiresAt,
+      message: nativeTransferAuthorization({ accountId: row.account_id, network: 'qie-mainnet',
+        chainId: QIE_CHAIN_ID, from: input.from, to: input.to,
+        amountAtomic: BigInt(input.amount_atomic), idempotencyKey, expiresAt }) };
+  });
   app.post('/personal/api/settlements', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async request => {
     const row = await required(request, true);
-    if (!row.privy_subject) throw new PaymentError(403,'privy_wallet_required','Sign in with Privy to authorize a QIE wallet transfer');
     const key = request.headers['idempotency-key'];
     const body = z.object({ network: z.string().regex(/^[a-z0-9-]{3,48}$/), from: z.string(), to: z.string(),
       amount_atomic: z.string(), expires_at: z.iso.datetime(), signature: z.string().regex(/^0x[a-fA-F0-9]{130}$/) }).strict().parse(request.body);
+    await requireLinkedWallet(row, body.from);
     return createNativeSettlement({ userId: row.user_id, accountId: row.account_id, network: body.network,
       from: body.from, to: body.to, amountAtomic: body.amount_atomic, expiresAt: body.expires_at,
       signature: body.signature as `0x${string}`, idempotencyKey: typeof key === 'string' ? key : '' });
