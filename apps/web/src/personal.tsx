@@ -24,6 +24,9 @@ import {
   CheckCircle2,
   Download,
   ArrowLeft,
+  Coins,
+  Landmark,
+  Sparkles,
 } from 'lucide-react';
 import { PersonalLogin } from './personal-login.js';
 import { PersonalKyc } from './personal-kyc.js';
@@ -323,27 +326,24 @@ export function PersonalPage({
             <span className="fin-mobile-logo">
               <MicrosendrMark />
             </span>
-            <span>
-              Personal <span className="fin-topbar-divider">/</span>{' '}
-              <b>
-                {(
-                  {
-                    home: 'Overview',
-                    payments: 'Payments',
-                    activity: 'Activity',
-                    profile: 'My account',
-                    security: 'Security',
-                    identity: 'Identity',
-                    onboarding: 'Welcome',
-                    deposit: 'Add money',
-                    send: 'Send money',
-                    convert: 'Convert',
-                    withdraw: 'Withdraw',
-                  } as Record<string, string>
-                )[tab] ?? 'Overview'}
-              </b>
-            </span>
+            <span className="fin-topbar-brand">{brand}</span>
           </div>
+          <nav className="fin-desktop-nav" aria-label="Account navigation">
+            {[
+              ['home', 'Home'],
+              ['payments', 'Payments'],
+              ['activity', 'Activity'],
+              ['profile', 'Account'],
+            ].map(([key, label]) => (
+              <button
+                key={key}
+                aria-current={navTab === key ? 'page' : undefined}
+                onClick={() => go(`/personal/${key}`)}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
           <div>
             {themeToggle}
             <button
@@ -355,7 +355,10 @@ export function PersonalPage({
             </button>
           </div>
         </header>
-        <main className="fin-content" id="main-content">
+        <main
+          className={`fin-content${tab === 'home' ? ' fin-home-content' : ''}`}
+          id="main-content"
+        >
           {error && (
             <div role="alert" className="fin-error">
               {error}
@@ -363,14 +366,14 @@ export function PersonalPage({
           )}
           {tab === 'home' && (
             <>
-              <div className="fin-heading">
+              <div className="fin-home-heading">
                 <div>
-                  <span className="fin-kicker">YOUR EVERYDAY, SIMPLIFIED</span>
+                  <span className="fin-kicker">YOUR MICROSENDR SPACE</span>
                   <h1>
                     Hello{p.first_name ? `, ${p.first_name}` : ''}
                     <span className="fin-greeting-dot">.</span>
                   </h1>
-                  <p>Make your next money move.</p>
+                  <p>One place for digital dollars and your next money move.</p>
                 </div>
                 <button
                   className="fin-icon-button"
@@ -381,137 +384,136 @@ export function PersonalPage({
                   <RefreshCw size={18} className={refreshing ? 'fin-spin' : ''} />
                 </button>
               </div>
-              <div className="fin-home-grid">
-                <div>
-                  <section className="fin-balance-card">
-                    <div className="fin-balance-top">
-                      <span>Total balance</span>
-                      <button
-                        aria-label={hidden ? 'Show balance' : 'Hide balance'}
-                        onClick={() => setHidden(!hidden)}
-                      >
-                        {hidden ? <EyeOff size={18} /> : <Eye size={18} />}
-                      </button>
-                      <span className="fin-currency-pill">{p.display_currency || 'USD'}</span>
-                    </div>
+              <section className="fin-wallet-overview" aria-label="Your wallet overview">
+                <div className="fin-wallet-overview-top">
+                  <span>
+                    <Coins size={17} /> Wallet overview
+                  </span>
+                  <span className="fin-wallet-status">
+                    <i /> Getting ready
+                  </span>
+                </div>
+                <div className="fin-wallet-amount">
+                  <span>Available balance</span>
+                  <div>
                     <strong>{hidden ? '••••' : '—'}</strong>
-                    <p>
-                      {hidden
-                        ? 'Your balance is hidden'
-                        : 'Your available balances will appear here'}
-                    </p>
-                    <div className="fin-balance-foot">
-                      <span>
-                        <LockKeyhole size={13} /> Personal account
-                      </span>
-                      <span>microsendr</span>
-                    </div>
-                  </section>
-                  <div className="fin-quick-actions">
-                    {actions.map(([key, label, Icon]) => (
-                      <button key={key} onClick={() => go('/personal/' + key)}>
-                        <span>
-                          <Icon size={22} />
-                        </span>
-                        {label}
-                      </button>
+                    <button
+                      aria-label={hidden ? 'Show balance' : 'Hide balance'}
+                      onClick={() => setHidden(!hidden)}
+                    >
+                      {hidden ? <EyeOff size={17} /> : <Eye size={17} />}
+                    </button>
+                  </div>
+                  <p>{hidden ? 'Your balance is hidden' : 'No available funds yet'}</p>
+                </div>
+                <div className="fin-wallet-overview-foot">
+                  <span>
+                    <span className="fin-token-dot">$</span> Digital dollars{' '}
+                    <small>Stablecoin access coming</small>
+                  </span>
+                  <button onClick={() => go('/personal/deposit')}>
+                    Explore deposit <ArrowRight size={15} />
+                  </button>
+                </div>
+              </section>
+              <div className="fin-wallet-actions" aria-label="Money actions">
+                {actions.map(([key, label, Icon]) => (
+                  <button key={key} onClick={() => go('/personal/' + key)}>
+                    <span>
+                      <Icon size={23} />
+                    </span>
+                    <b>{label}</b>
+                  </button>
+                ))}
+              </div>
+              <div className="fin-feature-grid">
+                <button
+                  className="fin-feature-card fin-feature-crypto"
+                  onClick={() => go('/personal/deposit')}
+                >
+                  <span className="fin-feature-eyebrow">
+                    <Coins size={17} /> DIGITAL DOLLARS <i>COMING</i>
+                  </span>
+                  <strong>
+                    Money that goes
+                    <br />
+                    where you do.
+                  </strong>
+                  <p>
+                    Receive supported stablecoins. See network details when a deposit route is
+                    ready.
+                  </p>
+                  <span className="fin-feature-link">
+                    Explore crypto deposits <ArrowUpRight size={16} />
+                  </span>
+                  <span className="fin-feature-coin" aria-hidden="true">
+                    $
+                  </span>
+                </button>
+                <button
+                  className="fin-feature-card fin-feature-fiat"
+                  onClick={() => go('/personal/withdraw')}
+                >
+                  <span className="fin-feature-eyebrow">
+                    <Landmark size={17} /> LOCAL PAYOUTS <i>COMING</i>
+                  </span>
+                  <strong>
+                    From digital to
+                    <br />
+                    everyday.
+                  </strong>
+                  <p>Withdraw to an eligible bank once a supported payout route is available.</p>
+                  <span className="fin-feature-link">
+                    Explore withdrawals <ArrowUpRight size={16} />
+                  </span>
+                </button>
+              </div>
+              <div className="fin-home-lower">
+                <section className="fin-panel fin-home-setup">
+                  <div className="fin-section-head">
+                    <h2>Make your account yours</h2>
+                    <Sparkles size={18} />
+                  </div>
+                  <p>
+                    Finish your details now. Verify your identity before eligible money services
+                    open.
+                  </p>
+                  <div
+                    className="fin-setup-progress"
+                    aria-label={`${Number(!!p.first_name) + Number(!!p.email_verified_at) + Number(identityDone)} of 3 account steps complete`}
+                  >
+                    {[!!p.first_name, !!p.email_verified_at, identityDone].map((done, index) => (
+                      <i key={index} className={done ? 'done' : ''} />
                     ))}
                   </div>
-                  <section className="fin-panel fin-balances">
-                    <div className="fin-section-head">
-                      <h2>Your money</h2>
-                      <Wallet size={18} />
-                    </div>
-                    <div className="fin-currency-row">
-                      <span className="fin-dollar">$</span>
-                      <span>
-                        <b>Digital dollars</b>
-                        <small>Account not yet available</small>
-                      </span>
-                      <strong>—</strong>
-                    </div>
-                    <div className="fin-currency-row">
-                      <span className="fin-naira">₦</span>
-                      <span>
-                        <b>Nigerian naira</b>
-                        <small>Account not yet available</small>
-                      </span>
-                      <strong>—</strong>
-                    </div>
-                  </section>
-                </div>
-                <aside className="fin-stack">
-                  <section className="fin-onboarding-card">
-                    <div className="fin-section-head">
-                      <span className="fin-kicker">GET STARTED</span>
-                      <span className="fin-step-count">
-                        {Number(!!p.first_name) +
-                          Number(!!p.email_verified_at) +
-                          Number(identityDone)}
-                        /3
-                      </span>
-                    </div>
-                    <h2>
-                      A few steps. <br />
-                      All yours.
-                    </h2>
-                    <div className="fin-checklist">
-                      {[
-                        [
-                          !!p.first_name,
-                          'Complete your profile',
-                          'Your details, all in one place.',
-                          'profile',
-                        ],
-                        [
-                          !!p.email_verified_at,
-                          'Verify your email',
-                          'Keep your account connected.',
-                          'security',
-                        ],
-                        [
-                          identityDone,
-                          'Verify your identity',
-                          'Get ready for available services.',
-                          'identity',
-                        ],
-                      ].map(([done, title, desc, destination]) => (
-                        <button
-                          key={title as string}
-                          onClick={() => go(`/personal/${destination}`)}
-                        >
-                          <span className={done ? 'done' : ''}>
-                            {done ? <Check size={14} /> : <span />}
-                          </span>
-                          <span>
-                            <b>{title as string}</b>
-                            <small>{desc as string}</small>
-                          </span>
-                          <ChevronRight size={16} />
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-                  <section className="fin-identity-card">
-                    <div className="fin-id-mark">
-                      <MicrosendrMark />
-                    </div>
-                    <span>YOUR MICROSENDR ID</span>
-                    <h3>{p.username ? `@${p.username}` : 'Make it personal'}</h3>
-                    <p>A name that’s yours.</p>
-                    <button
-                      className="fin-secondary"
-                      onClick={p.username ? copy : () => go('/personal/profile')}
-                    >
-                      {copied ? <CheckCircle2 size={15} /> : <Copy size={15} />}{' '}
-                      {copied ? 'Copied' : p.username ? 'Copy username' : 'Choose username'}
+                  <div className="fin-setup-links">
+                    <button onClick={() => go('/personal/profile')}>
+                      Profile <span>{p.first_name ? 'Added' : 'Add details'}</span>
                     </button>
-                  </section>
-                </aside>
+                    <button onClick={() => go('/personal/security')}>
+                      Email <span>{p.email_verified_at ? 'Verified' : 'Verify'}</span>
+                    </button>
+                    <button onClick={() => go('/personal/identity')}>
+                      Identity <span>{identityDone ? 'Verified' : 'Continue'}</span>
+                    </button>
+                  </div>
+                </section>
+                <section className="fin-panel fin-home-identity">
+                  <span className="fin-kicker">YOUR PAYMENT NAME</span>
+                  <h2>{p.username ? `@${p.username}` : 'Choose a username'}</h2>
+                  <p>One simple name to share when personal payments become available.</p>
+                  <button
+                    className="fin-text"
+                    onClick={p.username ? copy : () => go('/personal/profile')}
+                  >
+                    {copied ? <CheckCircle2 size={16} /> : <Copy size={16} />}
+                    {copied ? 'Copied' : p.username ? 'Copy username' : 'Set username'}
+                  </button>
+                </section>
               </div>
-              <section className="fin-panel fin-recent">
+              <section className="fin-panel fin-home-activity">
                 <div className="fin-section-head">
-                  <h2>Recent activity</h2>
+                  <h2>Activity</h2>
                   <button className="fin-text" onClick={() => go('/personal/activity')}>
                     View all <ArrowRight size={15} />
                   </button>
@@ -537,7 +539,7 @@ export function PersonalPage({
                     <p>
                       {
                         [
-                          'Choose a bank or crypto deposit.',
+                          'Explore stablecoin or local deposits.',
                           'Pay someone or an external account.',
                           'Review an exchange before you confirm.',
                           'Move money to your bank account.',
@@ -775,7 +777,7 @@ function MoneyFlow({
   go: (path: string) => void;
   identityDone: boolean;
 }) {
-  const [method, setMethod] = useState('bank'),
+  const [method, setMethod] = useState('crypto'),
     [source, setSource] = useState('USD'),
     [amount, setAmount] = useState(''),
     [error, setError] = useState(''),

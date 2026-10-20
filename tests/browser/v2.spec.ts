@@ -138,6 +138,9 @@ test('custom registration, optional identity, profile editing and mobile money n
   await expect(page.getByRole('heading', { name: 'You’re in, Ada.' })).toBeVisible();
   await page.getByRole('button', { name: 'Do this later' }).click();
   await expect(page.getByRole('heading', { name: 'Hello, Ada.' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Your wallet overview' })).toContainText('No available funds yet');
+  await expect(page.getByRole('button', { name: /Explore crypto deposits/ })).toContainText('COMING');
+  await expect(page.getByRole('button', { name: /Explore withdrawals/ })).toContainText('COMING');
   await expect(page.getByText('sandbox', { exact: false })).toHaveCount(0);
   await expect(page.getByText('QIE', { exact: false })).toHaveCount(0);
   await page.screenshot({ path: '/tmp/microsendr-dashboard-desktop.png', fullPage: true });
