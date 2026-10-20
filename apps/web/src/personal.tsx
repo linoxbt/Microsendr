@@ -49,12 +49,31 @@ type Movement = {
   confirmations: number;
   required_confirmations: number;
 };
+type Asset = {
+  code: 'QIE' | 'QUSDC' | 'NGN';
+  name: string;
+  amount_atomic: string | null;
+  decimals: number;
+  status: 'ready' | 'unavailable';
+  source: 'wallet' | 'fiat';
+};
 type Overview = {
   balances: unknown[];
   total: null;
+  assets: Asset[];
   activity: Movement[];
   capabilities: Record<string, Capability>;
 };
+function assetAmount(asset: Asset): string {
+  if (asset.amount_atomic === null) return '—';
+  const amount = BigInt(asset.amount_atomic);
+  const unit = 10n ** BigInt(asset.decimals);
+  const whole = (amount / unit).toLocaleString();
+  const fraction = (amount % unit).toString().padStart(asset.decimals, '0');
+  const visible = fraction.slice(0, 8).replace(/0+$/, '');
+  if (amount > 0n && amount < unit / 100000000n) return '<0.00000001';
+  return visible ? `${whole}.${visible}` : whole;
+}
 const statusLabel = (status: string) =>
   ({
     confirmed: 'Completed',
@@ -107,7 +126,8 @@ export function PersonalPage({
     [search, setSearch] = useState(''),
     [filter, setFilter] = useState('all');
   const [selected, setSelected] = useState<string | null>(null),
-    [refreshing, setRefreshing] = useState(false);
+    [refreshing, setRefreshing] = useState(false),
+    [heroAssetCode, setHeroAssetCode] = useState<Asset['code'] | null>(null);
   const rawTab = path.split('/')[2]?.split('?')[0] || 'home';
   const tab = rawTab === 'login' ? 'home' : rawTab === 'money' ? 'deposit' : rawTab;
   const navTab = ['profile', 'identity', 'security', 'onboarding'].includes(tab)
@@ -204,6 +224,11 @@ export function PersonalPage({
   const p = profile!,
     o = overview!,
     csrf = session.csrf_token!;
+  const walletAssets = (o.assets ?? []).filter(asset => asset.source === 'wallet');
+  const preferredAsset = walletAssets.find(asset => asset.code === heroAssetCode)
+    ?? walletAssets.find(asset => asset.code === 'QUSDC' && asset.amount_atomic && BigInt(asset.amount_atomic) > 0n)
+    ?? walletAssets.find(asset => asset.amount_atomic && BigInt(asset.amount_atomic) > 0n)
+    ?? walletAssets[0];
   const movements = o.activity.filter(
     (item) =>
       (filter === 'all' ||
@@ -374,11 +399,12 @@ export function PersonalPage({
                   <span>
                     <Coins size={17} /> Wallet overview
                   </span>
+                  <span className="fin-wallet-username">@{p.username}</span>
                 </div>
                 <div className="fin-wallet-amount">
-                  <span>Available balance</span>
+                  <span>Wallet balance · {preferredAsset?.code ?? 'QIE'}</span>
                   <div>
-                    <strong>{hidden ? '••••' : '—'}</strong>
+                    <strong>{hidden ? '••••' : preferredAsset ? assetAmount(preferredAsset) : '—'}</strong>
                     <button
                       aria-label={hidden ? 'Show balance' : 'Hide balance'}
                       onClick={() => setHidden(!hidden)}
@@ -386,7 +412,14 @@ export function PersonalPage({
                       {hidden ? <EyeOff size={17} /> : <Eye size={17} />}
                     </button>
                   </div>
-                  <p>{hidden ? 'Your balance is hidden' : 'No available funds yet'}</p>
+                  <p>{hidden ? 'Your balance is hidden' : preferredAsset?.status === 'ready'
+                    ? 'Onchain across your wallets' : 'Wallet balance temporarily unavailable'}</p>
+                  <div className="fin-wallet-asset-switch" aria-label="Choose wallet asset">
+                    {walletAssets.map(asset => <button key={asset.code}
+                      className={preferredAsset?.code === asset.code ? 'active' : ''}
+                      aria-pressed={preferredAsset?.code === asset.code}
+                      onClick={() => setHeroAssetCode(asset.code)}>{asset.code}</button>)}
+                  </div>
                 </div>
               </section>
               <div className="fin-wallet-actions" aria-label="Money actions">
@@ -399,14 +432,17 @@ export function PersonalPage({
                   </button>
                 ))}
               </div>
-              <section className="fin-panel fin-home-activity">
+              <section className="fin-panel fin-home-assets">
                 <div className="fin-section-head">
-                  <h2>Activity</h2>
-                  <button className="fin-text" onClick={() => go('/personal/activity')}>
-                    View all <ArrowRight size={15} />
-                  </button>
+                  <h2>Assets</h2>
                 </div>
-                {activity(true)}
+                <div className="fin-assets-list">
+                  {(o.assets ?? []).map(asset => <div className="fin-asset-row" key={asset.code}>
+                    <span className={`fin-asset-icon fin-asset-${asset.code.toLowerCase()}`}>{asset.code === 'NGN' ? '₦' : asset.code === 'QUSDC' ? '$' : 'Q'}</span>
+                    <span className="fin-asset-name"><b>{asset.code}</b><small>{asset.name}</small></span>
+                    <span className="fin-asset-value"><b>{hidden ? '••••' : assetAmount(asset)}</b><small>{asset.status === 'ready' ? 'Onchain' : 'Unavailable'}</small></span>
+                  </div>)}
+                </div>
               </section>
             </>
           )}

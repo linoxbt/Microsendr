@@ -5,6 +5,8 @@ export const QIE_RPC_URL = 'https://rpc1mainnet.qie.digital/';
 export const QIE_EXPLORER = 'https://mainnet.qie.digital/';
 export const QIE_NETWORK = 'qie-mainnet';
 export const QIE_NATIVE_POSITION = 'pos_qiev3_mainnet';
+// Exact mainnet contract. A ticker match is never sufficient to credit QUSDC.
+export const QIE_QUSDC_CONTRACT = '0x3F43DA82eC9A4f5285F10FaF1F26EcA7319E5DA5';
 const addressPattern = /^0x[a-fA-F0-9]{40}$/;
 const hashPattern = /^0x[a-fA-F0-9]{64}$/;
 
@@ -55,6 +57,19 @@ export class QieClient implements ChainSettlementAdapter {
     if (!/^0x[0-9a-f]+$/i.test(rawBalance) || !/^0x[0-9a-f]+$/i.test(rawBlock))
       throw new QieRpcError('Invalid balance response');
     return { balance_wei: BigInt(rawBalance).toString(), block_number: BigInt(rawBlock).toString() };
+  }
+
+  async qusdcBalance(address: string): Promise<{ balance_atomic: string; block_number: string }> {
+    if (!addressPattern.test(address)) throw new QieRpcError('Invalid QIE address');
+    await this.assertMainnet();
+    const data = `0x70a08231${address.slice(2).toLowerCase().padStart(64, '0')}`;
+    const [rawBalance, rawBlock] = await Promise.all([
+      this.rpc<string>('eth_call', [{ to: QIE_QUSDC_CONTRACT, data }, 'latest']),
+      this.rpc<string>('eth_blockNumber'),
+    ]);
+    if (!/^0x[0-9a-f]{64}$/i.test(rawBalance) || !/^0x[0-9a-f]+$/i.test(rawBlock))
+      throw new QieRpcError('Invalid QUSDC balance response');
+    return { balance_atomic: BigInt(rawBalance).toString(), block_number: BigInt(rawBlock).toString() };
   }
 
   async headBlock(): Promise<bigint> {

@@ -1899,6 +1899,12 @@
   font-weight: 600;
   font-size: 12px;
 }
+.fin-wallet-username {
+  font-size: 12px;
+  color: #d8e6ee;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
 .fin-wallet-status {
   font-size: 10px;
   color: #e4e9e7;
@@ -1933,10 +1939,12 @@
   margin: 4px 0;
 }
 .fin-wallet-amount strong {
-  font-size: 56px;
+  font-size: clamp(30px, 5vw, 56px);
   line-height: 1.1;
   font-weight: 500;
   letter-spacing: -2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .fin-wallet-amount button {
   border: 0;
@@ -1950,6 +1958,24 @@
   font-size: 11px;
   color: #bfcfd7;
   margin: 3px 0 0;
+}
+.fin-wallet-asset-switch {
+  display: flex !important;
+  justify-content: center;
+  gap: 7px !important;
+  margin-top: 15px !important;
+}
+.fin-wallet-asset-switch button {
+  display: inline-flex;
+  border: 1px solid #ffffff45;
+  border-radius: 999px;
+  color: #e2edf2;
+  padding: 5px 13px;
+  font-size: 11px;
+}
+.fin-wallet-asset-switch button.active {
+  background: #f7f3e9;
+  color: #203749;
 }
 .fin-wallet-overview-foot {
   border-top: 1px solid #ffffff21;
@@ -2189,6 +2215,32 @@
 .fin-home-activity .fin-empty > span {
   border-radius: 50%;
 }
+.fin-home-assets { margin-top: 17px; }
+.fin-assets-list { display: grid; }
+.fin-asset-row {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 15px 0;
+  border-top: 1px solid var(--fin-line);
+}
+.fin-asset-icon {
+  width: 39px;
+  height: 39px;
+  flex: 0 0 39px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-weight: 700;
+  color: #244963;
+  background: #eaf1f7;
+}
+.fin-asset-qusdc { color: #317d73; background: #e7f4ef; }
+.fin-asset-ngn { color: #617c55; background: #edf2e8; }
+.fin-asset-name, .fin-asset-value { display: grid; gap: 2px; }
+.fin-asset-name b, .fin-asset-value b { font-size: 13px; font-weight: 600; }
+.fin-asset-name small, .fin-asset-value small { font-size: 11px; color: var(--fin-muted); }
+.fin-asset-value { margin-left: auto; text-align: right; }
 @media (max-width: 900px) {
   .fin-app {
     grid-template-columns: none;

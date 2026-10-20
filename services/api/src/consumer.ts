@@ -6,6 +6,7 @@ import { hashKey } from '../../../packages/payments/src/auth.js';
 import { PaymentError } from '../../../packages/payments/src/errors.js';
 import { publicSettlement } from '../../../packages/settlement/src/service.js';
 import { ensureManagedWallet } from './managed-wallet.js';
+import { personalAssets } from './personal-assets.js';
 
 type Person = { user_id: string; account_id: string; csrf_token: string };
 type Dependencies = {
@@ -374,11 +375,12 @@ export function registerConsumer(app: FastifyInstance, deps: Dependencies) {
         [person.user_id],
       )
     ).rows;
-    // No consumer custodied live balances exist yet. Never reinterpret test journals or
-    // wallet transfer receipts as owned digital dollars or available naira.
+    // Wallet assets are live chain observations, distinct from custodial ledger balances.
+    const assets = await personalAssets(person.user_id, person.account_id);
     return {
       balances: [],
       total: null,
+      assets,
       activity: rows.map(publicSettlement),
       capabilities: {
         fiat_deposit: { available: false, reason: 'Bank deposits are not available yet.' },

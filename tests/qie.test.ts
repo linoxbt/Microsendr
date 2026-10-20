@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { QieClient, QieRpcError } from '../packages/qie/src/index.js';
+import { QieClient, QieRpcError, QIE_QUSDC_CONTRACT } from '../packages/qie/src/index.js';
+import { walletAssetSnapshot } from '../services/api/src/personal-assets.js';
 
 function fakeRpc(values: Record<string, unknown>) {
   return (async (_url: string | URL | Request, init?: RequestInit) => {
@@ -41,4 +42,33 @@ test('QIE balance reads only a valid address on chain 1990', async () => {
   const client = new QieClient(fakeRpc({ eth_chainId: '0x7c6', eth_getBalance: '0xde0b6b3a7640000', eth_blockNumber: '0x10' }));
   assert.deepEqual(await client.nativeBalance(from), { balance_wei: '1000000000000000000', block_number: '16' });
   await assert.rejects(client.nativeBalance('0x123'), QieRpcError);
+});
+
+test('QUSDC balance reads the allowlisted mainnet token with six decimal units', async () => {
+  const calls: { method: string; params: unknown[] }[] = [];
+  const request = (async (_url: string | URL | Request, init?: RequestInit) => {
+    const { method, params } = JSON.parse(String(init?.body));
+    calls.push({ method, params });
+    return Response.json({ result: method === 'eth_chainId' ? '0x7c6'
+      : method === 'eth_blockNumber' ? '0x10' : '0x' + (1250000n).toString(16).padStart(64, '0') });
+  }) as typeof fetch;
+  const client = new QieClient(request);
+  assert.deepEqual(await client.qusdcBalance(from), { balance_atomic: '1250000', block_number: '16' });
+  const call = calls.find(c => c.method === 'eth_call');
+  assert.equal((call?.params[0] as { to: string }).to, QIE_QUSDC_CONTRACT);
+  assert.equal((call?.params[0] as { data: string }).data, `0x70a08231${from.slice(2).padStart(64, '0')}`);
+  await assert.rejects(client.qusdcBalance('bad'), QieRpcError);
+});
+
+test('wallet asset snapshot sums linked wallets without inventing fiat or partial balances', async () => {
+  const snapshot = await walletAssetSnapshot([from, to], {
+    nativeBalance: async address => ({ balance_wei: address === from ? '100' : '200', block_number: '10' }),
+    qusdcBalance: async address => {
+      if (address === to) throw new Error('RPC unavailable');
+      return { balance_atomic: '1000000', block_number: '10' };
+    },
+  });
+  assert.deepEqual(snapshot.map(asset => [asset.code, asset.amount_atomic, asset.status]), [
+    ['QIE', '300', 'ready'], ['QUSDC', null, 'unavailable'], ['NGN', null, 'unavailable'],
+  ]);
 });

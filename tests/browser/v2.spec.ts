@@ -139,7 +139,27 @@ test('custom registration, optional identity, profile editing and mobile money n
   await expect(page.getByRole('heading', { name: 'You’re in, Ada.' })).toBeVisible();
   await page.getByRole('button', { name: 'Do this later' }).click();
   await expect(page.getByRole('heading', { name: 'Hello, Ada.' })).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Your wallet overview' })).toContainText('No available funds yet');
+  await expect(page.getByRole('region', { name: 'Your wallet overview' })).toContainText(`@ada_${unique}`);
+  await expect(page.getByRole('heading', { name: 'Assets' })).toBeVisible();
+  await expect(page.locator('.fin-asset-row')).toHaveCount(3);
+  await expect(page.locator('.fin-asset-row')).toContainText(['QIE', 'QUSDC', 'NGN']);
+  const fundedOverview = async (route: import('@playwright/test').Route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.assets = [
+      { code: 'QIE', name: 'QIE', amount_atomic: '1250000000000000000', decimals: 18, status: 'ready', source: 'wallet' },
+      { code: 'QUSDC', name: 'Digital dollars', amount_atomic: '2500000', decimals: 6, status: 'ready', source: 'wallet' },
+      { code: 'NGN', name: 'Nigerian naira', amount_atomic: null, decimals: 2, status: 'unavailable', source: 'fiat' },
+    ];
+    await route.fulfill({ response, body: JSON.stringify(body) });
+  };
+  await page.route('**/personal/api/overview', fundedOverview);
+  await page.reload();
+  await expect(page.locator('.fin-wallet-amount strong')).toHaveText('2.5');
+  await page.getByRole('button', { name: 'QIE', exact: true }).click();
+  await expect(page.locator('.fin-wallet-amount strong')).toHaveText('1.25');
+  await expect(page.locator('.fin-asset-row').nth(2)).toContainText('Unavailable');
+  await page.unroute('**/personal/api/overview', fundedOverview);
   await expect(page.getByRole('button', { name: 'Explore deposit' })).toHaveCount(0);
   await expect(page.getByText('Make your account yours')).toHaveCount(0);
   await expect(page.getByText('Money that goes')).toHaveCount(0);
