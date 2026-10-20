@@ -20,13 +20,9 @@ import {
   Search,
   RefreshCw,
   LockKeyhole,
-  Copy,
-  CheckCircle2,
   Download,
   ArrowLeft,
   Coins,
-  Landmark,
-  Sparkles,
 } from 'lucide-react';
 import { PersonalLogin } from './personal-login.js';
 import { PersonalKyc } from './personal-kyc.js';
@@ -108,7 +104,6 @@ export function PersonalPage({
     [overview, setOverview] = useState<Overview>();
   const [error, setError] = useState(''),
     [hidden, setHidden] = useState(false),
-    [copied, setCopied] = useState(false),
     [search, setSearch] = useState(''),
     [filter, setFilter] = useState('all');
   const [selected, setSelected] = useState<string | null>(null),
@@ -176,15 +171,6 @@ export function PersonalPage({
       setError((e as Error).message);
     }
   }
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(`@${profile!.username}`);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setError('Copy is unavailable in this browser. Your username is shown below.');
-    }
-  }
   if (!session || (session.authenticated && (!profile || !overview)))
     return error ? (
       <div className="fin-connection">
@@ -217,8 +203,7 @@ export function PersonalPage({
     );
   const p = profile!,
     o = overview!,
-    csrf = session.csrf_token!,
-    identityDone = p.identity_status === 'Approved';
+    csrf = session.csrf_token!;
   const movements = o.activity.filter(
     (item) =>
       (filter === 'all' ||
@@ -427,92 +412,6 @@ export function PersonalPage({
                   </button>
                 ))}
               </div>
-              <ConsumerChainWallet csrf={csrf} mode="summary" go={go} onChanged={refresh} />
-              <div className="fin-feature-grid">
-                <button
-                  className="fin-feature-card fin-feature-crypto"
-                  onClick={() => go('/personal/deposit')}
-                >
-                  <span className="fin-feature-eyebrow">
-                    <Coins size={17} /> DIGITAL DOLLARS <i>COMING</i>
-                  </span>
-                  <strong>
-                    Money that goes
-                    <br />
-                    where you do.
-                  </strong>
-                  <p>
-                    Receive supported stablecoins. See network details when a deposit route is
-                    ready.
-                  </p>
-                  <span className="fin-feature-link">
-                    Explore crypto deposits <ArrowUpRight size={16} />
-                  </span>
-                  <span className="fin-feature-coin" aria-hidden="true">
-                    $
-                  </span>
-                </button>
-                <button
-                  className="fin-feature-card fin-feature-fiat"
-                  onClick={() => go('/personal/withdraw')}
-                >
-                  <span className="fin-feature-eyebrow">
-                    <Landmark size={17} /> LOCAL PAYOUTS <i>COMING</i>
-                  </span>
-                  <strong>
-                    From digital to
-                    <br />
-                    everyday.
-                  </strong>
-                  <p>Withdraw to an eligible bank once a supported payout route is available.</p>
-                  <span className="fin-feature-link">
-                    Explore withdrawals <ArrowUpRight size={16} />
-                  </span>
-                </button>
-              </div>
-              <div className="fin-home-lower">
-                <section className="fin-panel fin-home-setup">
-                  <div className="fin-section-head">
-                    <h2>Make your account yours</h2>
-                    <Sparkles size={18} />
-                  </div>
-                  <p>
-                    Finish your details now. Verify your identity before eligible money services
-                    open.
-                  </p>
-                  <div
-                    className="fin-setup-progress"
-                    aria-label={`${Number(!!p.first_name) + Number(!!p.email_verified_at) + Number(identityDone)} of 3 account steps complete`}
-                  >
-                    {[!!p.first_name, !!p.email_verified_at, identityDone].map((done, index) => (
-                      <i key={index} className={done ? 'done' : ''} />
-                    ))}
-                  </div>
-                  <div className="fin-setup-links">
-                    <button onClick={() => go('/personal/profile')}>
-                      Profile <span>{p.first_name ? 'Added' : 'Add details'}</span>
-                    </button>
-                    <button onClick={() => go('/personal/security')}>
-                      Email <span>{p.email_verified_at ? 'Verified' : 'Verify'}</span>
-                    </button>
-                    <button onClick={() => go('/personal/identity')}>
-                      Identity <span>{identityDone ? 'Verified' : 'Continue'}</span>
-                    </button>
-                  </div>
-                </section>
-                <section className="fin-panel fin-home-identity">
-                  <span className="fin-kicker">YOUR PAYMENT NAME</span>
-                  <h2>{p.username ? `@${p.username}` : 'Choose a username'}</h2>
-                  <p>One simple name to share when personal payments become available.</p>
-                  <button
-                    className="fin-text"
-                    onClick={p.username ? copy : () => go('/personal/profile')}
-                  >
-                    {copied ? <CheckCircle2 size={16} /> : <Copy size={16} />}
-                    {copied ? 'Copied' : p.username ? 'Copy username' : 'Set username'}
-                  </button>
-                </section>
-              </div>
               <section className="fin-panel fin-home-activity">
                 <div className="fin-section-head">
                   <h2>Activity</h2>
@@ -552,19 +451,6 @@ export function PersonalPage({
                   </button>
                 ))}
               </div>
-              <section className="fin-panel fin-recent">
-                <div className="fin-section-head">
-                  <h2>Before you move money</h2>
-                  <ShieldCheck size={20} />
-                </div>
-                <p>
-                  Complete your identity check and confirm that the payment method is available for
-                  your account.
-                </p>
-                <button className="fin-text" onClick={() => go('/personal/identity')}>
-                  Check verification <ArrowRight size={16} />
-                </button>
-              </section>
             </>
           )}
           {['deposit', 'send', 'withdraw', 'convert'].includes(tab) && (
@@ -574,7 +460,6 @@ export function PersonalPage({
               capabilities={o.capabilities}
               csrf={csrf}
               go={go}
-              identityDone={identityDone}
               onChanged={refresh}
             />
           )}
@@ -772,14 +657,12 @@ function MoneyFlow({
   capabilities,
   csrf,
   go,
-  identityDone,
   onChanged,
 }: {
   kind: string;
   capabilities: Record<string, Capability>;
   csrf: string;
   go: (path: string) => void;
-  identityDone: boolean;
   onChanged: () => Promise<void>;
 }) {
   const [method, setMethod] = useState('crypto'),
@@ -959,23 +842,6 @@ function MoneyFlow({
             </div>
           )}
         </section>
-        <aside className="fin-stack">
-          {!identityDone && (
-            <section className="fin-panel">
-              <ShieldCheck size={25} />
-              <h2>First, make it official.</h2>
-              <p>Verify your identity before using available payment services.</p>
-              <button className="fin-link-row" onClick={() => go('/personal/identity')}>
-                Verify identity <ArrowRight size={16} />
-              </button>
-            </section>
-          )}
-          <section className="fin-panel fin-flow-note">
-            <LockKeyhole size={22} />
-            <h3>You’re in control</h3>
-            <p>You’ll review the recipient, amount and fees before authorizing any payment.</p>
-          </section>
-        </aside>
       </div>
     </>
   );

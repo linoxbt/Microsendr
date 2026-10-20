@@ -140,10 +140,11 @@ test('custom registration, optional identity, profile editing and mobile money n
   await page.getByRole('button', { name: 'Do this later' }).click();
   await expect(page.getByRole('heading', { name: 'Hello, Ada.' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Your wallet overview' })).toContainText('No available funds yet');
-  await expect(page.getByRole('button', { name: /Explore crypto deposits/ })).toContainText('COMING');
-  await expect(page.getByRole('button', { name: /Explore withdrawals/ })).toContainText('COMING');
+  await expect(page.getByText('Make your account yours')).toHaveCount(0);
+  await expect(page.getByText('Money that goes')).toHaveCount(0);
+  await expect(page.getByText('From digital to')).toHaveCount(0);
   await expect(page.getByText('sandbox', { exact: false })).toHaveCount(0);
-  await expect(page.getByRole('region', { name: 'QIE wallet' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'QIE wallet' })).toHaveCount(0);
   await page.screenshot({ path: '/tmp/microsendr-dashboard-desktop.png', fullPage: true });
   await page.getByRole('button', { name: 'Switch to dark theme' }).click();
   await expect(page.locator('.fin-app')).toHaveCSS('background-color', 'rgb(9, 9, 9)');
@@ -184,6 +185,8 @@ test('custom registration, optional identity, profile editing and mobile money n
     ).toBeLessThanOrEqual(1);
   }
   await page.goto('/personal/convert');
+  await expect(page.getByText('First, make it official.')).toHaveCount(0);
+  await expect(page.getByText('You’re in control')).toHaveCount(0);
   await page.getByLabel('You exchange', { exact: true }).fill('100.00');
   await page.getByRole('button', { name: 'Check exchange availability' }).click();
   await expect(page.getByRole('alert')).toContainText('No funds have been moved');

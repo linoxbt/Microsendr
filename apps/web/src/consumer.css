@@ -838,7 +838,7 @@
 }
 .fin-flow-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(240px, 1fr);
+  grid-template-columns: minmax(0, 800px);
   gap: 24px;
   align-items: start;
 }
