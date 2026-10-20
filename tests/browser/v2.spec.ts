@@ -165,10 +165,26 @@ test('custom registration, optional identity, profile editing and mobile money n
   };
   await page.route('**/personal/api/overview', fundedOverview);
   await page.reload();
-  await expect(page.locator('.fin-wallet-amount strong')).toHaveText('2.5');
-  await page.getByRole('button', { name: 'QIE', exact: true }).click();
-  await expect(page.locator('.fin-wallet-amount strong')).toHaveText('1.25');
+  await expect(page.locator('.fin-wallet-amount strong')).toHaveText('2');
+  await expect(page.getByRole('region', { name: 'Your wallet overview' })).not.toContainText('QIE');
+  await expect(page.getByRole('region', { name: 'Your wallet overview' })).not.toContainText('QUSDC');
+  await expect(page.locator('.fin-asset-row').first()).toContainText('1.25');
+  await expect(page.locator('.fin-asset-row').nth(1)).toContainText('2.5');
   await expect(page.locator('.fin-asset-row').nth(2)).toContainText('Unavailable');
+  expect(await page.locator('.fin-asset-icon img').evaluateAll(images => images.every(image => (image as HTMLImageElement).naturalWidth > 0))).toBe(true);
+  await page.getByRole('button', { name: 'View QIE details' }).click();
+  await expect(page).toHaveURL(/\/personal\/assets\/qie$/);
+  await expect(page.getByRole('region', { name: 'QIE details' })).toContainText('1.25 QIE');
+  await expect(page.getByRole('heading', { name: 'Page not found' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Receive QIE' })).toBeVisible();
+  await page.getByRole('button', { name: 'Assets', exact: true }).click();
+  await page.getByRole('button', { name: 'View QUSDC details' }).click();
+  await expect(page.getByRole('region', { name: 'QUSDC details' })).toContainText('2.5 QUSDC');
+  await expect(page.getByText('0x3F43…5DA5')).toBeVisible();
+  await page.getByRole('button', { name: 'Assets', exact: true }).click();
+  await page.getByRole('button', { name: 'View NGN details' }).click();
+  await expect(page.getByRole('region', { name: 'NGN details' })).toContainText('Unavailable');
+  await page.getByRole('button', { name: 'Assets', exact: true }).click();
   await page.unroute('**/personal/api/overview', fundedOverview);
   await expect(page.getByRole('button', { name: 'Explore deposit' })).toHaveCount(0);
   await expect(page.getByText('Make your account yours')).toHaveCount(0);
@@ -198,6 +214,9 @@ test('custom registration, optional identity, profile editing and mobile money n
   await page.screenshot({ path: '/tmp/microsendr-dashboard-phone.png', fullPage: true });
   for (const path of [
     'home',
+    'assets/qie',
+    'assets/qusdc',
+    'assets/ngn',
     'payments',
     'deposit',
     'withdraw',

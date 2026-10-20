@@ -30,6 +30,7 @@ import { ConsumerProfileForm, ConsumerSecurity } from './consumer-profile.js';
 import { consumerRequest, type ConsumerProfile } from './consumer-api.js';
 import { MicrosendrMark } from './microsendr-logo.js';
 import { ConsumerChainWallet } from './consumer-chain-wallet.js';
+import { AssetDetail, AssetIcon, assetAmount, assetDefaults, type PersonalAsset } from './personal-assets.js';
 import './personal.css';
 import './consumer.css';
 
@@ -49,36 +50,13 @@ type Movement = {
   confirmations: number;
   required_confirmations: number;
 };
-type Asset = {
-  code: 'QIE' | 'QUSDC' | 'NGN';
-  name: string;
-  amount_atomic: string | null;
-  decimals: number;
-  status: 'ready' | 'unavailable';
-  source: 'wallet' | 'fiat';
-};
 type Overview = {
   balances: unknown[];
   total: null;
-  assets: Asset[];
+  assets: PersonalAsset[];
   activity: Movement[];
   capabilities: Record<string, Capability>;
 };
-const assetRows: Asset[] = [
-  { code: 'QIE', name: 'QIE', amount_atomic: null, decimals: 18, status: 'unavailable', source: 'wallet' },
-  { code: 'QUSDC', name: 'Digital dollars', amount_atomic: null, decimals: 6, status: 'unavailable', source: 'wallet' },
-  { code: 'NGN', name: 'Nigerian naira', amount_atomic: null, decimals: 2, status: 'unavailable', source: 'fiat' },
-];
-function assetAmount(asset: Asset): string {
-  if (asset.amount_atomic === null) return '—';
-  const amount = BigInt(asset.amount_atomic);
-  const unit = 10n ** BigInt(asset.decimals);
-  const whole = (amount / unit).toLocaleString();
-  const fraction = (amount % unit).toString().padStart(asset.decimals, '0');
-  const visible = fraction.slice(0, 8).replace(/0+$/, '');
-  if (amount > 0n && amount < unit / 100000000n) return '<0.00000001';
-  return visible ? `${whole}.${visible}` : whole;
-}
 const statusLabel = (status: string) =>
   ({
     confirmed: 'Completed',
@@ -131,11 +109,11 @@ export function PersonalPage({
     [search, setSearch] = useState(''),
     [filter, setFilter] = useState('all');
   const [selected, setSelected] = useState<string | null>(null),
-    [refreshing, setRefreshing] = useState(false),
-    [heroAssetCode, setHeroAssetCode] = useState<Asset['code'] | null>(null);
+    [refreshing, setRefreshing] = useState(false);
   const rawTab = path.split('/')[2]?.split('?')[0] || 'home';
   const tab = rawTab === 'login' ? 'home' : rawTab === 'money' ? 'deposit' : rawTab;
-  const navTab = ['profile', 'identity', 'security', 'onboarding'].includes(tab)
+  const assetCode = path.split('/')[3]?.split('?')[0]?.toUpperCase();
+  const navTab = tab === 'assets' ? 'home' : ['profile', 'identity', 'security', 'onboarding'].includes(tab)
     ? 'profile'
     : ['deposit', 'withdraw', 'send', 'convert'].includes(tab)
       ? 'payments'
@@ -229,12 +207,11 @@ export function PersonalPage({
   const p = profile!,
     o = overview!,
     csrf = session.csrf_token!;
-  const assets = assetRows.map(defaultAsset => o.assets?.find(asset => asset.code === defaultAsset.code) ?? defaultAsset);
+  const assets = assetDefaults.map(defaultAsset => o.assets?.find(asset => asset.code === defaultAsset.code) ?? defaultAsset);
   const walletAssets = assets.filter(asset => asset.source === 'wallet');
-  const preferredAsset = walletAssets.find(asset => asset.code === heroAssetCode)
-    ?? walletAssets.find(asset => asset.code === 'QUSDC' && asset.amount_atomic && BigInt(asset.amount_atomic) > 0n)
-    ?? walletAssets.find(asset => asset.amount_atomic && BigInt(asset.amount_atomic) > 0n)
-    ?? walletAssets[0];
+  const walletCount = walletAssets.every(asset => asset.status === 'ready')
+    ? walletAssets.filter(asset => asset.amount_atomic && BigInt(asset.amount_atomic) > 0n).length : null;
+  const detailAsset = assets.find(asset => asset.code.toLowerCase() === assetCode?.toLowerCase());
   const movements = o.activity.filter(
     (item) =>
       (filter === 'all' ||
@@ -408,9 +385,9 @@ export function PersonalPage({
                   <span className="fin-wallet-username">@{p.username}</span>
                 </div>
                 <div className="fin-wallet-amount">
-                  <span>Wallet balance · {preferredAsset?.code ?? 'QIE'}</span>
+                  <span>Funded assets</span>
                   <div>
-                    <strong>{hidden ? '••••' : preferredAsset ? assetAmount(preferredAsset) : '—'}</strong>
+                    <strong>{hidden ? '••••' : walletCount ?? '—'}</strong>
                     <button
                       aria-label={hidden ? 'Show balance' : 'Hide balance'}
                       onClick={() => setHidden(!hidden)}
@@ -418,14 +395,8 @@ export function PersonalPage({
                       {hidden ? <EyeOff size={17} /> : <Eye size={17} />}
                     </button>
                   </div>
-                  <p>{hidden ? 'Your balance is hidden' : preferredAsset?.status === 'ready'
-                    ? 'Onchain across your wallets' : 'Wallet balance temporarily unavailable'}</p>
-                  <div className="fin-wallet-asset-switch" aria-label="Choose wallet asset">
-                    {walletAssets.map(asset => <button key={asset.code}
-                      className={preferredAsset?.code === asset.code ? 'active' : ''}
-                      aria-pressed={preferredAsset?.code === asset.code}
-                      onClick={() => setHeroAssetCode(asset.code)}>{asset.code}</button>)}
-                  </div>
+                  <p>{hidden ? 'Your balances are hidden' : walletCount === null
+                    ? 'Wallet balances temporarily unavailable' : 'See each balance below'}</p>
                 </div>
               </section>
               <div className="fin-wallet-actions" aria-label="Money actions">
@@ -443,15 +414,19 @@ export function PersonalPage({
                   <h2>Assets</h2>
                 </div>
                 <div className="fin-assets-list">
-                  {assets.map(asset => <div className="fin-asset-row" key={asset.code}>
-                    <span className={`fin-asset-icon fin-asset-${asset.code.toLowerCase()}`}>{asset.code === 'NGN' ? '₦' : asset.code === 'QUSDC' ? '$' : 'Q'}</span>
+                  {assets.map(asset => <button className="fin-asset-row" key={asset.code} onClick={() => go(`/personal/assets/${asset.code.toLowerCase()}`)} aria-label={`View ${asset.code} details`}>
+                    <AssetIcon code={asset.code} />
                     <span className="fin-asset-name"><b>{asset.code}</b><small>{asset.name}</small></span>
                     <span className="fin-asset-value"><b>{hidden ? '••••' : assetAmount(asset)}</b><small>{asset.status === 'ready' ? 'Onchain' : 'Unavailable'}</small></span>
-                  </div>)}
+                    <ChevronRight className="fin-asset-chevron" size={17} />
+                  </button>)}
                 </div>
               </section>
             </>
           )}
+          {tab === 'assets' && (detailAsset
+            ? <AssetDetail asset={detailAsset} go={go} hidden={hidden} refresh={() => void retry()} refreshing={refreshing} />
+            : <div className="fin-panel"><h1>Asset not found</h1><button className="fin-secondary" onClick={() => go('/personal/home')}>Back to assets</button></div>)}
           {tab === 'payments' && (
             <>
               <PageHeading
@@ -651,6 +626,7 @@ export function PersonalPage({
             'security',
             'identity',
             'onboarding',
+            'assets',
           ].includes(tab) && (
             <section className="fin-panel">
               <h1>Page not found</h1>
