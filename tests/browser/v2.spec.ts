@@ -161,11 +161,12 @@ test('custom registration, optional identity, profile editing and mobile money n
       { code: 'QUSDC', name: 'Digital dollars', amount_atomic: '2500000', decimals: 6, status: 'ready', source: 'wallet' },
       { code: 'NGN', name: 'Nigerian naira', amount_atomic: null, decimals: 2, status: 'unavailable', source: 'fiat' },
     ];
+    body.wallet_value_usd = { amount_usd: '2.73', checked_at: '2026-10-21T10:00:00.000Z' };
     await route.fulfill({ response, body: JSON.stringify(body) });
   };
   await page.route('**/personal/api/overview', fundedOverview);
   await page.reload();
-  await expect(page.locator('.fin-wallet-amount strong')).toHaveText('2');
+  await expect(page.locator('.fin-wallet-amount strong')).toHaveText('$2.73');
   await expect(page.getByRole('region', { name: 'Your wallet overview' })).not.toContainText('QIE');
   await expect(page.getByRole('region', { name: 'Your wallet overview' })).not.toContainText('QUSDC');
   await expect(page.locator('.fin-asset-row').first()).toContainText('1.25');

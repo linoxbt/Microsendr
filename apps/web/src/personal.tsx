@@ -54,6 +54,7 @@ type Overview = {
   balances: unknown[];
   total: null;
   assets: PersonalAsset[];
+  wallet_value_usd?: { amount_usd: string | null; checked_at: string | null };
   activity: Movement[];
   capabilities: Record<string, Capability>;
 };
@@ -208,9 +209,9 @@ export function PersonalPage({
     o = overview!,
     csrf = session.csrf_token!;
   const assets = assetDefaults.map(defaultAsset => o.assets?.find(asset => asset.code === defaultAsset.code) ?? defaultAsset);
-  const walletAssets = assets.filter(asset => asset.source === 'wallet');
-  const walletCount = walletAssets.every(asset => asset.status === 'ready')
-    ? walletAssets.filter(asset => asset.amount_atomic && BigInt(asset.amount_atomic) > 0n).length : null;
+  const walletValue = o.wallet_value_usd?.amount_usd ?? null;
+  const formattedWalletValue = walletValue === null ? '—' :
+    `$${walletValue.replace(/\B(?=(\d{3})+(?=\.))/g, ',')}`;
   const detailAsset = assets.find(asset => asset.code.toLowerCase() === assetCode?.toLowerCase());
   const movements = o.activity.filter(
     (item) =>
@@ -385,9 +386,9 @@ export function PersonalPage({
                   <span className="fin-wallet-username">@{p.username}</span>
                 </div>
                 <div className="fin-wallet-amount">
-                  <span>Funded assets</span>
+                  <span>Estimated wallet value · USD</span>
                   <div>
-                    <strong>{hidden ? '••••' : walletCount ?? '—'}</strong>
+                    <strong>{hidden ? '••••' : formattedWalletValue}</strong>
                     <button
                       aria-label={hidden ? 'Show balance' : 'Hide balance'}
                       onClick={() => setHidden(!hidden)}
@@ -395,8 +396,10 @@ export function PersonalPage({
                       {hidden ? <EyeOff size={17} /> : <Eye size={17} />}
                     </button>
                   </div>
-                  <p>{hidden ? 'Your balances are hidden' : walletCount === null
-                    ? 'Wallet balances temporarily unavailable' : 'See each balance below'}</p>
+                  <p>{hidden ? 'Your balances are hidden' : walletValue === null
+                    ? 'Wallet value temporarily unavailable' : o.wallet_value_usd?.checked_at
+                      ? `Approximate value · Price checked ${new Date(o.wallet_value_usd.checked_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+                      : 'Approximate value · See each balance below'}</p>
                 </div>
               </section>
               <div className="fin-wallet-actions" aria-label="Money actions">

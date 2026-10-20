@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { QieClient, QieRpcError, QIE_QUSDC_CONTRACT } from '../packages/qie/src/index.js';
 import { walletAssetSnapshot } from '../services/api/src/personal-assets.js';
+import { walletUsdValue } from '../services/api/src/personal-valuation.js';
 
 function fakeRpc(values: Record<string, unknown>) {
   return (async (_url: string | URL | Request, init?: RequestInit) => {
@@ -71,4 +72,17 @@ test('wallet asset snapshot sums linked wallets without inventing fiat or partia
   assert.deepEqual(snapshot.map(asset => [asset.code, asset.amount_atomic, asset.status]), [
     ['QIE', '300', 'ready'], ['QUSDC', null, 'unavailable'], ['NGN', null, 'unavailable'],
   ]);
+});
+
+test('wallet USD estimate uses exact wallet units and fails closed on missing balances or quotes', () => {
+  const assets = [
+    { code: 'QIE' as const, name: 'QIE', amount_atomic: '1250000000000000000', decimals: 18, status: 'ready' as const, source: 'wallet' as const },
+    { code: 'QUSDC' as const, name: 'Digital dollars', amount_atomic: '2500000', decimals: 6, status: 'ready' as const, source: 'wallet' as const },
+  ];
+  const prices = { qie: '0.187425', qusdc: '1.0', checked_at: '2026-10-21T10:00:00.000Z' };
+  assert.deepEqual(walletUsdValue(assets, prices), { amount_usd: '2.73', checked_at: prices.checked_at });
+  assert.equal(walletUsdValue(assets, null).amount_usd, null);
+  assert.equal(walletUsdValue([{ ...assets[0], amount_atomic: null, status: 'unavailable' }, assets[1]], prices).amount_usd, null);
+  assert.equal(walletUsdValue(assets, { ...prices, qusdc: '0' }).amount_usd, null);
+  assert.equal(walletUsdValue(assets.map(asset => ({ ...asset, amount_atomic: '0' })), null).amount_usd, '0.00');
 });
