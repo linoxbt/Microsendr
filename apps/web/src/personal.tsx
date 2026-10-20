@@ -359,7 +359,6 @@ export function PersonalPage({
                     Hello{p.first_name ? `, ${p.first_name}` : ''}
                     <span className="fin-greeting-dot">.</span>
                   </h1>
-                  <p>One place for digital dollars and your next money move.</p>
                 </div>
                 <button
                   className="fin-icon-button"
@@ -375,9 +374,6 @@ export function PersonalPage({
                   <span>
                     <Coins size={17} /> Wallet overview
                   </span>
-                  <span className="fin-wallet-status">
-                    <i /> Getting ready
-                  </span>
                 </div>
                 <div className="fin-wallet-amount">
                   <span>Available balance</span>
@@ -391,15 +387,6 @@ export function PersonalPage({
                     </button>
                   </div>
                   <p>{hidden ? 'Your balance is hidden' : 'No available funds yet'}</p>
-                </div>
-                <div className="fin-wallet-overview-foot">
-                  <span>
-                    <span className="fin-token-dot">$</span> Digital dollars{' '}
-                    <small>Stablecoin access coming</small>
-                  </span>
-                  <button onClick={() => go('/personal/deposit')}>
-                    Explore deposit <ArrowRight size={15} />
-                  </button>
                 </div>
               </section>
               <div className="fin-wallet-actions" aria-label="Money actions">
