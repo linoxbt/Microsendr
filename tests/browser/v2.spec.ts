@@ -193,25 +193,21 @@ test('custom registration, optional identity, profile editing and mobile money n
   await expect(page.getByRole('alert')).toContainText('No funds have been moved');
   await page.goto('/personal/deposit');
   await page.getByRole('button', { name: 'Crypto transfer', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Link QIE wallet' })).toBeVisible();
   const wallet = privateKeyToAccount(generatePrivateKey());
-  await page.exposeFunction('testWalletSign', (message: string) => wallet.signMessage({ message }));
-  await page.evaluate((address) => Object.assign(window, { ethereum: {
-    request: async ({ method, params }: { method: string; params?: unknown[] }) => {
-      if (method === 'eth_chainId') return '0x7c6';
-      if (method === 'eth_requestAccounts') return [address];
-      if (method === 'personal_sign') return (window as any).testWalletSign(params?.[0]);
-      throw new Error(`Unexpected wallet call: ${method}`);
-    },
-  } }), wallet.address);
+  await page.route('**/personal/api/wallets', route => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({
+      data: [{ id: 'wallet_browser_test', address: wallet.address, network: 'qie-mainnet', managed: true, label: 'Your wallet' }],
+      provisioning_available: true,
+    }),
+  }));
   await page.route('**/personal/api/wallets/*/balance', route => route.fulfill({
     status: 200, contentType: 'application/json', body: JSON.stringify({
       balance_wei: '0', block_number: '100', asset: 'QIEV3',
       explorer_url: `https://mainnet.qie.digital/address/${wallet.address}`,
     }),
   }));
-  await page.getByRole('button', { name: 'Link QIE wallet' }).click();
-  await expect(page.getByText('QIE wallet linked to your account.')).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: 'Crypto transfer', exact: true }).click();
   await expect(page.getByRole('img', { name: 'QR code for the QIE wallet address shown below' })).toBeVisible();
   await expect(page.locator('.fin-chain-receive code')).toHaveText(wallet.address);
   expect(errors).toEqual([]);

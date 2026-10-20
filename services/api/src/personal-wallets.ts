@@ -5,10 +5,11 @@ import { z } from 'zod';
 import { id, pool, transaction } from '../../../packages/database/src/index.js';
 import { PaymentError } from '../../../packages/payments/src/errors.js';
 import { QieClient, QIE_CHAIN_ID, QIE_EXPLORER, QIE_NETWORK } from '../../../packages/qie/src/index.js';
+import { ensureManagedWallet } from './managed-wallet.js';
 
 type Person = { user_id: string; account_id: string };
 const addressSchema = z.string().regex(/^0x[a-fA-F0-9]{40}$/);
-const walletIdSchema = z.string().regex(/^cwa_[a-f0-9]{32}$/);
+const walletIdSchema = z.string().regex(/^(?:cwa_[a-f0-9]{32}|[A-Za-z0-9_-]{8,100})$/);
 const challengeIdSchema = z.string().regex(/^cwc_[a-f0-9]{32}$/);
 const signatureSchema = z.string().regex(/^0x[a-fA-F0-9]{130}$/);
 
@@ -43,12 +44,19 @@ export function registerPersonalWallets(
 ) {
   app.get('/personal/api/wallets', async request => {
     const person = await required(request);
+    const managed = await ensureManagedWallet(person.user_id, person.account_id).catch(() => null);
     const rows = await pool.query(
       `SELECT id,address,label,network,created_at FROM personal_chain_wallets
        WHERE personal_user_id=$1 AND account_id=$2 AND status='active' ORDER BY created_at,id`,
       [person.user_id, person.account_id],
     );
-    return { data: rows.rows.map(row => ({ ...row, address: getAddress(row.address) })) };
+    return {
+      data: [
+        ...(managed ? [{ ...managed, label: 'Your wallet', managed: true }] : []),
+        ...rows.rows.map(row => ({ ...row, address: getAddress(row.address), managed: false })),
+      ],
+      provisioning_available: !!(process.env.PRIVY_APP_ID && process.env.PRIVY_APP_SECRET),
+    };
   });
 
   app.post('/personal/api/wallets/challenge',
@@ -121,9 +129,11 @@ export function registerPersonalWallets(
     { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async request => {
       const person = await required(request);
       const { id: walletId } = z.object({ id: walletIdSchema }).parse(request.params);
-      const wallet = (await pool.query(
+      const wallet = walletId.startsWith('cwa_') ? (await pool.query(
         `SELECT address FROM personal_chain_wallets WHERE id=$1 AND personal_user_id=$2
-         AND account_id=$3 AND status='active'`,
+         AND account_id=$3 AND status='active'`, [walletId, person.user_id, person.account_id],
+      )).rows[0] : (await pool.query(
+        `SELECT address FROM personal_managed_wallets WHERE privy_wallet_id=$1 AND personal_user_id=$2 AND account_id=$3`,
         [walletId, person.user_id, person.account_id],
       )).rows[0];
       if (!wallet) throw new PaymentError(404, 'wallet_not_found', 'Wallet not found');

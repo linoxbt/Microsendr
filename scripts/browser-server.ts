@@ -9,6 +9,7 @@ const children = ['services/api/src/index.ts', 'services/worker/src/index.ts'].m
       PORT: '4310',
       PAYSTACK_SECRET_KEY: '',
       PRIVY_APP_ID: '',
+      PRIVY_APP_SECRET: '',
       PRIVY_CLIENT_ID: '',
       PRIVY_VERIFICATION_KEY: '',
       STELLAR_TESTNET_ISSUER: '',

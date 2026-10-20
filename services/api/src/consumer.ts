@@ -5,6 +5,7 @@ import { id, pool, transaction } from '../../../packages/database/src/index.js';
 import { hashKey } from '../../../packages/payments/src/auth.js';
 import { PaymentError } from '../../../packages/payments/src/errors.js';
 import { publicSettlement } from '../../../packages/settlement/src/service.js';
+import { ensureManagedWallet } from './managed-wallet.js';
 
 type Person = { user_id: string; account_id: string; csrf_token: string };
 type Dependencies = {
@@ -167,7 +168,9 @@ export function registerConsumer(app: FastifyInstance, deps: Dependencies) {
       }
       const s = await newSession(userId, 'password');
       deps.setCookie(request, reply, s.token);
-      return { authenticated: true, csrf_token: s.csrf };
+      const account = (await pool.query('SELECT id FROM kora_accounts WHERE personal_user_id=$1', [userId])).rows[0];
+      const wallet = await ensureManagedWallet(userId, account.id).catch(() => null);
+      return { authenticated: true, csrf_token: s.csrf, wallet_address: wallet?.address ?? null };
     },
   );
   app.post(
@@ -218,7 +221,9 @@ export function registerConsumer(app: FastifyInstance, deps: Dependencies) {
         hashKey(input.email),
       ]);
       deps.setCookie(request, reply, s.token);
-      return { authenticated: true, csrf_token: s.csrf };
+      const account = (await pool.query('SELECT id FROM kora_accounts WHERE personal_user_id=$1', [user.id])).rows[0];
+      const wallet = await ensureManagedWallet(user.id, account.id).catch(() => null);
+      return { authenticated: true, csrf_token: s.csrf, wallet_address: wallet?.address ?? null };
     },
   );
   app.get('/personal/api/profile', async (request) => {

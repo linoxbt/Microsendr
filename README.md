@@ -2,14 +2,14 @@
 
 **Your money, without borders.** Microsendr is a consumer finance application and settlement foundation. The public Personal experience uses custom email/password accounts, optional Didit identity verification, editable profiles and a responsive finance dashboard. Earlier Business, Stellar Testnet and developer sandbox modules remain in the repository for regression coverage.
 
-> **Current status:** Registration, profile editing, and account security are implemented. Personal accounts can link user controlled EVM wallets by signature, receive native QIEV3 on QIE Mainnet with an address and QR code, and authorize native QIEV3 transfers in the wallet. Onchain funds remain in the linked wallet and are displayed separately from Microsendr balances. Didit opens hosted identity verification when server credentials are configured. Digital-dollar deposits, conversion, fiat deposits, and bank withdrawals remain unavailable pending verified asset and provider integrations. See [settlement status](docs/microsendr-settlement-status.md).
+> **Current status:** Registration, profile editing, and account security are implemented. With `PRIVY_APP_ID` and a fresh server-only `PRIVY_APP_SECRET`, each Personal account receives a managed EVM wallet address at registration; existing accounts receive one on next login. The address and QR code work on QIE Mainnet. Outbound transfers from these new managed wallets are not enabled yet; users are warned before deposit. Previously linked, user-controlled wallets retain their existing transfer flow. Onchain funds are displayed separately from Microsendr balances. Didit opens hosted identity verification when server credentials are configured. Digital-dollar deposits, conversion, fiat deposits, and bank withdrawals remain unavailable pending verified asset and provider integrations. See [settlement status](docs/microsendr-settlement-status.md).
 
 ## Product surface
 
 | Area | Current behavior |
 | --- | --- |
 | Personal | Custom account creation, password sign-in, optional identity verification, editable profile, payments navigation and receipts |
-| Settlement backend | QIE Mainnet linked wallets, signed native transfer instructions, receipt matching and worker reconciliation; no customer ledger credit. Automatic embedded wallet provisioning remains separate work. |
+| Settlement backend | QIE Mainnet managed address provisioning through Privy, linked wallet signed transfer instructions, receipt matching and worker reconciliation; no customer ledger credit. Managed wallet outbound transfer authorization remains open work. |
 | Paystack | Test-key-only checkout, bank name enquiry and payout; explicit status verification |
 | Financial core | PostgreSQL double-entry ledger, idempotency, reservations, outbox, immutable journals and reconciliation controls |
 | Historical modules | Business workspace, Stellar Testnet KUSD and multi-provider sandbox routing |
@@ -45,7 +45,7 @@ pnpm db:migrate
 pnpm dev
 ```
 
-Open the URL printed by Vite. Copy `.env.example` for optional integrations and keep credentials in ignored server-side environment files. Personal registration works without Privy. Configure `SMTP_*` and `KORA_AUTH_SECRET` for email verification and password recovery. Legacy Privy endpoints remain for compatibility. `PAYSTACK_SECRET_KEY` accepts **test keys only**. No provider key or wallet secret belongs in browser variables.
+Open the URL printed by Vite. Copy `.env.example` for optional integrations and keep credentials in ignored server-side environment files. Configure `PRIVY_APP_ID` and a **rotated** `PRIVY_APP_SECRET` on the API server to issue a wallet address at signup; without them, registration succeeds but wallet issuance remains pending. The key previously shared in chat is exposed and must not be deployed. Configure `SMTP_*` and `KORA_AUTH_SECRET` for email verification and password recovery. Legacy Privy endpoints remain for compatibility. `PAYSTACK_SECRET_KEY` accepts **test keys only**. No provider key or wallet secret belongs in browser variables.
 
 See [consumer account implementation](docs/consumer-accounts.md) for routes, deployment requirements and remaining payment dependencies.
 
