@@ -143,6 +143,16 @@ test('custom registration, optional identity, profile editing and mobile money n
   await expect(page.getByRole('heading', { name: 'Assets' })).toBeVisible();
   await expect(page.locator('.fin-asset-row')).toHaveCount(3);
   await expect(page.locator('.fin-asset-row')).toContainText(['QIE', 'QUSDC', 'NGN']);
+  const olderOverview = async (route: import('@playwright/test').Route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    delete body.assets;
+    await route.fulfill({ response, body: JSON.stringify(body) });
+  };
+  await page.route('**/personal/api/overview', olderOverview);
+  await page.reload();
+  await expect(page.locator('.fin-asset-row')).toContainText(['QIE', 'QUSDC', 'NGN']);
+  await page.unroute('**/personal/api/overview', olderOverview);
   const fundedOverview = async (route: import('@playwright/test').Route) => {
     const response = await route.fetch();
     const body = await response.json();

@@ -64,6 +64,11 @@ type Overview = {
   activity: Movement[];
   capabilities: Record<string, Capability>;
 };
+const assetRows: Asset[] = [
+  { code: 'QIE', name: 'QIE', amount_atomic: null, decimals: 18, status: 'unavailable', source: 'wallet' },
+  { code: 'QUSDC', name: 'Digital dollars', amount_atomic: null, decimals: 6, status: 'unavailable', source: 'wallet' },
+  { code: 'NGN', name: 'Nigerian naira', amount_atomic: null, decimals: 2, status: 'unavailable', source: 'fiat' },
+];
 function assetAmount(asset: Asset): string {
   if (asset.amount_atomic === null) return '—';
   const amount = BigInt(asset.amount_atomic);
@@ -224,7 +229,8 @@ export function PersonalPage({
   const p = profile!,
     o = overview!,
     csrf = session.csrf_token!;
-  const walletAssets = (o.assets ?? []).filter(asset => asset.source === 'wallet');
+  const assets = assetRows.map(defaultAsset => o.assets?.find(asset => asset.code === defaultAsset.code) ?? defaultAsset);
+  const walletAssets = assets.filter(asset => asset.source === 'wallet');
   const preferredAsset = walletAssets.find(asset => asset.code === heroAssetCode)
     ?? walletAssets.find(asset => asset.code === 'QUSDC' && asset.amount_atomic && BigInt(asset.amount_atomic) > 0n)
     ?? walletAssets.find(asset => asset.amount_atomic && BigInt(asset.amount_atomic) > 0n)
@@ -437,7 +443,7 @@ export function PersonalPage({
                   <h2>Assets</h2>
                 </div>
                 <div className="fin-assets-list">
-                  {(o.assets ?? []).map(asset => <div className="fin-asset-row" key={asset.code}>
+                  {assets.map(asset => <div className="fin-asset-row" key={asset.code}>
                     <span className={`fin-asset-icon fin-asset-${asset.code.toLowerCase()}`}>{asset.code === 'NGN' ? '₦' : asset.code === 'QUSDC' ? '$' : 'Q'}</span>
                     <span className="fin-asset-name"><b>{asset.code}</b><small>{asset.name}</small></span>
                     <span className="fin-asset-value"><b>{hidden ? '••••' : assetAmount(asset)}</b><small>{asset.status === 'ready' ? 'Onchain' : 'Unavailable'}</small></span>
