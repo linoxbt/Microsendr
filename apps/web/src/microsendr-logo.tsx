@@ -1,20 +1,19 @@
-/** Two connected ribbons form an M and point toward the next payment. */
-export const microsendrMarkPath =
-  'M4 29 10 7c.4-1.4 2.2-1.7 3-.5l6.9 11L27 6.5c.8-1.2 2.6-.9 3 .5l6 22h-6.2l-3.7-13.7-4.7 7.4a2 2 0 0 1-3.4 0l-4.7-7.4L9.6 29Z';
-
+/** The mark is the plain lowercase letter m, set in the app typeface on a rounded tile. */
 export function MicrosendrMark() {
   return (
-    <svg viewBox="0 0 40 36" aria-hidden="true" focusable="false">
-      <path d={microsendrMarkPath} fill="currentColor" />
-      <path d="M29.8 29h6.4l-4.6 4.1h-6.4Z" fill="currentColor" opacity=".62" />
+    <svg className="microsendr-mark" viewBox="0 0 40 40" aria-hidden="true" focusable="false">
+      <rect width="40" height="40" rx="10" fill="currentColor" />
+      <text x="20" y="28.5" textAnchor="middle" className="microsendr-mark-letter">
+        m
+      </text>
     </svg>
   );
 }
 
+/** The wordmark is the name set in type, with no separate symbol. */
 export function MicrosendrWordmark() {
   return (
     <span className="logo microsendr-wordmark" role="img" aria-label="Microsendr">
-      <MicrosendrMark />
       <span aria-hidden="true">microsendr</span>
     </span>
   );

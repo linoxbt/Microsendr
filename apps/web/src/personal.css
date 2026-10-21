@@ -5,9 +5,9 @@
 .personal-kyc{max-width:650px;margin-top:18px}.personal-kyc-title{display:flex;align-items:center;gap:10px}.personal-kyc-title h2{margin:0}.personal-kyc-consent{display:flex!important;grid-template-columns:none!important;align-items:flex-start;gap:11px!important;margin-top:22px!important;line-height:1.5}.personal-kyc-consent input{width:17px!important;height:17px;flex:none;margin-top:2px}.personal-kyc .personal-error{margin-top:16px}
 .personal-error{padding:12px 15px;border-radius:9px;margin-bottom:20px;font-size:13px}.personal-error{background:#44231f;color:#ffd5cc}.personal-text{border:0;background:none;color:#c4e894;padding:16px 0 0;display:flex;gap:7px;align-items:center;font-size:13px}.personal-loading{display:grid;place-content:center;text-align:center;gap:18px}
 .personal-loading{place-items:center}
-.personal-loading-mark{display:block;width:64px;height:64px;transform-origin:center;animation:personal-logo-turn 2.4s ease-in-out infinite}
+.personal-loading-mark{display:block;width:64px;height:64px;transform-origin:center;animation:personal-logo-pulse 1.6s ease-in-out infinite}
 .personal-loading-mark svg{display:block;width:100%;height:100%}
-@keyframes personal-logo-turn{0%{transform:rotate(0deg) scale(.96)}50%{transform:rotate(180deg) scale(1.04)}100%{transform:rotate(360deg) scale(.96)}}
+@keyframes personal-logo-pulse{0%,100%{transform:scale(.94);opacity:.75}50%{transform:scale(1.04);opacity:1}}
 @media(prefers-reduced-motion:reduce){.personal-loading-mark{animation:none}}
 .personal-card select{width:100%;background:#fff;border:1px solid #bdcbd2;border-radius:9px;padding:13px 14px;color:#183247;outline:none}
 .personal-card select:focus{border-color:#4682b4}
