@@ -132,10 +132,11 @@ body {
   color: #e2ebef;
 }
 
-/* The wordmark is plain type; the mark is the letter m on a tile. */
+/* Wordmark: the send monogram followed by the name in DM Sans. */
 .logo.microsendr-wordmark {
   display: inline-flex;
   align-items: center;
+  gap: 10px;
   font-family: 'DM Sans Variable', Arial, sans-serif;
   font-size: 26px;
   font-weight: 700;
@@ -145,6 +146,11 @@ body {
   white-space: nowrap;
   text-transform: none;
 }
+.logo.microsendr-wordmark > svg {
+  width: 1.3em;
+  height: 1.3em;
+  flex-shrink: 0;
+}
 .logo.microsendr-wordmark > span {
   font: inherit;
   letter-spacing: inherit;
@@ -152,13 +158,4 @@ body {
 }
 :root[data-theme='dark'] .logo.microsendr-wordmark {
   color: #f7f3e9;
-}
-.microsendr-mark {
-  color: #4682b4;
-}
-.microsendr-mark-letter {
-  fill: #f7f3e9;
-  font-family: 'DM Sans Variable', Arial, sans-serif;
-  font-size: 28px;
-  font-weight: 700;
 }
