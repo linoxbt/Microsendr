@@ -2251,25 +2251,69 @@
 .fin-asset-name small, .fin-asset-value small { font-size: 11px; color: var(--fin-muted); }
 .fin-asset-value { margin-left: auto; text-align: right; }
 .fin-asset-chevron { flex: 0 0 auto; color: var(--fin-muted); transition: transform .2s, color .2s; }
-.fin-asset-detail { max-width: 800px; margin: 0 auto; }
-.fin-asset-back { border: 0; background: none; color: var(--fin-blue); display: inline-flex; align-items: center; gap: 7px; padding: 2px 0; margin: 0 0 20px; }
-.fin-asset-detail-card { padding: 28px; }
-.fin-asset-detail-title { display: flex; align-items: center; gap: 17px; }
-.fin-asset-detail-title h1 { margin: 3px 0 0; }
-.fin-asset-detail-title p { margin: 2px 0 0; }
-.fin-asset-detail-balance { display: grid; gap: 4px; margin: 30px 0 23px; }
-.fin-asset-detail-balance > span { color: var(--fin-muted); font-size: 12px; }
-.fin-asset-detail-balance strong { font-size: clamp(30px, 6vw, 48px); font-weight: 550; line-height: 1.1; overflow-wrap: anywhere; }
-.fin-asset-detail-balance small { font-size: 15px; font-weight: 500; }
-.fin-asset-detail-actions { display: flex; flex-wrap: wrap; gap: 10px; }
-.fin-asset-detail-actions button { width: auto; min-width: 0; }
-.fin-asset-detail-info { margin-top: 16px; padding: 26px 28px; }
-.fin-asset-detail-info dl { margin: 10px 0 0; }
-.fin-asset-detail-info dl > div { display: flex; justify-content: space-between; gap: 16px; border-top: 1px solid var(--fin-line); padding: 14px 0; }
-.fin-asset-detail-info dt { color: var(--fin-muted); }
-.fin-asset-detail-info dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
-.fin-asset-detail-info dd a { display: inline-flex; align-items: center; gap: 4px; }
-.fin-asset-detail-info p { font-size: 12px; margin-bottom: 0; }
+.fin-asset-detail { max-width: 900px; margin: 0 auto; }
+.fin-asset-detail-nav { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 20px; }
+.fin-asset-back, .fin-asset-refresh { border: 0; background: none; color: var(--fin-ink); display: inline-flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 13px !important; font-weight: 600; }
+.fin-asset-refresh { color: var(--fin-muted); }
+.fin-asset-back:hover, .fin-asset-refresh:hover { color: var(--fin-blue); }
+.fin-asset-detail-card { position: relative; isolation: isolate; overflow: hidden; min-height: 365px; padding: 31px 34px 0; border-radius: 25px; color: #fff; background: linear-gradient(118deg, #1a3448 0%, #275674 58%, #3b80a9 100%); box-shadow: 0 20px 45px #1839531a; }
+.fin-asset-detail-card::before { content: ''; position: absolute; z-index: -1; width: 420px; height: 420px; right: -95px; top: -240px; border: 1px solid #ffffff2c; border-radius: 50%; box-shadow: 0 0 0 55px #ffffff0a, 0 0 0 130px #ffffff07; pointer-events: none; }
+.fin-asset-detail-qusdc .fin-asset-detail-card { background: linear-gradient(118deg, #25394c 0%, #3b5781 60%, #677db3 100%); }
+.fin-asset-detail-ngn .fin-asset-detail-card { background: linear-gradient(118deg, #193b3b 0%, #28645e 65%, #398777 100%); }
+.fin-asset-detail-card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
+.fin-asset-detail-title { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.fin-asset-detail-title .fin-asset-icon { box-shadow: 0 5px 18px #071f2633; }
+.fin-asset-detail-title > div { min-width: 0; }
+.fin-asset-detail-title span:not(.fin-asset-icon) { display: block; color: #e0eaf1; font-size: 12px; }
+.fin-asset-detail-title h1 { margin: 0; color: #fff; font-size: 25px; letter-spacing: -.7px; }
+.fin-asset-detail-status { display: inline-flex; align-items: center; gap: 7px; padding: 7px 11px; border: 1px solid #ffffff44; border-radius: 100px; color: #f2f7f8; background: #ffffff16; font-size: 11px; white-space: nowrap; }
+.fin-asset-detail-status i { width: 6px; height: 6px; border-radius: 50%; background: #a8e8d1; }
+.fin-asset-detail-ngn .fin-asset-detail-status i { background: #f4d096; }
+.fin-asset-detail-balance { margin: 44px 0 33px; }
+.fin-asset-detail-balance > span { display: block; color: #d9e8ed; font-size: 12px; }
+.fin-asset-detail-balance strong { display: block; margin-top: 3px; color: #fff; font-size: clamp(37px, 6vw, 63px); font-weight: 500; letter-spacing: -2px; line-height: 1.1; overflow-wrap: anywhere; }
+.fin-asset-detail-balance small { font-size: 16px; font-weight: 500; letter-spacing: 0; }
+.fin-asset-detail-balance p { margin: 8px 0 0; color: #d8e6eb; font-size: 12px; }
+.fin-asset-detail-actions { display: flex; align-items: center; gap: 0; min-height: 77px; border-top: 1px solid #ffffff36; }
+.fin-asset-detail-actions button { display: inline-flex; align-items: center; gap: 10px; min-height: 77px; padding: 0 27px 0 0; margin-right: 25px; border: 0; background: none; color: #fff; font-size: 13px !important; font-weight: 650; }
+.fin-asset-detail-actions button:hover span { background: #fff; color: #264f69; transform: translateY(-2px); }
+.fin-asset-detail-actions button span { display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid #ffffff83; border-radius: 50%; transition: background .18s, color .18s, transform .18s; }
+.fin-asset-detail-note { color: #e5eeef; font-size: 12px; }
+.fin-asset-detail-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 17px; margin-top: 18px; }
+.fin-asset-detail-grid .fin-panel { min-height: 229px; padding: 23px 25px; }
+.fin-asset-detail-section-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.fin-asset-detail-section-title h2, .fin-asset-detail-info h2 { margin: 0 0 15px; font-size: 16px; }
+.fin-asset-detail-section-title button { display: inline-flex; align-items: center; gap: 4px; border: 0; background: none; color: var(--fin-blue); font-size: 12px !important; font-weight: 650; }
+.fin-asset-detail-movements { display: grid; }
+.fin-asset-detail-movement { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--fin-line); }
+.fin-asset-detail-movement-icon { display: grid; place-items: center; width: 35px; height: 35px; flex: 0 0 35px; border-radius: 50%; background: var(--fin-soft); color: var(--fin-blue); }
+.fin-asset-detail-movement-copy { display: grid; min-width: 0; }
+.fin-asset-detail-movement-copy b, .fin-asset-detail-movement > b { font-size: 12px; font-weight: 650; }
+.fin-asset-detail-movement-copy small { color: var(--fin-muted); font-size: 11px; }
+.fin-asset-detail-movement > b { margin-left: auto; white-space: nowrap; }
+.fin-asset-detail-empty { display: grid; justify-items: start; gap: 5px; padding: 18px 0 8px; color: var(--fin-muted); font-size: 12px; }
+.fin-asset-detail-empty svg { margin-bottom: 4px; color: var(--fin-blue); }
+.fin-asset-detail-empty strong { color: var(--fin-ink); font-size: 13px; }
+.fin-asset-detail-fact { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding: 12px 0; border-top: 1px solid var(--fin-line); font-size: 12px; }
+.fin-asset-detail-fact span { color: var(--fin-muted); }
+.fin-asset-detail-fact b { font-weight: 650; text-align: right; }
+.fin-asset-detail-contract { display: inline-flex; align-items: center; gap: 5px; padding-top: 14px; font-size: 12px; font-weight: 650; text-decoration: none; }
+.fin-asset-detail-info p { margin: 15px 0 0; color: var(--fin-muted); font-size: 12px; line-height: 1.5; }
+@media (max-width: 650px) {
+  .fin-asset-detail-card { min-height: 330px; padding: 23px 22px 0; border-radius: 20px; }
+  .fin-asset-detail-title .fin-asset-icon { width: 56px; height: 56px; flex-basis: 56px; }
+  .fin-asset-detail-title .fin-asset-qie img { width: 47px; height: 47px; }
+  .fin-asset-detail-title .fin-asset-qusdc img { width: 118px; height: 118px; transform: translate(-30px, -20px); }
+  .fin-asset-detail-title .fin-asset-ngn { font-size: 33px; }
+  .fin-asset-detail-status { font-size: 10px; padding: 6px 8px; }
+  .fin-asset-detail-status i { width: 7px; height: 7px; }
+  .fin-asset-detail-balance { margin: 38px 0 26px; }
+  .fin-asset-detail-balance strong { font-size: clamp(35px, 10vw, 49px); }
+  .fin-asset-detail-actions { min-height: 68px; }
+  .fin-asset-detail-actions button { min-height: 68px; margin-right: 11px; padding-right: 10px; font-size: 12px !important; }
+  .fin-asset-detail-grid { grid-template-columns: 1fr; gap: 13px; margin-top: 13px; }
+  .fin-asset-detail-grid .fin-panel { min-height: 0; padding: 20px; }
+}
 @media (max-width: 900px) {
   .fin-app {
     grid-template-columns: none;

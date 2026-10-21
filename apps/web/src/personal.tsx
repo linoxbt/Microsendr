@@ -428,7 +428,7 @@ export function PersonalPage({
             </>
           )}
           {tab === 'assets' && (detailAsset
-            ? <AssetDetail asset={detailAsset} go={go} hidden={hidden} refresh={() => void retry()} refreshing={refreshing} />
+            ? <AssetDetail asset={detailAsset} activity={o.activity} go={go} hidden={hidden} refresh={() => void retry()} refreshing={refreshing} />
             : <div className="fin-panel"><h1>Asset not found</h1><button className="fin-secondary" onClick={() => go('/personal/home')}>Back to assets</button></div>)}
           {tab === 'payments' && (
             <>

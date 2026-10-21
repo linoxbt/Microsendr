@@ -178,14 +178,17 @@ test('custom registration, optional identity, profile editing and mobile money n
   await expect(page.getByRole('region', { name: 'QIE details' })).toContainText('1.25 QIE');
   await expect(page.getByRole('heading', { name: 'Page not found' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Receive QIE' })).toBeVisible();
-  await page.getByRole('button', { name: 'Assets', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'QIE activity' })).toBeVisible();
+  await page.screenshot({ path: '/tmp/microsendr-asset-qie-desktop.png', fullPage: true });
+  await page.getByRole('button', { name: 'All assets' }).click();
   await page.getByRole('button', { name: 'View QUSDC details' }).click();
   await expect(page.getByRole('region', { name: 'QUSDC details' })).toContainText('2.5 QUSDC');
-  await expect(page.getByText('0x3F43…5DA5')).toBeVisible();
-  await page.getByRole('button', { name: 'Assets', exact: true }).click();
+  await expect(page.getByRole('link', { name: 'View token contract' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Send QIE' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'All assets' }).click();
   await page.getByRole('button', { name: 'View NGN details' }).click();
   await expect(page.getByRole('region', { name: 'NGN details' })).toContainText('Unavailable');
-  await page.getByRole('button', { name: 'Assets', exact: true }).click();
+  await page.getByRole('button', { name: 'All assets' }).click();
   await page.unroute('**/personal/api/overview', fundedOverview);
   await expect(page.getByRole('button', { name: 'Explore deposit' })).toHaveCount(0);
   await expect(page.getByText('Make your account yours')).toHaveCount(0);
@@ -230,6 +233,7 @@ test('custom registration, optional identity, profile editing and mobile money n
   ]) {
     await page.goto('/personal/' + path);
     await expect(page.locator('h1')).toBeVisible();
+    if (path === 'assets/qie') await page.screenshot({ path: '/tmp/microsendr-asset-qie-phone.png', fullPage: true });
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth - innerWidth),
       path,
