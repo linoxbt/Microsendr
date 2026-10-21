@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight, ShieldCheck } from 'lucide-react';
+import { consumerRequest } from './consumer-api.js';
 
 type Kyc = {
   email_verified: boolean;
@@ -27,14 +28,33 @@ export function PersonalKyc({ csrf }: { csrf?: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   async function refresh() {
-    const response = await fetch('/personal/api/kyc', { credentials: 'include' });
-    if (!response.ok) throw new Error('Verification status is unavailable');
-    setKyc(await response.json());
+    setKyc(await consumerRequest<Kyc>('kyc'));
   }
   useEffect(() => {
-    void refresh().catch((cause) => setError(cause.message));
-    const timer = setInterval(() => void refresh().catch(() => undefined), 15000);
-    return () => clearInterval(timer);
+    void refresh().catch(() => setError('Verification status is unavailable'));
+    // Poll only while the page is visible; catch up as soon as it is shown again.
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const start = () => {
+      if (timer === undefined && !document.hidden)
+        timer = setInterval(() => void refresh().catch(() => undefined), 15000);
+    };
+    const stop = () => {
+      if (timer !== undefined) clearInterval(timer);
+      timer = undefined;
+    };
+    const visibility = () => {
+      if (document.hidden) stop();
+      else {
+        void refresh().catch(() => undefined);
+        start();
+      }
+    };
+    start();
+    document.addEventListener('visibilitychange', visibility);
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', visibility);
+    };
   }, []);
   async function start() {
     setBusy(true);
@@ -42,14 +62,12 @@ export function PersonalKyc({ csrf }: { csrf?: string }) {
     try {
       let url = kyc?.url;
       if (!url) {
-        const response = await fetch('/personal/api/kyc/session', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'content-type': 'application/json', 'x-kora-csrf': csrf ?? '' },
-          body: JSON.stringify({ consent: true }),
-        });
-        const body = await response.json();
-        if (!response.ok) throw new Error(body.error?.message ?? 'Verification could not start');
+        const body = await consumerRequest<{ url: string }>(
+          'kyc/session',
+          'POST',
+          { consent: true },
+          csrf,
+        );
         url = body.url;
       }
       const { DiditSdk } = await import('@didit-protocol/sdk-web');

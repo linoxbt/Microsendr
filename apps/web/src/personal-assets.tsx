@@ -5,7 +5,7 @@ export type PersonalAsset = {
   code: 'QIE' | 'QUSDC' | 'NGN';
   name: string;
   amount_atomic: string | null;
-  decimals: number;
+  decimals: number | null;
   status: 'ready' | 'unavailable';
   source: 'wallet' | 'fiat';
 };
@@ -17,7 +17,7 @@ export const assetDefaults: PersonalAsset[] = [
 ];
 
 export function assetAmount(asset: PersonalAsset): string {
-  if (asset.amount_atomic === null) return '—';
+  if (asset.amount_atomic === null || asset.decimals === null || asset.decimals === undefined) return '—';
   const amount = BigInt(asset.amount_atomic);
   const unit = 10n ** BigInt(asset.decimals);
   const whole = (amount / unit).toLocaleString();
@@ -39,7 +39,7 @@ type AssetMovement = {
   id: string;
   asset: string;
   amount_atomic: string;
-  decimals: number;
+  decimals: number | null;
   status: string;
   to: string;
   created_at: string;
@@ -91,8 +91,8 @@ export function AssetDetail({ asset, activity, go, hidden, refresh, refreshing }
         {movements.length ? <div className="fin-asset-detail-movements">{movements.map(item =>
           <div className="fin-asset-detail-movement" key={item.id}>
             <span className="fin-asset-detail-movement-icon"><ArrowUpRight size={17} /></span>
-            <span className="fin-asset-detail-movement-copy"><b>Sent {asset.code}</b><small>{new Date(item.created_at).toLocaleDateString()} · {item.status === 'confirmed' ? 'Completed' : item.status === 'failed' ? 'Failed' : 'Processing'}</small></span>
-            <b>{hidden ? '••••' : `−${assetAmount({ ...asset, amount_atomic: item.amount_atomic, decimals: item.decimals })}`}</b>
+            <span className="fin-asset-detail-movement-copy"><b>Sent {item.asset === 'QIEV3' ? 'QIE' : item.asset}</b><small>{new Date(item.created_at).toLocaleDateString()} · {item.status === 'confirmed' ? 'Completed' : item.status === 'failed' ? 'Failed' : 'Processing'}</small></span>
+            <b>{hidden ? '••••' : `−${assetAmount({ ...asset, amount_atomic: item.amount_atomic, decimals: item.decimals ?? asset.decimals })}`}</b>
           </div>)}</div> : <div className="fin-asset-detail-empty"><Clock3 size={21} /><strong>No Microsendr transfers yet</strong><span>{asset.code === 'QIE' ? 'Wallet deposits are shown in your balance.' : `${asset.code} activity will appear here when available.`}</span></div>}
       </section>
       <section className="fin-panel fin-asset-detail-info" aria-label="Asset information">

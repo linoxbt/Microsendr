@@ -1,4 +1,27 @@
 import { countries } from './consumer-api.js';
+
+// Mirrors services/api/src/consumer.ts profileSchema so mistakes are caught before submit.
+const rules: Record<string, { maxLength: number; minLength?: number; pattern?: string; title?: string }> = {
+  first_name: { maxLength: 80 },
+  last_name: { maxLength: 80 },
+  username: {
+    maxLength: 24,
+    minLength: 3,
+    pattern: '[A-Za-z][A-Za-z0-9_]{2,23}',
+    title: 'Use 3–24 letters, numbers or underscores, starting with a letter',
+  },
+  phone: {
+    maxLength: 20,
+    pattern: '\\+[1-9][0-9 \\(\\)\\-]{6,19}',
+    title: 'Include the country code, for example +234',
+  },
+  address_line1: { maxLength: 160, minLength: 3 },
+  address_line2: { maxLength: 160 },
+  city: { maxLength: 80 },
+  region: { maxLength: 80 },
+  postal_code: { maxLength: 20 },
+  occupation: { maxLength: 80 },
+};
 export function ConsumerFields({
   value,
   set,
@@ -29,7 +52,10 @@ export function ConsumerFields({
         disabled={disabled}
         placeholder={placeholder}
         autoComplete={autoComplete}
-        maxLength={key === 'username' ? 24 : key === 'phone' ? 16 : 160}
+        maxLength={rules[key]?.maxLength ?? 160}
+        minLength={rules[key]?.minLength}
+        pattern={rules[key]?.pattern}
+        title={rules[key]?.title}
       />
     </label>
   );

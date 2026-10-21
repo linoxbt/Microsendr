@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 
 test('landing presents Microsendr Personal and routes prompts', async ({ page }) => {
@@ -24,6 +24,10 @@ test('landing presents Microsendr Personal and routes prompts', async ({ page })
   await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
   await page.goto('/app/overview');
   await expect(page).toHaveURL(/\/personal\/login$/);
+  for (const legacy of ['/sandbox', '/docs', '/ramp', '/connect', '/login']) {
+    await page.goto(legacy);
+    await expect(page).toHaveURL(/\/personal\/login$/);
+  }
 });
 
 test('landing product tour, FAQs and mobile navigation work', async ({ page }) => {
@@ -241,16 +245,12 @@ test('custom registration, optional identity, profile editing and mobile money n
   }
   await page.goto('/personal/convert');
   await expect(page.getByText('First, make it official.')).toHaveCount(0);
-  await expect(page.getByText('You’re in control')).toHaveCount(0);
-  await page.getByLabel('You exchange', { exact: true }).fill('100.00');
-  await page.getByRole('button', { name: 'Check exchange availability' }).click();
-  await expect(page.getByRole('alert')).toContainText('No funds have been moved');
-  await page.getByRole('button', { name: 'Reverse conversion' }).click();
-  await expect(page.getByLabel('Source currency')).toHaveValue('NGN');
-  await page.getByRole('button', { name: 'Check exchange availability' }).click();
-  await expect(page.getByRole('alert')).toContainText('No funds have been moved');
+  await expect(page.getByLabel('You exchange', { exact: true })).toHaveCount(0);
+  await expect(page.locator('.fin-method-detail')).toContainText('Not available');
   await page.goto('/personal/deposit');
-  await page.getByRole('button', { name: 'Crypto transfer', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Crypto transfer', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Bank / card', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Bank / card', exact: true })).toHaveAttribute('aria-pressed', 'true');
   const wallet = privateKeyToAccount(generatePrivateKey());
   await page.route('**/personal/api/wallets', route => route.fulfill({
     status: 200, contentType: 'application/json', body: JSON.stringify({
@@ -266,7 +266,238 @@ test('custom registration, optional identity, profile editing and mobile money n
   }));
   await page.reload();
   await page.getByRole('button', { name: 'Crypto transfer', exact: true }).click();
-  await expect(page.getByRole('img', { name: 'QR code for the QIE wallet address shown below' })).toBeVisible();
-  await expect(page.locator('.fin-chain-receive code')).toHaveText(wallet.address);
+  // A managed (custodial) wallet cannot send yet, so it is never offered as a deposit address.
+  await expect(page.getByRole('group', { name: 'Microsendr account wallet' })).toContainText('not open yet');
+  await expect(page.getByRole('button', { name: 'Link QIE wallet' })).toBeVisible();
+  await expect(page.getByRole('img', { name: /QR code/ })).toHaveCount(0);
+  await expect(page.locator('main')).not.toContainText(wallet.address);
   expect(errors).toEqual([]);
+});
+
+// ---- Signed-in Personal flows with mocked API routes (independent of backend rollout) ----
+const linkedAddress = privateKeyToAccount(generatePrivateKey()).address;
+const managedAddress = privateKeyToAccount(generatePrivateKey()).address;
+const recipient = privateKeyToAccount(generatePrivateKey()).address;
+const csrf = 'csrf_browser_mock';
+const profile = {
+  email: 'mock@example.test', email_verified_at: null, phone_verified_at: null,
+  first_name: 'Ada', last_name: 'Okafor', username: 'ada_mock', phone: '+2348000000000',
+  residence_country: 'NG', nationality: null, date_of_birth: '1995-05-12',
+  address_line1: '14 Example Street', address_line2: '', city: 'Lagos', region: 'Lagos',
+  postal_code: '', occupation: '', display_currency: 'USD', profile_version: 1,
+  identity_status: 'Not Started', identity_locked: false, has_password: true,
+};
+const overview = {
+  balances: [], total: null,
+  assets: [
+    { code: 'QIE', name: 'QIE', amount_atomic: '1500000000000000000', decimals: 18, status: 'ready', source: 'wallet' },
+    { code: 'QUSDC', name: 'Digital dollars', amount_atomic: null, decimals: 6, status: 'unavailable', source: 'wallet' },
+    { code: 'NGN', name: 'Nigerian naira', amount_atomic: null, decimals: 2, status: 'unavailable', source: 'fiat' },
+  ],
+  wallet_value_usd: { amount_usd: null, checked_at: null },
+  activity: [{
+    id: 'cst_browser_mock', status: 'confirmed', to: recipient, amount_atomic: '250000000000000000',
+    asset: 'QIEV3', decimals: null, network: 'qie-mainnet', created_at: '2026-10-20T10:00:00.000Z',
+    tx_hash: null, explorer_url: null, confirmations: 12, required_confirmations: 12,
+  }],
+  capabilities: {
+    fiat_deposit: { available: false, reason: 'Bank deposits are not available yet.' },
+    crypto_deposit: { available: false, reason: 'Your deposit account is not available yet.' },
+    withdrawal: { available: false, reason: 'Bank withdrawals are not available yet.' },
+    transfer: { available: false, reason: 'Transfers from your Microsendr balance are not available yet.' },
+    conversion: { available: false, reason: 'No exchange route is available for these currencies yet.' },
+  },
+};
+const json = (body: unknown, status = 200) => ({ status, contentType: 'application/json', body: JSON.stringify(body) });
+const expired = json({ error: { type: 'authentication_error', code: 'personal_login_required', message: 'Sign in to your Personal account' } }, 401);
+async function signedIn(page: Page) {
+  const calls: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().includes('/personal/api/')) calls.push(`${request.method()} ${new URL(request.url()).pathname}`);
+  });
+  await page.route('**/personal/api/session', (route) => route.fulfill(json({ authenticated: true, csrf_token: csrf, email: profile.email })));
+  await page.route('**/personal/api/profile', (route) => route.fulfill(json(profile)));
+  await page.route('**/personal/api/overview', (route) => route.fulfill(json(overview)));
+  await page.route('**/personal/api/kyc', (route) => route.fulfill(json({ email_verified: false, status: 'Not Started', url: null, updated_at: null, configured: false })));
+  await page.route('**/personal/api/wallets/*/balance', (route) => route.fulfill(json({
+    balance_wei: '1500000000000000000', block_number: '100', asset: 'QIEV3',
+    explorer_url: `https://mainnet.qie.digital/address/${linkedAddress}`,
+  })));
+  return calls;
+}
+const managedRecord = { id: 'privy_wallet_mock', address: managedAddress, network: 'qie-mainnet', label: 'Your wallet', managed: true, custody: 'managed' };
+const linkedRecord = { id: 'cwa_' + 'a'.repeat(32), address: linkedAddress, network: 'qie-mainnet', label: 'QIE wallet', managed: false };
+
+test('Personal activity labels sends from data and the landing uses the Personal session', async ({ page }) => {
+  const calls = await signedIn(page);
+  await page.goto('/personal/activity');
+  await expect(page.locator('.fin-transaction').first()).toContainText('Sent QIE');
+  await expect(page.locator('.fin-transaction').first()).not.toContainText('Wallet transfer');
+  await page.locator('.fin-transaction').first().click();
+  await expect(page.locator('.fin-receipt')).toContainText('250000000000000000 base units of QIE');
+  await page.goto('/personal/home');
+  await expect(page.getByRole('button', { name: 'View QIE details, QIE, balance 1.5 QIE' })).toBeVisible();
+  await page.getByRole('button', { name: /View QIE details/ }).click();
+  await expect(page.getByRole('region', { name: 'QIE activity' })).toContainText('Sent QIE');
+  await expect(page.getByRole('region', { name: 'QIE activity' })).toContainText('0.25');
+  await page.goto('/');
+  await expect(page.locator('.lp-signin')).toContainText('My account');
+  expect(calls).toContain('GET /personal/api/session');
+  expect(calls.some((call) => call.includes('/console/'))).toBe(false);
+});
+
+test('managed account wallet never shows a receive address or QR, and can be checked', async ({ page }) => {
+  await signedIn(page);
+  let managedCreated = false;
+  const managedBodies: unknown[] = [];
+  await page.route('**/personal/api/wallets', (route) => route.fulfill(json({ data: managedCreated ? [managedRecord] : [] })));
+  await page.route('**/personal/api/wallets/managed', (route) => {
+    expect(route.request().method()).toBe('POST');
+    expect(route.request().headers()['x-kora-csrf']).toBe(csrf);
+    managedBodies.push(route.request().postDataJSON());
+    managedCreated = true;
+    return route.fulfill(json({ id: managedRecord.id, address: managedAddress, network: 'qie-mainnet', custody: 'managed' }));
+  });
+  await page.goto('/personal/deposit');
+  const account = page.getByRole('group', { name: 'Microsendr account wallet' });
+  await expect(account).toContainText("isn't set up yet");
+  await account.getByRole('button', { name: 'Check wallet' }).click();
+  await expect(account).toContainText("Microsendr manages this wallet's signing key");
+  expect(managedBodies).toEqual([{}]);
+  await expect(page.getByRole('img', { name: /QR code/ })).toHaveCount(0);
+  await expect(page.locator('body')).not.toContainText(managedAddress);
+  await expect(page.locator('body')).not.toContainText(managedAddress.toLowerCase());
+  await page.goto('/personal/send');
+  await expect(page.getByLabel('Recipient QIE address')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Link QIE wallet' })).toBeVisible();
+  await expect(page.locator('body')).not.toContainText(managedAddress);
+});
+
+test('links a self-custody wallet by signature, receives to it, and unlinks it', async ({ page }) => {
+  await signedIn(page);
+  await page.addInitScript(({ address }) => {
+    const calls: string[] = [];
+    (window as unknown as { ethereumCalls: string[] }).ethereumCalls = calls;
+    (window as unknown as { ethereum: unknown }).ethereum = {
+      async request({ method, params }: { method: string; params?: unknown[] }) {
+        calls.push(method);
+        if (method === 'eth_chainId') return '0x7c6';
+        if (method === 'eth_requestAccounts') return [address];
+        if (method === 'personal_sign') {
+          if (!String(params?.[0]).startsWith('Link this QIE wallet')) throw new Error('unexpected message');
+          return '0x' + 'ab'.repeat(65);
+        }
+        throw new Error('unsupported ' + method);
+      },
+    };
+  }, { address: linkedAddress });
+  let linked = false;
+  const posted: unknown[] = [];
+  await page.route('**/personal/api/wallets', (route) => {
+    if (route.request().method() === 'POST') {
+      expect(route.request().headers()['x-kora-csrf']).toBe(csrf);
+      posted.push(route.request().postDataJSON());
+      linked = true;
+      return route.fulfill(json({ id: linkedRecord.id, address: linkedAddress, network: 'qie-mainnet' }));
+    }
+    return route.fulfill(json({ data: linked ? [managedRecord, linkedRecord] : [managedRecord] }));
+  });
+  await page.route('**/personal/api/wallets/challenge', (route) => {
+    expect(route.request().postDataJSON()).toEqual({ address: linkedAddress });
+    return route.fulfill(json({ challenge_id: 'cwc_' + 'b'.repeat(32), message: 'Link this QIE wallet to your Microsendr account', expires_at: '2026-10-21T10:05:00.000Z' }));
+  });
+  let deleted = '';
+  await page.route('**/personal/api/wallets/cwa_*', (route) => {
+    expect(route.request().method()).toBe('DELETE');
+    expect(route.request().headers()['x-kora-csrf']).toBe(csrf);
+    deleted = new URL(route.request().url()).pathname;
+    linked = false;
+    return route.fulfill(json({ removed: true }));
+  });
+  await page.goto('/personal/deposit');
+  await page.getByRole('button', { name: 'Link QIE wallet' }).click();
+  await expect(page.getByText('QIE wallet linked to your account.')).toBeVisible();
+  expect(posted).toEqual([{ challenge_id: 'cwc_' + 'b'.repeat(32), signature: '0x' + 'ab'.repeat(65) }]);
+  expect(await page.evaluate(() => (window as unknown as { ethereumCalls: string[] }).ethereumCalls)).toContain('personal_sign');
+  await expect(page.getByRole('img', { name: 'QR code for the QIE wallet address shown below' })).toBeVisible();
+  await expect(page.locator('.fin-chain-receive code')).toHaveText(linkedAddress);
+  await expect(page.locator('.fin-chain-receive')).not.toContainText('Microsendr manages');
+  await expect(page.locator('body')).not.toContainText(managedAddress);
+  await page.screenshot({ path: '/tmp/microsendr-linked-wallet-receive.png', fullPage: true });
+  await page.goto('/personal/send');
+  await expect(page.getByLabel('Recipient QIE address')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Review in wallet' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Unlink wallet' }).click();
+  await page.getByRole('button', { name: 'Confirm unlink' }).click();
+  await expect(page.getByRole('button', { name: 'Link QIE wallet' })).toBeVisible();
+  expect(deleted).toBe(`/personal/api/wallets/${linkedRecord.id}`);
+});
+
+test('Convert shows unavailable without calling the quote API', async ({ page }) => {
+  const calls = await signedIn(page);
+  await page.goto('/personal/convert');
+  await expect(page.locator('.fin-method-detail')).toContainText('No exchange route is available');
+  await expect(page.locator('.fin-method-detail')).toContainText('Not available');
+  await expect(page.getByRole('main')).not.toContainText(/exchange rate|fees/i);
+  await expect(page.getByRole('button', { name: /exchange availability/ })).toHaveCount(0);
+  expect(calls.filter((call) => call.includes('conversion'))).toEqual([]);
+});
+
+test('a 401 during the overview poll clears the dashboard and routes to sign-in', async ({ page }) => {
+  await page.clock.install();
+  await signedIn(page);
+  await page.goto('/personal/home');
+  await expect(page.getByRole('heading', { name: 'Hello, Ada.' })).toBeVisible();
+  await page.route('**/personal/api/overview', (route) => route.fulfill(expired));
+  await page.clock.fastForward(16_000);
+  await expect(page).toHaveURL(/\/personal\/login$/);
+  await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
+  await expect(page.getByText('Your session has ended. Sign in again to continue.')).toBeVisible();
+  await expect(page.getByText('Hello, Ada.')).toHaveCount(0);
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+});
+
+test('sign out clears local state even when the server call fails', async ({ page }) => {
+  await signedIn(page);
+  let logoutCalls = 0;
+  await page.route('**/personal/api/logout', (route) => {
+    logoutCalls++;
+    return route.fulfill(json({ error: { code: 'internal_error', message: 'The request could not be completed' } }, 500));
+  });
+  await page.goto('/personal/profile');
+  await expect(page.getByLabel('First name')).toHaveValue('Ada');
+  await page.getByRole('button', { name: 'Sign out', exact: true }).last().click();
+  await expect(page).toHaveURL(/\/personal\/login$/);
+  await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
+  await expect(page.getByText('You are signed out on this device.')).toBeVisible();
+  await expect(page.getByLabel('First name')).toHaveCount(0);
+  expect(logoutCalls).toBe(1);
+});
+
+test('recovery code screen offers resend and a different email with neutral copy', async ({ page }) => {
+  const starts: unknown[] = [];
+  await page.route('**/personal/api/registration/config', (route) => route.fulfill(json({ method: 'password', email_verification_available: true })));
+  await page.route('**/personal/api/auth/start', (route) => {
+    starts.push(route.request().postDataJSON());
+    return route.fulfill(json({ challenge_id: 'otp_' + String(starts.length).repeat(32) }));
+  });
+  await page.route('**/personal/api/auth/verify', (route) => route.fulfill(json({ error: { code: 'invalid_code', message: 'Code is invalid or expired' } }, 401)));
+  await page.goto('/personal/login');
+  await page.getByRole('button', { name: 'Forgot password or upgrading an existing account?' }).click();
+  await page.getByLabel('Email address').fill('nobody@example.test');
+  await page.getByRole('button', { name: 'Send verification code' }).click();
+  await expect(page.getByRole('status')).toContainText('If nobody@example.test belongs to a Microsendr account');
+  const codeInput = page.getByLabel('Verification code');
+  await expect(codeInput).toHaveAttribute('pattern', '[0-9]{6}');
+  await codeInput.fill('12ab34');
+  await expect(codeInput).toHaveValue('1234');
+  await codeInput.fill('123456');
+  await page.getByRole('button', { name: 'Verify code' }).click();
+  await expect(page.getByRole('alert')).toContainText('Recovery only works for an existing Microsendr account');
+  await expect(page).toHaveURL(/\/personal\/login$/);
+  await page.getByRole('button', { name: 'Resend code' }).click();
+  await expect.poll(() => starts.length).toBe(2);
+  await page.getByRole('button', { name: 'Use a different email' }).click();
+  await expect(page.getByLabel('Email address')).toHaveValue('nobody@example.test');
+  await expect(page.getByLabel('Verification code')).toHaveCount(0);
 });

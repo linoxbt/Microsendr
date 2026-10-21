@@ -1,6 +1,6 @@
 import React, { useEffect, useState, type FormEvent } from 'react';
 import { ArrowLeft, ArrowRight, Check, LockKeyhole, ShieldCheck, Eye, EyeOff } from 'lucide-react';
-import { consumerRequest, emptyProfile, profilePayload } from './consumer-api.js';
+import { ConsumerRequestError, consumerRequest, emptyProfile, profilePayload } from './consumer-api.js';
 import { MicrosendrAuth } from './auth-shell.js';
 import type { AuthConfig } from './microsendr-auth.js';
 import { ConsumerFields } from './consumer-fields.js';
@@ -9,9 +9,11 @@ export function PersonalLogin({
   brand,
   go,
   onComplete,
+  notice: signInNotice = '',
 }: {
   brand: React.ReactNode;
   go: (path: string) => void;
+  notice?: string;
   onComplete: (session: any, newAccount?: boolean) => void | Promise<void>;
 }) {
   const [legacyConfig, setLegacyConfig] = useState<AuthConfig>();
@@ -26,7 +28,8 @@ export function PersonalLogin({
   const [details, setDetails] = useState<any>({ ...emptyProfile });
   const [emailEnabled, setEmailEnabled] = useState(false),
     [challenge, setChallenge] = useState(''),
-    [code, setCode] = useState('');
+    [code, setCode] = useState(''),
+    [notice, setNotice] = useState('');
   useEffect(() => {
     document.title =
       mode === 'register' ? 'Create your account | Microsendr' : 'Sign in | Microsendr';
@@ -44,7 +47,34 @@ export function PersonalLogin({
     setPassword('');
     setChallenge('');
     setCode('');
+    setNotice('');
   };
+  // auth/start answers the same way whether or not an account exists, so the copy stays neutral.
+  async function sendRecoveryCode() {
+    const result = await consumerRequest('auth/start', 'POST', { email });
+    setChallenge(result.challenge_id);
+    setCode('');
+    setNotice(
+      `If ${email.trim()} belongs to a Microsendr account, a six-digit code is on its way. Codes only work for existing accounts.`,
+    );
+  }
+  async function resendCode() {
+    setError('');
+    setBusy(true);
+    try {
+      await sendRecoveryCode();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  function useDifferentEmail() {
+    setChallenge('');
+    setCode('');
+    setNotice('');
+    setError('');
+  }
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError('');
@@ -56,15 +86,23 @@ export function PersonalLogin({
     try {
       if (mode === 'recover') {
         if (challenge) {
-          const session = await consumerRequest('auth/verify', 'POST', {
-            challenge_id: challenge,
-            code,
-          });
+          let session;
+          try {
+            session = await consumerRequest('auth/verify', 'POST', {
+              challenge_id: challenge,
+              code,
+            });
+          } catch (cause) {
+            if (cause instanceof ConsumerRequestError && cause.code === 'invalid_code')
+              throw new Error(
+                'That code didn’t work. Check the latest code we sent, or request a new one. Recovery only works for an existing Microsendr account.',
+              );
+            throw cause;
+          }
           await onComplete(session);
           go('/personal/security');
         } else {
-          const result = await consumerRequest('auth/start', 'POST', { email });
-          setChallenge(result.challenge_id);
+          await sendRecoveryCode();
         }
       } else {
         const session = await consumerRequest(
@@ -83,7 +121,7 @@ export function PersonalLogin({
             : { email, password },
         );
         setPassword('');
-        onComplete(session, mode === 'register');
+        await onComplete(session, mode === 'register');
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Please try again.');
@@ -178,13 +216,17 @@ export function PersonalLogin({
                 {error}
               </div>
             )}
+            {signInNotice && mode === 'login' && (
+              <div className="fin-notice" role="status">
+                {signInNotice}
+              </div>
+            )}
             {restoring ? (
               <>
                 <p>
                   Confirm ownership of your previous account, then choose a Microsendr password.
                 </p>
                 <MicrosendrAuth
-                  mode="personal"
                   restoreExisting
                   config={legacyConfig}
                   onComplete={async (session) => {
@@ -247,18 +289,44 @@ export function PersonalLogin({
                       </button>
                     )}
                     {mode === 'recover' && challenge && (
-                      <label>
-                        Verification code
-                        <input
-                          value={code}
-                          onChange={(e) => setCode(e.target.value)}
-                          inputMode="numeric"
-                          pattern="[0-9]{6}"
-                          maxLength={6}
-                          autoComplete="one-time-code"
-                          required
-                        />
-                      </label>
+                      <>
+                        {notice && (
+                          <div className="fin-notice" role="status">
+                            {notice}
+                          </div>
+                        )}
+                        <label>
+                          Verification code
+                          <input
+                            value={code}
+                            onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                            inputMode="numeric"
+                            pattern="[0-9]{6}"
+                            minLength={6}
+                            maxLength={6}
+                            autoComplete="one-time-code"
+                            required
+                          />
+                        </label>
+                        <div className="fin-code-actions">
+                          <button
+                            type="button"
+                            className="fin-text"
+                            onClick={() => void resendCode()}
+                            disabled={busy}
+                          >
+                            Resend code
+                          </button>
+                          <button
+                            type="button"
+                            className="fin-text"
+                            onClick={useDifferentEmail}
+                            disabled={busy}
+                          >
+                            Use a different email
+                          </button>
+                        </div>
+                      </>
                     )}
                     {mode === 'recover' && !emailEnabled && (
                       <div className="fin-notice">

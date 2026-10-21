@@ -26,18 +26,6 @@ body {
   width: 33px;
   height: 33px;
 }
-.button.primary {
-  background: #4682b4;
-  border-color: #4682b4;
-  color: #fff;
-}
-.button.primary:hover {
-  background: #336f9e;
-}
-.button.subtle,
-.button:not(.primary) {
-  color: #30536e;
-}
 .theme-toggle {
   border: 1px solid #b6c8d1;
   color: #3c637e;
@@ -46,72 +34,7 @@ body {
   padding: 8px 11px;
   font-size: 11px;
 }
-.app-shell,
-.app-main,
-.content,
-.connect-page,
-.login-page,
-.hosted-page {
-  background: #f7f3e9;
-  color: #183247;
-}
-.sidebar {
-  background: #294d69;
-  color: #f7f3e9;
-}
-.sidebar .logo {
-  color: #f7f3e9;
-}
-.sidebar-label,
-.sidebar-version,
-.sidebar-docs,
-.sidebar nav button,
-.workspace-switch small {
-  color: #c9dbe6;
-}
-.sidebar nav button:hover {
-  background: #386181;
-}
-.sidebar nav button.active {
-  background: #f7f3e9;
-  color: #244b69;
-}
-.workspace-switch,
-.sandbox-card {
-  background: #315b7a;
-  border-color: #6188a3;
-  color: #f7f3e9;
-}
-.sandbox-card > span {
-  color: #f7f3e9;
-}
-.workspace-icon {
-  background: #b9d5e8;
-  color: #204969;
-}
-.sidebar-version {
-  border-color: #6687a0;
-}
-.topbar,
-.card,
-.modal,
-.connect-card,
-.hosted-card {
-  background: #fffdf8;
-  color: #183247;
-  border-color: #dce2df;
-}
-.breadcrumb b,
-.card h2,
-.card h3 {
-  color: #183247;
-}
-.sandbox-top,
-.eyebrow {
-  color: #4682b4;
-}
-.public-header,
-.public-footer {
+.public-header {
   background: #f7f3e9;
   color: #183247;
   border-color: #dce2df;
@@ -119,107 +42,20 @@ body {
 .public-header nav button {
   color: #365a73;
 }
-.business-balance-card {
-  background: linear-gradient(125deg, #376d99, #294d69);
-  border-color: #4e7ca1;
-  color: #fff;
-}
-.business-balance-card > span,
-.business-balance-card small {
-  color: #d5e6ef;
-}
-.business-verification {
-  border-color: #a5c1d3;
-}
-.business-position > div {
-  border-color: #dce2df;
-}
-.personal-shell,
-.personal-auth,
 .personal-loading {
   background: #f7f3e9;
   color: #183247;
 }
-.personal-sidebar {
-  background: #294d69;
-  border-color: #6388a3;
-}
-.personal-brand,
-.personal-auth header > button {
-  color: #173347;
-}
-.personal-sidebar .personal-brand {
-  color: #f7f3e9;
-}
-.personal-sidebar-caption,
-.personal-sidebar nav button,
-.personal-sidebar-bottom > button {
-  color: #c9dbe6;
-}
-.personal-sidebar-caption span {
-  background: #42729a;
-  color: #fff;
-}
-.personal-sidebar nav button:hover,
-.personal-sidebar nav button.active,
-.personal-sidebar-bottom > button:hover {
-  background: #f7f3e9;
-  color: #294d69;
-}
-.personal-sandbox-note {
-  background: #386181;
-  border-color: #6d91a9;
-  color: #f7f3e9;
-}
-.personal-sandbox-note small {
-  color: #c9dbe6;
-}
-.personal-topbar {
-  border-color: #dce2df;
-  color: #6b7c88;
-}
-.personal-topbar b,
-.personal-heading h1 {
-  color: #183247;
-}
-.personal-avatar {
-  background: #4682b4;
-  color: #fff;
-}
-.personal-eyebrow {
-  color: #4682b4;
-}
-.personal-heading p,
 .personal-muted {
   color: #697b87;
 }
-.personal-content {
-  max-width: 1040px;
-}
-.personal-balance {
-  background: linear-gradient(115deg, #4682b4, #294d69);
-  border-color: #5b8cb2;
-  color: #fff;
-}
-.personal-balance span,
-.personal-balance small {
-  color: #e1edf5;
-}
-.personal-balance strong {
-  color: #fff;
-}
-.personal-balance svg {
-  color: #c9e1ef;
-}
-.personal-card,
-.personal-actions button {
+.personal-card {
   background: #fffdf8;
   border-color: #dce2df;
   color: #183247;
 }
 .personal-card > p,
-.personal-card small,
-.personal-profile > div span {
+.personal-card small {
   color: #6a7d89;
 }
 .personal-card label {
@@ -241,40 +77,8 @@ body {
 .personal-primary:hover {
   background: #336f9e;
 }
-.personal-form-summary,
-.personal-activity-row,
-.personal-profile > div {
-  border-color: #dce2df;
-  color: #6b7d87;
-}
-.personal-form-summary b {
-  color: #183247;
-}
-.personal-activity-icon {
-  background: #e7f0f5;
-  color: #4682b4;
-}
-.personal-auth header {
-  border-color: #dce2df;
-}
-.personal-auth-story > p,
-.personal-auth-proof {
-  color: #597487;
-}
 .personal-text {
   color: #4682b4;
-}
-.personal-mobile-menu {
-  color: #183247;
-}
-.ms-login-page .personal-auth-main {
-  max-width: 1080px;
-  gap: 10%;
-  padding-top: 13vh;
-}
-.personal-auth-card {
-  box-shadow: 0 20px 50px #24486610;
-  border-radius: 14px;
 }
 .ms-auth-form {
   margin-top: 30px;
@@ -296,39 +100,19 @@ body {
   color: #f8f3e9;
 }
 :root[data-theme='dark'] body,
-:root[data-theme='dark'] .app-shell,
-:root[data-theme='dark'] .app-main,
-:root[data-theme='dark'] .content,
-:root[data-theme='dark'] .connect-page,
-:root[data-theme='dark'] .login-page,
-:root[data-theme='dark'] .hosted-page,
-:root[data-theme='dark'] .personal-shell,
-:root[data-theme='dark'] .personal-auth,
 :root[data-theme='dark'] .personal-loading {
   background: #172d40;
   color: #f8f3e9;
 }
 :root[data-theme='dark'] .ms-site,
-:root[data-theme='dark'] .ms-site .public-header,
-:root[data-theme='dark'] .ms-footer {
+:root[data-theme='dark'] .ms-site .public-header {
   background: #172d40;
   color: #f8f3e9;
 }
-:root[data-theme='dark'] .ms-hero h1,
-:root[data-theme='dark'] .ms-section-head h2,
-:root[data-theme='dark'] .logo,
-:root[data-theme='dark'] .personal-heading h1,
-:root[data-theme='dark'] .personal-auth header > button {
+:root[data-theme='dark'] .logo {
   color: #f8f3e9;
 }
-:root[data-theme='dark'] .ms-mode-card,
-:root[data-theme='dark'] .card,
-:root[data-theme='dark'] .modal,
-:root[data-theme='dark'] .connect-card,
-:root[data-theme='dark'] .hosted-card,
-:root[data-theme='dark'] .topbar,
-:root[data-theme='dark'] .personal-card,
-:root[data-theme='dark'] .personal-actions button {
+:root[data-theme='dark'] .personal-card {
   background: #25445e;
   border-color: #456b87;
   color: #f8f3e9;
@@ -341,45 +125,11 @@ body {
   border-color: #5a7c94;
   color: #f8f3e9;
 }
-:root[data-theme='dark'] .ms-hero-copy > p,
-:root[data-theme='dark'] .ms-mode-card p,
-:root[data-theme='dark'] .personal-auth-story > p,
-:root[data-theme='dark'] .personal-heading p,
 :root[data-theme='dark'] .personal-muted {
   color: #c4d2d9;
 }
-:root[data-theme='dark'] .ms-link,
-:root[data-theme='dark'] .card h2,
-:root[data-theme='dark'] .card h3,
-:root[data-theme='dark'] .breadcrumb b,
-:root[data-theme='dark'] .personal-topbar b {
-  color: #f8f3e9;
-}
-:root[data-theme='dark'] .ms-hero-visual {
-  background: #284d69;
-}
-:root[data-theme='dark'] .ms-preview,
-:root[data-theme='dark'] .ms-network-card {
-  background: #f7f3e9;
-  color: #173347;
-}
-:root[data-theme='dark'] .ms-preview .logo {
-  color: #173347;
-}
-:root[data-theme='dark'] .ms-site .public-header nav :is(a, button),
-:root[data-theme='dark'] .ms-footer nav button {
+:root[data-theme='dark'] .ms-site .public-header nav :is(a, button) {
   color: #e2ebef;
-}
-@media (max-width: 780px) {
-  .personal-shell .personal-sidebar {
-    background: #294d69;
-  }
-  .personal-mobile-menu {
-    color: #183247;
-  }
-  :root[data-theme='dark'] .personal-mobile-menu {
-    color: #f8f3e9;
-  }
 }
 
 /* Shared monochrome wordmark; the M is a letter, not a separate app badge. */

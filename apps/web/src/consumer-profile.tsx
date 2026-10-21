@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { CheckCircle2, ShieldCheck, ArrowRight, Mail, LockKeyhole } from 'lucide-react';
 import { ConsumerFields } from './consumer-fields.js';
-import { consumerRequest, profilePayload, type ConsumerProfile } from './consumer-api.js';
+import { consumerRequest, profileDraft, profilePayload, type ConsumerProfile } from './consumer-api.js';
 
 export function ConsumerProfileForm({
   profile,
@@ -14,7 +14,7 @@ export function ConsumerProfileForm({
   onSaved: () => Promise<void>;
   go: (path: string) => void;
 }) {
-  const [draft, setDraft] = useState<any>(profile),
+  const [draft, setDraft] = useState<any>(() => profileDraft(profile)),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [saved, setSaved] = useState(false);
@@ -35,7 +35,7 @@ export function ConsumerProfileForm({
           ...profilePayload({
             ...draft,
             nationality: draft.nationality || null,
-            phone: draft.phone.replace(/[\s()-]/g, ''),
+            phone: String(draft.phone ?? '').replace(/[\s()-]/g, ''),
           }),
           profile_version: profile.profile_version,
         },
@@ -228,16 +228,18 @@ export function ConsumerSecurity({
             Six-digit code
             <input
               value={code}
-              onChange={(e) => setCode(e.target.value)}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
               inputMode="numeric"
               autoComplete="one-time-code"
+              pattern="[0-9]{6}"
               maxLength={6}
+              required
             />
           </label>
         )}
         <button
           className="fin-secondary"
-          disabled={busy || !profile.email || !emailEnabled}
+          disabled={busy || !profile.email || !emailEnabled || (!!challenge && code.length !== 6)}
           onClick={verify}
         >
           {challenge ? 'Verify email' : 'Send verification code'}

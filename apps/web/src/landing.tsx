@@ -18,10 +18,8 @@ import {
 import './landing.css';
 
 type Props = {
-  header: ReactNode;
   brand: ReactNode;
   go: (path: string) => void;
-  authenticated: boolean;
 };
 const previews = {
   Receive: {
@@ -61,7 +59,7 @@ type Preview = keyof typeof previews;
 const questions = [
   [
     'What can I do on Microsendr today?',
-    'You can create your Personal account, complete your profile, link a QIE wallet, and receive or send native QIEV3 on QIE Mainnet. Digital-dollar deposits, exchange, and bank payments are still coming.',
+    'You can create your Personal account, complete your profile, link a self-custody QIE wallet you control, and use it to receive or send native QIEV3 on QIE Mainnet. Deposits to and sends from a Microsendr-managed account wallet, digital-dollar deposits, exchange, and bank payments are still coming.',
   ],
   [
     'Do I need a crypto wallet to register?',
@@ -81,8 +79,22 @@ const questions = [
   ],
 ];
 
-export function LandingPage({ brand, go, authenticated }: Props) {
+export function LandingPage({ brand, go }: Props) {
   const [menu, setMenu] = useState(false);
+  // "My account" reflects the Personal session, not the retired Business console session.
+  const [authenticated, setAuthenticated] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void fetch('/personal/api/session', { credentials: 'include' })
+      .then((response) => (response.ok ? response.json() : { authenticated: false }))
+      .then((session) => {
+        if (active) setAuthenticated(session?.authenticated === true);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
   const [preview, setPreview] = useState<Preview>('Receive');
   const current = previews[preview];
   const Icon = current.icon;
@@ -484,8 +496,12 @@ export function LandingPage({ brand, go, authenticated }: Props) {
               <b className="lp-open">Available</b>
             </div>
             <div>
-              <span>Native QIE wallet transfers</span>
+              <span>Native QIE transfers with your linked wallet</span>
               <b className="lp-open">Available</b>
+            </div>
+            <div>
+              <span>Microsendr account wallet deposits & sends</span>
+              <b>Coming</b>
             </div>
             <div>
               <span>Digital-dollar deposits & transfers</span>
@@ -500,7 +516,7 @@ export function LandingPage({ brand, go, authenticated }: Props) {
               <b>Coming</b>
             </div>
             <p>
-              Native QIE transfers use your linked wallet. Digital-dollar and fiat services depend
+              Native QIE transfers use a self-custody wallet you link and control. Digital-dollar and fiat services depend
               on supported assets, providers and verification. Digital assets are not insured bank deposits.
             </p>
           </div>

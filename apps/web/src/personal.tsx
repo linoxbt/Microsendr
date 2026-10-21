@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -27,12 +27,16 @@ import {
 import { PersonalLogin } from './personal-login.js';
 import { PersonalKyc } from './personal-kyc.js';
 import { ConsumerProfileForm, ConsumerSecurity } from './consumer-profile.js';
-import { consumerRequest, type ConsumerProfile } from './consumer-api.js';
+import {
+  consumerRequest,
+  isSessionExpired,
+  sessionExpiredEvent,
+  type ConsumerProfile,
+} from './consumer-api.js';
+import { logoutPrivyIfMounted } from './auth-shell.js';
 import { MicrosendrMark } from './microsendr-logo.js';
 import { ConsumerChainWallet } from './consumer-chain-wallet.js';
 import { AssetDetail, AssetIcon, assetAmount, assetDefaults, type PersonalAsset } from './personal-assets.js';
-import './personal.css';
-import './consumer.css';
 
 type Session = { authenticated: boolean; csrf_token?: string; email?: string; account_id?: string };
 type Capability = { available: boolean; reason: string };
@@ -42,7 +46,7 @@ type Movement = {
   to: string;
   amount_atomic: string;
   asset: string;
-  decimals: number;
+  decimals: number | null;
   network: string;
   created_at: string;
   tx_hash: string | null;
@@ -68,8 +72,15 @@ const statusLabel = (status: string) =>
     failed: 'Failed',
     expired: 'Expired',
   })[status] ?? status;
+const assetLabel = (asset: string) => (asset === 'QIEV3' ? 'QIE' : asset);
+// Personal activity rows are chain settlements: outbound native transfers from a linked wallet.
+const movementTitle = (item: Movement) => `Sent ${assetLabel(item.asset)}`;
+const shortAddress = (value: string) =>
+  value.length > 16 ? `${value.slice(0, 6)}…${value.slice(-4)}` : value;
 const formatAmount = (item: Movement) => {
-  const unit = 10n ** BigInt(item.decimals ?? 0);
+  if (item.decimals === null || item.decimals === undefined)
+    return `${item.amount_atomic} base units of`;
+  const unit = 10n ** BigInt(item.decimals);
   const n = BigInt(item.amount_atomic);
   return `${n / unit}.${(n % unit).toString().padStart(item.decimals, '0').slice(0, 6).replace(/0+$/, '') || '00'}`;
 };
@@ -110,7 +121,8 @@ export function PersonalPage({
     [search, setSearch] = useState(''),
     [filter, setFilter] = useState('all');
   const [selected, setSelected] = useState<string | null>(null),
-    [refreshing, setRefreshing] = useState(false);
+    [refreshing, setRefreshing] = useState(false),
+    [signInNotice, setSignInNotice] = useState('');
   const rawTab = path.split('/')[2]?.split('?')[0] || 'home';
   const tab = rawTab === 'login' ? 'home' : rawTab === 'money' ? 'deposit' : rawTab;
   const assetCode = path.split('/')[3]?.split('?')[0]?.toUpperCase();
@@ -131,11 +143,28 @@ export function PersonalPage({
       setOverview(o);
     }
   }
+  // Drop everything tied to the account so no stale dashboard survives a sign-out or expiry.
+  const clearLocalState = useCallback(() => {
+    setSession({ authenticated: false });
+    setProfile(undefined);
+    setOverview(undefined);
+    setSelected(null);
+    setError('');
+  }, []);
   useEffect(() => {
     void refresh().catch((e) => {
-      setError(e.message);
+      if (!isSessionExpired(e)) setError(e.message);
     });
   }, []);
+  useEffect(() => {
+    const expired = () => {
+      clearLocalState();
+      setSignInNotice('Your session has ended. Sign in again to continue.');
+      go('/personal/login');
+    };
+    window.addEventListener(sessionExpiredEvent, expired);
+    return () => window.removeEventListener(sessionExpiredEvent, expired);
+  }, [clearLocalState, go]);
   useEffect(() => {
     if (session) onAuthChange(session.authenticated);
   }, [session?.authenticated, onAuthChange]);
@@ -144,14 +173,39 @@ export function PersonalPage({
     setError('');
     window.scrollTo(0, 0);
   }, [tab]);
+  // Poll the overview only while the page is visible; a 401 fires the session-expired handler.
   useEffect(() => {
     if (!session?.authenticated) return;
-    const timer = setInterval(() => {
+    let active = true;
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const tick = () => {
       void consumerRequest<Overview>('overview')
-        .then(setOverview)
-        .catch(() => {});
-    }, 15000);
-    return () => clearInterval(timer);
+        .then((next) => {
+          if (active) setOverview(next);
+        })
+        .catch(() => undefined);
+    };
+    const start = () => {
+      if (timer === undefined && !document.hidden) timer = setInterval(tick, 15000);
+    };
+    const stop = () => {
+      if (timer !== undefined) clearInterval(timer);
+      timer = undefined;
+    };
+    const visibility = () => {
+      if (document.hidden) stop();
+      else {
+        tick();
+        start();
+      }
+    };
+    start();
+    document.addEventListener('visibilitychange', visibility);
+    return () => {
+      active = false;
+      stop();
+      document.removeEventListener('visibilitychange', visibility);
+    };
   }, [session?.authenticated]);
   const retry = async () => {
     setRefreshing(true);
@@ -159,21 +213,29 @@ export function PersonalPage({
     try {
       await refresh();
     } catch (e) {
-      setError((e as Error).message);
+      if (!isSessionExpired(e)) setError((e as Error).message);
     } finally {
       setRefreshing(false);
     }
   };
+  const signingOut = useRef(false);
   async function logout() {
-    try {
-      await consumerRequest('logout', 'POST', {}, session?.csrf_token);
-      setSession({ authenticated: false });
-      setProfile(undefined);
-      setOverview(undefined);
-      go('/personal/login');
-    } catch (e) {
-      setError((e as Error).message);
-    }
+    if (signingOut.current) return;
+    signingOut.current = true;
+    const csrf = session?.csrf_token;
+    // Local state is cleared first so a failed server call can never leave the account on screen.
+    clearLocalState();
+    setSignInNotice('');
+    go('/personal/login');
+    const [server] = await Promise.allSettled([
+      consumerRequest('logout', 'POST', {}, csrf),
+      logoutPrivyIfMounted(),
+    ]);
+    if (server.status === 'rejected' && !isSessionExpired(server.reason))
+      setSignInNotice(
+        'You are signed out on this device. We could not reach Microsendr to end the session, so it will expire on its own.',
+      );
+    signingOut.current = false;
   }
   if (!session || (session.authenticated && (!profile || !overview)))
     return error ? (
@@ -193,14 +255,16 @@ export function PersonalPage({
       <PersonalLogin
         brand={brand}
         go={go}
+        notice={signInNotice}
         onComplete={async (s, isNew) => {
           setSession(s);
           setError('');
+          setSignInNotice('');
           try {
             await refresh();
             go(isNew ? '/personal/onboarding' : '/personal/home');
           } catch (e) {
-            setError((e as Error).message);
+            if (!isSessionExpired(e)) setError((e as Error).message);
           }
         }}
       />
@@ -219,7 +283,7 @@ export function PersonalPage({
         (filter === 'completed'
           ? item.status === 'confirmed'
           : !['confirmed', 'failed', 'expired'].includes(item.status))) &&
-      `${item.id} ${item.to} ${statusLabel(item.status)}`
+      `${item.id} ${item.to} ${movementTitle(item)} ${statusLabel(item.status)}`
         .toLowerCase()
         .includes(search.toLowerCase()),
   );
@@ -240,13 +304,14 @@ export function PersonalPage({
               <ArrowUpRight size={19} />
             </span>
             <span>
-              <b>Wallet transfer</b>
+              <b>{movementTitle(item)}</b>
               <small>
                 {new Date(item.created_at).toLocaleDateString(undefined, {
                   month: 'short',
                   day: 'numeric',
                   year: 'numeric',
-                })}
+                })}{' '}
+                · To {shortAddress(item.to)}
               </small>
             </span>
             <span>
@@ -417,7 +482,7 @@ export function PersonalPage({
                   <h2>Assets</h2>
                 </div>
                 <div className="fin-assets-list">
-                  {assets.map(asset => <button className="fin-asset-row" key={asset.code} onClick={() => go(`/personal/assets/${asset.code.toLowerCase()}`)} aria-label={`View ${asset.code} details`}>
+                  {assets.map(asset => <button className="fin-asset-row" key={asset.code} onClick={() => go(`/personal/assets/${asset.code.toLowerCase()}`)} aria-label={`View ${asset.code} details, ${asset.name}, balance ${hidden ? 'hidden' : asset.amount_atomic === null ? 'unavailable' : `${assetAmount(asset)} ${asset.code}`}`}>
                     <AssetIcon code={asset.code} />
                     <span className="fin-asset-name"><b>{asset.code}</b><small>{asset.name}</small></span>
                     <span className="fin-asset-value"><b>{hidden ? '••••' : assetAmount(asset)}</b><small>{asset.status === 'ready' ? 'Onchain' : 'Unavailable'}</small></span>
@@ -435,7 +500,7 @@ export function PersonalPage({
               <PageHeading
                 kicker="MOVE MONEY"
                 title="Your next move."
-                text="Add, send, convert or withdraw from one place."
+                text="Send QIE from a linked wallet. More money services are on the way."
               />
               <div className="fin-payment-tiles">
                 {actions.map(([key, label, Icon], i) => (
@@ -447,10 +512,10 @@ export function PersonalPage({
                     <p>
                       {
                         [
-                          'Explore stablecoin or local deposits.',
-                          'Pay someone or an external account.',
-                          'Review an exchange before you confirm.',
-                          'Move money to your bank account.',
+                          'Receive QIE to a wallet you link.',
+                          'Send native QIE from a linked wallet.',
+                          'Currency exchange is not available yet.',
+                          'Bank withdrawals are not available yet.',
                         ][i]
                       }
                     </p>
@@ -503,7 +568,7 @@ export function PersonalPage({
               {receipt && (
                 <section className="fin-panel fin-receipt">
                   <div className="fin-section-head">
-                    <h2>Transfer details</h2>
+                    <h2>{movementTitle(receipt)}</h2>
                     <button className="fin-text" onClick={() => setSelected(null)}>
                       Close
                     </button>
@@ -511,7 +576,7 @@ export function PersonalPage({
                   <dl>
                     {Object.entries({
                       Status: statusLabel(receipt.status),
-                      Amount: `${formatAmount(receipt)} ${receipt.asset}`,
+                      Amount: `${formatAmount(receipt)} ${assetLabel(receipt.asset)}`,
                       Recipient: receipt.to,
                       Reference: receipt.id,
                       Network: receipt.network,
@@ -673,44 +738,24 @@ function MoneyFlow({
   go: (path: string) => void;
   onChanged: () => Promise<void>;
 }) {
-  const [method, setMethod] = useState('crypto'),
-    [source, setSource] = useState('USD'),
-    [amount, setAmount] = useState(''),
-    [error, setError] = useState(''),
-    [busy, setBusy] = useState(false);
-  const destination = source === 'USD' ? 'NGN' : 'USD';
+  // "Crypto transfer" shows only wallets the user links and controls; never the managed account wallet.
+  const [method, setMethod] = useState<'crypto' | 'bank'>('crypto');
   const capability =
-    capabilities[
+    capabilities?.[
       kind === 'deposit'
-        ? method === 'bank'
-          ? 'fiat_deposit'
-          : 'crypto_deposit'
+        ? 'fiat_deposit'
         : kind === 'convert'
           ? 'conversion'
-          : kind === 'send'
-            ? 'transfer'
-            : 'withdrawal'
+          : 'withdrawal'
     ];
   const title =
     kind === 'deposit'
       ? 'Add money.'
       : kind === 'convert'
-        ? 'A clearer exchange.'
+        ? 'Convert currencies.'
         : kind === 'send'
           ? 'Who are you paying?'
           : 'Withdraw to your bank.';
-  async function quote(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError('');
-    try {
-      await consumerRequest('conversion/quotes', 'POST', { source, destination, amount }, csrf);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
   return (
     <>
       <button className="fin-text fin-back" onClick={() => go('/personal/payments')}>
@@ -721,12 +766,12 @@ function MoneyFlow({
         title={title}
         text={
           kind === 'convert'
-            ? 'See the rate, fees and final amount before you confirm.'
+            ? 'Currency exchange is not available yet.'
             : kind === 'deposit'
-              ? 'Choose a network wallet or a local funding method.'
+              ? 'Receive QIE to a wallet you link, or check local funding.'
               : kind === 'send'
-                ? 'Send native QIE to a wallet on QIE Mainnet.'
-                : 'Send available naira to a verified bank account.'
+                ? 'Send native QIE from a wallet you link, on QIE Mainnet.'
+                : 'Bank withdrawals are not available yet.'
         }
       />
       <div className="fin-flow-layout">
@@ -734,117 +779,53 @@ function MoneyFlow({
           {kind === 'deposit' && (
             <div className="fin-methods" role="group" aria-label="Deposit method">
               <button
+                type="button"
                 className={method === 'bank' ? 'active' : ''}
+                aria-pressed={method === 'bank'}
                 onClick={() => setMethod('bank')}
               >
                 <CreditCard size={20} /> Bank / card
               </button>
               <button
+                type="button"
                 className={method === 'crypto' ? 'active' : ''}
+                aria-pressed={method === 'crypto'}
                 onClick={() => setMethod('crypto')}
               >
                 <Globe2 size={20} /> Crypto transfer
               </button>
             </div>
           )}
-          {(kind === 'send' || (kind === 'deposit' && method === 'crypto')) ? (
+          {kind === 'send' || (kind === 'deposit' && method === 'crypto') ? (
             <ConsumerChainWallet
               csrf={csrf}
               mode={kind === 'send' ? 'send' : 'receive'}
-              go={go}
               onChanged={onChanged}
             />
-          ) : kind === 'convert' ? (
-            <form onSubmit={quote}>
-              <div className="fin-amount-input">
-                <label>
-                  You exchange
-                  <input
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    inputMode="decimal"
-                    pattern="[1-9][0-9]*(\.[0-9]{1,2})?"
-                    required
-                    placeholder="0.00"
-                  />
-                </label>
-                <select
-                  aria-label="Source currency"
-                  value={source}
-                  onChange={(e) => {
-                    setSource(e.target.value);
-                    setError('');
-                  }}
-                >
-                  <option value="USD">USD</option>
-                  <option value="NGN">NGN</option>
-                </select>
-              </div>
-              <button
-                type="button"
-                className="fin-swap"
-                aria-label="Reverse conversion"
-                onClick={() => {
-                  setSource(destination);
-                  setError('');
-                }}
-              >
-                <ArrowLeftRight size={18} />
-              </button>
-              <div className="fin-receive">
-                <span>
-                  You receive<strong>—</strong>
-                </span>
-                <b>{destination}</b>
-              </div>
-              <div className="fin-fee-row">
-                <span>Rate & total fees</span>
-                <b>Calculated with your quote</b>
-              </div>
-              <p className="fin-small">
-                A digital dollar balance is an asset balance, not a bank deposit. Conversion
-                requires an available provider route.
-              </p>
-              {error && (
-                <div className="fin-error" role="alert">
-                  {error}
-                </div>
-              )}
-              <button className="fin-primary" disabled={busy}>
-                {busy ? 'Checking availability…' : 'Check exchange availability'}
-                <ArrowRight size={17} />
-              </button>
-            </form>
           ) : (
             <div className="fin-method-detail">
               <span className="fin-method-icon">
                 {kind === 'deposit' ? (
-                  method === 'bank' ? (
-                    <CreditCard size={30} />
-                  ) : (
-                    <Globe2 size={30} />
-                  )
-                ) : kind === 'send' ? (
-                  <ArrowUpRight size={30} />
+                  <CreditCard size={30} />
+                ) : kind === 'convert' ? (
+                  <ArrowLeftRight size={30} />
                 ) : (
                   <ArrowDownLeft size={30} />
                 )}
               </span>
               <h2>
                 {kind === 'deposit'
-                  ? method === 'bank'
-                    ? 'Local deposits'
-                    : 'Receive digital dollars'
-                  : kind === 'send'
-                    ? 'Send with Microsendr'
+                  ? 'Local deposits'
+                  : kind === 'convert'
+                    ? 'Currency exchange'
                     : 'Bank withdrawal'}
               </h2>
               <p>{capability?.reason ?? 'This payment method is not available yet.'}</p>
               <span className="fin-status">Not available</span>
-              {kind === 'deposit' && method === 'crypto' && (
+              {kind === 'convert' && (
                 <p className="fin-small">
-                  The deposit instructions will specify the supported asset and network. Only use
-                  the address shown for that network.
+                  No exchange is offered and no funds are moved here. A digital-dollar balance is
+                  an asset balance, not a bank deposit.
                 </p>
               )}
             </div>

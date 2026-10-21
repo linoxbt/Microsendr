@@ -1,10 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { formatEther, getAddress, isAddress, parseEther } from 'viem';
-import { ArrowRight, ArrowUpRight, Copy, RefreshCw, ShieldCheck, Wallet } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, Copy, Link2, RefreshCw, ShieldCheck, Unlink, Wallet } from 'lucide-react';
 import { consumerRequest } from './consumer-api.js';
 
-type WalletRecord = { id: string; address: string; label: string; network: string; managed?: boolean };
+type WalletRecord = {
+  id: string;
+  address: string;
+  label?: string;
+  network: string;
+  managed?: boolean;
+  custody?: string;
+};
 type Balance = {
   balance_wei: string; block_number: string; explorer_url: string; asset: string;
 };
@@ -13,6 +20,8 @@ type EthereumProvider = {
 };
 const qieChainId = '0x7c6';
 const explorer = 'https://mainnet.qie.digital/';
+/** Managed (custodial) wallets cannot send yet, so they must never be offered as a deposit address. */
+export const isManaged = (wallet: WalletRecord) => wallet.managed === true || wallet.custody === 'managed';
 function previewAmount(wei: string) {
   const [whole, fraction = ''] = formatEther(BigInt(wei)).split('.');
   const short = fraction.slice(0, 6).replace(/0+$/, '');
@@ -56,14 +65,13 @@ async function signature(wallet: EthereumProvider, address: string, message: str
 }
 
 export function ConsumerChainWallet({
-  csrf, mode, go, onChanged,
+  csrf, mode, onChanged,
 }: {
   csrf: string;
-  mode: 'summary' | 'receive' | 'send';
-  go: (path: string) => void;
-  onChanged?: () => void;
+  mode: 'receive' | 'send';
+  onChanged?: () => Promise<unknown> | void;
 }) {
-  const [wallets, setWallets] = useState<WalletRecord[]>([]);
+  const [wallets, setWallets] = useState<WalletRecord[]>();
   const [selectedId, setSelectedId] = useState('');
   const [balance, setBalance] = useState<Balance>();
   const [qr, setQr] = useState('');
@@ -72,21 +80,33 @@ export function ConsumerChainWallet({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [confirmUnlink, setConfirmUnlink] = useState(false);
   const [pending, setPending] = useState<{ id: string; hash?: string }>();
-  const selected = wallets.find(wallet => wallet.id === selectedId);
+  // Only wallets the user controls can receive or send. The managed account wallet is described separately.
+  const linked = (wallets ?? []).filter(wallet => !isManaged(wallet));
+  const managed = (wallets ?? []).find(isManaged);
+  const selected = linked.find(wallet => wallet.id === selectedId);
 
+  async function notifyChanged() {
+    try { await onChanged?.(); } catch { /* the overview refresh reports its own errors */ }
+  }
   async function loadWallets() {
     const result = await consumerRequest<{ data: WalletRecord[] }>('wallets');
     setWallets(result.data);
-    setSelectedId(current => result.data.some(wallet => wallet.id === current)
-      ? current : result.data[0]?.id ?? '');
+    const own = result.data.filter(wallet => !isManaged(wallet));
+    setSelectedId(current => own.some(wallet => wallet.id === current) ? current : own[0]?.id ?? '');
+    return own;
   }
   useEffect(() => { void loadWallets().catch(e => setError((e as Error).message)); }, []);
   useEffect(() => {
     setBalance(undefined);
+    setConfirmUnlink(false);
     if (!selectedId) return;
+    let active = true;
     void consumerRequest<Balance>(`wallets/${selectedId}/balance`)
-      .then(setBalance).catch(e => setError((e as Error).message));
+      .then(value => { if (active) setBalance(value); })
+      .catch(e => { if (active) setError((e as Error).message); });
+    return () => { active = false; };
   }, [selectedId]);
   useEffect(() => {
     setQr('');
@@ -97,6 +117,45 @@ export function ConsumerChainWallet({
     }).then(setQr).catch(() => setError('Could not create the QR code. Copy the address instead.'));
   }, [mode, selected?.address]);
 
+  async function linkWallet() {
+    setBusy(true); setError(''); setNotice('');
+    try {
+      const injected = provider();
+      await mainnet(injected);
+      const address = await selectedAccount(injected);
+      const challenge = await consumerRequest<{ challenge_id: string; message: string }>(
+        'wallets/challenge', 'POST', { address }, csrf,
+      );
+      const signed = await signature(injected, address, challenge.message);
+      const result = await consumerRequest<WalletRecord>('wallets', 'POST',
+        { challenge_id: challenge.challenge_id, signature: signed }, csrf);
+      await loadWallets();
+      setSelectedId(result.id);
+      setNotice('QIE wallet linked to your account.');
+      await notifyChanged();
+    } catch (cause) { setError((cause as Error).message || 'Could not link this wallet.'); }
+    finally { setBusy(false); }
+  }
+  async function unlinkWallet() {
+    if (!selected) return;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      await consumerRequest(`wallets/${encodeURIComponent(selected.id)}`, 'DELETE', undefined, csrf);
+      setConfirmUnlink(false);
+      await loadWallets();
+      setNotice('Wallet unlinked. It keeps its funds; Microsendr no longer shows it.');
+      await notifyChanged();
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setBusy(false); }
+  }
+  async function setUpAccountWallet() {
+    setBusy(true); setError(''); setNotice('');
+    try {
+      await consumerRequest('wallets/managed', 'POST', {}, csrf);
+      await loadWallets();
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setBusy(false); }
+  }
   async function refreshBalance() {
     if (!selected) return;
     setBusy(true); setError('');
@@ -111,7 +170,7 @@ export function ConsumerChainWallet({
   }
   async function send(event: React.FormEvent) {
     event.preventDefault();
-    if (!selected || selected.managed || pending) return;
+    if (!selected || pending) return;
     setBusy(true); setError(''); setNotice('');
     try {
       if (!isAddress(destination) || getAddress(destination) === getAddress(selected.address))
@@ -151,7 +210,7 @@ export function ConsumerChainWallet({
       setPending({ id: settlement.id, hash });
       await consumerRequest(`settlements/${settlement.id}/submit`, 'POST', { tx_hash: hash }, csrf);
       setNotice('Sent to QIE Mainnet. The transaction is being confirmed.');
-      onChanged?.();
+      await notifyChanged();
       await refreshBalance();
     } catch (cause) {
       setError((cause as Error).message || 'Check your wallet history before retrying.');
@@ -162,74 +221,96 @@ export function ConsumerChainWallet({
     setBusy(true); setError('');
     try {
       await consumerRequest(`settlements/${pending.id}/submit`, 'POST', { tx_hash: pending.hash }, csrf);
-      setNotice('Transfer is being confirmed.'); onChanged?.();
+      setNotice('Transfer is being confirmed.');
+      await notifyChanged();
     } catch (cause) { setError((cause as Error).message); }
     finally { setBusy(false); }
   }
 
+  const accountWallet = wallets && <div className="fin-chain-account" aria-label="Microsendr account wallet" role="group">
+    <ShieldCheck size={19} />
+    <div>
+      <b>Microsendr account wallet</b>
+      {managed ? <p>Microsendr manages this wallet's signing key. Deposits to and sends from the account wallet are not open yet, so no address is shown. Use a linked wallet you control for QIE.</p>
+        : <p>Your account wallet isn't set up yet. Deposits to the account wallet are not open yet either way.</p>}
+      {!managed && <button className="fin-text" type="button" onClick={() => void setUpAccountWallet()} disabled={busy}>
+        <RefreshCw size={14} /> Check wallet
+      </button>}
+    </div>
+  </div>;
+
   return <section className={`fin-panel fin-chain-wallet fin-chain-wallet-${mode}`} aria-label="QIE wallet">
     <div className="fin-section-head">
       <div><span className="fin-kicker">QIE MAINNET · NATIVE ASSET</span><h2>
-        {mode === 'receive' ? 'Receive QIE' : mode === 'send' ? 'Send QIE' : 'Your QIE wallet'}
+        {mode === 'receive' ? 'Receive QIE' : 'Send QIE'}
       </h2></div>
       <Wallet size={23} />
     </div>
-    {!wallets.length ? <div className="fin-chain-empty">
-      <p>Your wallet address is being prepared. Check again shortly.</p>
-      <button className="fin-primary" type="button" onClick={() => void loadWallets().catch(e => setError((e as Error).message))} disabled={busy}>
-        <RefreshCw size={17} /> Check wallet
-      </button>
-    </div> : <>
-      <div className="fin-chain-select">
-        <label>Wallet address
-          <select value={selectedId} onChange={e => setSelectedId(e.target.value)}>
-            {wallets.map(wallet => <option key={wallet.id} value={wallet.id}>
-              {wallet.managed ? 'Your wallet · ' : ''}{wallet.address.slice(0, 8)}…{wallet.address.slice(-6)}
-            </option>)}
-          </select>
-        </label>
-      </div>
-      {selected && <>
-        {mode !== 'send' && <div className="fin-chain-balance">
-          <span>Onchain balance</span>
-          <strong>{balance ? previewAmount(balance.balance_wei) : '—'} <small>QIEV3</small></strong>
-          <button className="fin-text" type="button" onClick={refreshBalance} disabled={busy}><RefreshCw size={14} /> Refresh</button>
-        </div>}
-        {mode === 'receive' && <div className="fin-chain-receive">
-          {qr && <img src={qr} alt="QR code for the QIE wallet address shown below" width="240" height="240" />}
-          <code>{selected.address}</code>
-          <button className="fin-secondary" type="button" onClick={copyAddress}><Copy size={16} /> Copy address</button>
-          <p>Send only native QIEV3 on QIE Mainnet to this address. Other assets and networks are not credited by Microsendr. Microsendr manages this wallet's signing key. Outbound transfers from this wallet are not enabled yet; do not deposit funds you need to withdraw.</p>
-          <a href={`${explorer}address/${selected.address}`} target="_blank" rel="noreferrer">View on explorer <ArrowUpRight size={15} /></a>
-        </div>}
-        {mode === 'send' && selected.managed && <p className="fin-chain-empty">Sending from this account wallet is being prepared. Do not fund it until withdrawals are enabled.</p>}
-        {mode === 'send' && !selected.managed && <form className="fin-chain-send" onSubmit={send}>
-          <label>Recipient QIE address<input value={destination} onChange={e => setDestination(e.target.value.trim())}
-            placeholder="0x…" autoComplete="off" required disabled={!!pending} /></label>
-          <label>Amount in QIEV3<input value={amount} onChange={e => setAmount(e.target.value)}
-            placeholder="0.00" inputMode="decimal" required disabled={!!pending} /></label>
-          <p>Available onchain: {balance ? formatEther(BigInt(balance.balance_wei)) : 'checking…'} QIEV3. Your wallet shows the network fee before you confirm. Onchain sends cannot be reversed.</p>
-          {!pending && <button className="fin-primary" disabled={busy || !balance}>
-            {busy ? 'Opening wallet…' : 'Review in wallet'} <ArrowRight size={17} />
-          </button>}
-        </form>}
-        {pending && <div className="fin-chain-pending">
-          <ShieldCheck size={19} /><div><b>Transfer reference: {pending.id}</b>
-            <p>{pending.hash ? 'Broadcast to QIE Mainnet. Awaiting confirmation.' : 'Check wallet history before starting another send.'}</p>
-            {pending.hash && <a href={`${explorer}tx/${pending.hash}`} target="_blank" rel="noreferrer">View transaction <ArrowUpRight size={14} /></a>}
+    {!wallets ? <p className="fin-chain-empty" role="status">Loading your wallets…</p>
+      : !linked.length ? <div className="fin-chain-empty">
+        <p>Link a self-custody EVM wallet to {mode === 'receive' ? 'receive' : 'send'} native QIEV3 on QIE Mainnet. Your wallet keeps control of its keys; Microsendr never holds them.</p>
+        <button className="fin-primary" type="button" onClick={() => void linkWallet()} disabled={busy}>
+          <Link2 size={17} /> {busy ? 'Connecting…' : 'Link QIE wallet'}
+        </button>
+      </div> : <>
+        <div className="fin-chain-select">
+          <label>Linked wallet
+            <select value={selectedId} onChange={e => setSelectedId(e.target.value)}>
+              {linked.map(wallet => <option key={wallet.id} value={wallet.id}>
+                {wallet.address.slice(0, 8)}…{wallet.address.slice(-6)}
+              </option>)}
+            </select>
+          </label>
+          <button className="fin-text" type="button" onClick={() => void linkWallet()} disabled={busy}><Link2 size={15} /> Add wallet</button>
+        </div>
+        {selected && <>
+          <div className="fin-chain-balance">
+            <span>Onchain balance</span>
+            <strong>{balance ? previewAmount(balance.balance_wei) : '—'} <small>QIEV3</small></strong>
+            <button className="fin-text" type="button" onClick={() => void refreshBalance()} disabled={busy}><RefreshCw size={14} /> Refresh</button>
           </div>
-          {pending.hash && <button className="fin-text" type="button" onClick={retryTracking} disabled={busy}>Track</button>}
-          <button className="fin-text" type="button" onClick={() => {
-            setPending(undefined); setNotice('Check your wallet history before sending again.');
-          }}>New send</button>
-        </div>}
+          {mode === 'receive' && <div className="fin-chain-receive">
+            {qr && <img src={qr} alt="QR code for the QIE wallet address shown below" width="240" height="240" />}
+            <code>{selected.address}</code>
+            <button className="fin-secondary" type="button" onClick={() => void copyAddress()}><Copy size={16} /> Copy address</button>
+            <p>This is your own linked wallet: you hold its keys. Send only native QIEV3 on QIE Mainnet to this address. Other assets and networks are not shown by Microsendr.</p>
+            <a href={`${explorer}address/${selected.address}`} target="_blank" rel="noreferrer">View on explorer <ArrowUpRight size={15} /></a>
+          </div>}
+          {mode === 'send' && <form className="fin-chain-send" onSubmit={send}>
+            <label>Recipient QIE address<input value={destination} onChange={e => setDestination(e.target.value.trim())}
+              placeholder="0x…" autoComplete="off" required disabled={!!pending}
+              pattern="0x[a-fA-F0-9]{40}" title="A 0x-prefixed QIE address" /></label>
+            <label>Amount in QIEV3<input value={amount} onChange={e => setAmount(e.target.value)}
+              placeholder="0.00" inputMode="decimal" required disabled={!!pending}
+              pattern="[0-9]+(\.[0-9]{1,18})?" title="A QIE amount, up to 18 decimal places" /></label>
+            <p>Available onchain: {balance ? formatEther(BigInt(balance.balance_wei)) : 'checking…'} QIEV3. Your wallet shows the network fee before you confirm. Onchain sends cannot be reversed.</p>
+            {!pending && <button className="fin-primary" disabled={busy || !balance}>
+              {busy ? 'Opening wallet…' : 'Review in wallet'} <ArrowRight size={17} />
+            </button>}
+          </form>}
+          {pending && <div className="fin-chain-pending">
+            <ShieldCheck size={19} /><div><b>Transfer reference: {pending.id}</b>
+              <p>{pending.hash ? 'Broadcast to QIE Mainnet. Awaiting confirmation.' : 'Check wallet history before starting another send.'}</p>
+              {pending.hash && <a href={`${explorer}tx/${pending.hash}`} target="_blank" rel="noreferrer">View transaction <ArrowUpRight size={14} /></a>}
+            </div>
+            {pending.hash && <button className="fin-text" type="button" onClick={() => void retryTracking()} disabled={busy}>Track</button>}
+            <button className="fin-text" type="button" onClick={() => {
+              setPending(undefined); setNotice('Check your wallet history before sending again.');
+            }}>New send</button>
+          </div>}
+          <div className="fin-chain-unlink">
+            {confirmUnlink ? <>
+              <span>Unlink {selected.address.slice(0, 8)}…{selected.address.slice(-6)}? Its funds stay in your wallet.</span>
+              <button className="fin-text" type="button" onClick={() => void unlinkWallet()} disabled={busy}>Confirm unlink</button>
+              <button className="fin-text" type="button" onClick={() => setConfirmUnlink(false)} disabled={busy}>Cancel</button>
+            </> : <button className="fin-text" type="button" onClick={() => setConfirmUnlink(true)} disabled={busy || !!pending}>
+              <Unlink size={14} /> Unlink wallet
+            </button>}
+          </div>
+        </>}
       </>}
-    </>}
+    {accountWallet}
     {notice && <p className="fin-chain-notice" role="status">{notice}</p>}
     {error && <p className="fin-error" role="alert">{error}</p>}
-    {mode === 'summary' && wallets.length > 0 && <div className="fin-chain-links">
-      <button className="fin-text" onClick={() => go('/personal/deposit')}>Receive QIE <ArrowRight size={15} /></button>
-      <button className="fin-text" onClick={() => go('/personal/send')}>Send QIE <ArrowRight size={15} /></button>
-    </div>}
   </section>;
 }
