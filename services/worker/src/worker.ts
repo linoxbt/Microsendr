@@ -33,7 +33,7 @@ export async function runOnce(options: WorkerOptions = {}): Promise<boolean> {
       );
     else
       await pool.query(
-        "UPDATE outbox SET available_at=now()+($3::integer*interval '1 second'),locked_by=NULL,locked_until=NULL,last_error=$4,priority=0 WHERE id=$1 AND locked_by=$2",
+        "UPDATE outbox SET available_at=now()+($3::integer*interval '1 second'),locked_by=NULL,locked_until=NULL,last_error=$4,priority=0,failures=0 WHERE id=$1 AND locked_by=$2",
         [
           job.id,
           token,
@@ -43,13 +43,15 @@ export async function runOnce(options: WorkerOptions = {}): Promise<boolean> {
       );
   } catch (error) {
     // Unexpected errors back off and are bounded; exhausted jobs are parked for review.
-    const dead = job.attempts >= MAX_OUTBOX_ATTEMPTS;
+    // Only consecutive failures count; ordinary recovery polls reset the streak.
+    const failures = job.failures + 1,
+      dead = failures >= MAX_OUTBOX_ATTEMPTS;
     await pool.query(
-      "UPDATE outbox SET available_at=now()+($3::integer*interval '1 second'),locked_by=NULL,locked_until=NULL,last_error='execution_error',priority=0,dead_at=CASE WHEN $4 THEN now() END WHERE id=$1 AND locked_by=$2",
-      [job.id, token, Math.min(300, 2 ** Math.min(job.attempts, 8)), dead],
+      "UPDATE outbox SET available_at=now()+($3::integer*interval '1 second'),locked_by=NULL,locked_until=NULL,last_error='execution_error',priority=0,failures=$5,dead_at=CASE WHEN $4 THEN now() END WHERE id=$1 AND locked_by=$2",
+      [job.id, token, Math.min(300, 2 ** Math.min(failures, 8)), dead, failures],
     );
     console.error(JSON.stringify({ level: dead ? 'error' : 'warn', msg: dead ? 'outbox job parked' : 'outbox job failed',
-      job: job.id, intent: job.intent_id, attempts: job.attempts,
+      job: job.id, intent: job.intent_id, failures,
       error: error instanceof Error ? { name: error.name, code: (error as { code?: string }).code } : 'unknown' }));
   }
   return true;

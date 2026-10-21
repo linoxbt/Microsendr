@@ -295,7 +295,7 @@ export async function registerProduct(app: FastifyInstance) {
             'Only ambiguous intents require status recovery',
           );
         const result = await c.query(
-          'UPDATE outbox SET available_at=now(),priority=2,locked_by=NULL,locked_until=NULL,dead_at=NULL,attempts=0 WHERE intent_id=$1 AND processed_at IS NULL RETURNING id',
+          'UPDATE outbox SET available_at=now(),priority=2,locked_by=NULL,locked_until=NULL,dead_at=NULL,failures=0 WHERE intent_id=$1 AND processed_at IS NULL RETURNING id',
           [intent.id],
         );
         await emit(c, intent, 'intent.recovery_requested');

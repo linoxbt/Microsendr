@@ -56,7 +56,8 @@ services:
     command: ["node", "--import", "tsx", "services/worker/src/index.ts"]
     healthcheck:
       # The worker records a heartbeat file each loop pass; stale means it is wedged.
-      test: ["CMD", "node", "-e", "const s=require('fs').statSync('/tmp/worker-heartbeat');if(Date.now()-s.mtimeMs>120000)process.exit(1)"]
+      # Docker only reports unhealthy; alert on it (docker events / monitoring) to restart.
+      test: ["CMD", "node", "-e", "const s=require('fs').statSync(process.env.KORA_WORKER_HEARTBEAT||'/tmp/worker-heartbeat');if(Date.now()-s.mtimeMs>120000)process.exit(1)"]
       interval: 30s
       timeout: 5s
       retries: 3

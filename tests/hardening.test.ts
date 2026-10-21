@@ -199,3 +199,22 @@ test('the email code secret must be at least 32 bytes', () => {
     if (previous === undefined) delete process.env.KORA_AUTH_SECRET; else process.env.KORA_AUTH_SECRET = previous;
   }
 });
+
+test('outbox jobs are parked after consecutive failures only', async () => {
+  const { runRailOnce } = await import('../packages/rails/src/index.js');
+  const { PaystackClient } = await import('../connectors/paystack/src/index.js');
+  const client = new PaystackClient({ secretKey: 'sk_test_hardeningparkedjobs000000', fetch: async () => { throw new Error('no provider call expected'); } });
+  const job = id('obx'), resource = id('col');
+  // Many earlier polls (attempts) but one failure short of the limit.
+  await pool.query("INSERT INTO outbox(id,kind,resource_id,attempts,failures) VALUES($1,'collection_verify',$2,40,23)", [job, resource]);
+  assert.equal(await runRailOnce({ client, onlyResource: resource }), true);
+  let row = (await pool.query('SELECT failures,dead_at,last_error FROM outbox WHERE id=$1', [job])).rows[0];
+  assert.deepEqual([row.failures, row.dead_at, row.last_error], [24, null, 'collection_not_found']);
+  await pool.query('UPDATE outbox SET available_at=now() WHERE id=$1', [job]);
+  await runRailOnce({ client, onlyResource: resource });
+  row = (await pool.query('SELECT failures,dead_at FROM outbox WHERE id=$1', [job])).rows[0];
+  assert.equal(row.failures, 25);
+  assert.ok(row.dead_at);
+  await pool.query('UPDATE outbox SET available_at=now() WHERE id=$1', [job]);
+  assert.equal(await runRailOnce({ client, onlyResource: resource }), false);
+});

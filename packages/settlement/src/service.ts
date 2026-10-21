@@ -84,6 +84,14 @@ export function publicSettlement(row: Record<string, any>) {
 
 export async function submitNativeSettlement(userId: string, settlementId: string, hash: string) {
   if (!hashPattern.test(hash)) throw new SettlementError(400, 'invalid_hash', 'Enter a valid transaction hash');
+  // Look up the visible sender before locking anything; RPC latency must not hold a
+  // row lock or pooled connection. A hash from another sender cannot be claimed.
+  // Not yet visible is allowed: reconciliation still checks the sender, and a claim
+  // proven mismatched releases the hash (uniqueness excludes mismatched rows).
+  const owner = (await pool.query('SELECT network,source_address FROM chain_settlements WHERE id=$1 AND personal_user_id=$2', [settlementId,userId])).rows[0];
+  const sender = owner ? await chainAdapters[owner.network]?.().transactionSender?.(hash.toLowerCase()).catch(() => null) : null;
+  if (owner && sender && sender !== owner.source_address)
+    throw new SettlementError(422, 'transaction_sender_mismatch', 'This transaction was not sent from your wallet');
   return transaction(async c => {
     const row = (await c.query('SELECT * FROM chain_settlements WHERE id=$1 AND personal_user_id=$2 FOR UPDATE', [settlementId,userId])).rows[0];
     if (!row) throw new SettlementError(404, 'settlement_not_found', 'Settlement not found');
@@ -93,11 +101,6 @@ export async function submitNativeSettlement(userId: string, settlementId: strin
     }
     if (row.status !== 'awaiting_submission' || new Date(row.submission_expires_at).getTime() < Date.now())
       throw new SettlementError(409, 'settlement_expired', 'Create a new settlement authorization');
-    // Hashes are globally unique, so a visible transaction from another sender must not
-    // be claimable: otherwise anyone could block a user's settlement from the mempool.
-    const sender = await chainAdapters[row.network]?.().transactionSender?.(hash.toLowerCase()).catch(() => null);
-    if (sender && sender !== row.source_address)
-      throw new SettlementError(422, 'transaction_sender_mismatch', 'This transaction was not sent from your wallet');
     try {
       const updated = (await c.query(`UPDATE chain_settlements SET tx_hash=$2,status='submitted',updated_at=now()
         WHERE id=$1 RETURNING *`, [settlementId,hash.toLowerCase()])).rows[0];

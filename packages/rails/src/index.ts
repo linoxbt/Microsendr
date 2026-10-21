@@ -720,7 +720,7 @@ export async function runRailOnce(
       );
     else
       await pool.query(
-        "UPDATE outbox SET available_at=now()+($3::integer*interval '1 second'),locked_by=NULL,locked_until=NULL,last_error='awaiting_verified_status' WHERE id=$1 AND locked_by=$2",
+        "UPDATE outbox SET available_at=now()+($3::integer*interval '1 second'),locked_by=NULL,locked_until=NULL,last_error='awaiting_verified_status',failures=0 WHERE id=$1 AND locked_by=$2",
         [job.id, token, Math.min(600, 10 * 2 ** Math.min(job.attempts - 1, 6))],
       );
   } catch (error) {
@@ -736,14 +736,16 @@ export async function runRailOnce(
           ? 'provider_unavailable'
           : 'provider_evidence_unavailable';
     // Retries back off and are bounded; exhausted jobs are parked for operator review.
+    // Only consecutive failures count; ordinary status polls reset the streak.
     const limit = code === 'unmapped_provider_event' ? 10 : MAX_OUTBOX_ATTEMPTS;
-    const dead = job.attempts >= limit;
+    const failures = job.failures + 1,
+      dead = failures >= limit;
     await pool.query(
-      "UPDATE outbox SET available_at=now()+($4::integer*interval '1 second'),locked_by=NULL,locked_until=NULL,last_error=$3,dead_at=CASE WHEN $5 THEN now() END WHERE id=$1 AND locked_by=$2",
-      [job.id, token, code, Math.min(3600, 30 * 2 ** Math.min(job.attempts - 1, 7)), dead],
+      "UPDATE outbox SET available_at=now()+($4::integer*interval '1 second'),locked_by=NULL,locked_until=NULL,last_error=$3,failures=$6,dead_at=CASE WHEN $5 THEN now() END WHERE id=$1 AND locked_by=$2",
+      [job.id, token, code, Math.min(3600, 30 * 2 ** Math.min(failures - 1, 7)), dead, failures],
     );
     console.error(JSON.stringify({ level: dead ? 'error' : 'warn', msg: dead ? 'outbox job parked' : 'outbox job failed',
-      job: job.id, kind: job.kind, attempts: job.attempts, code }));
+      job: job.id, kind: job.kind, failures, code }));
     if (job.kind.startsWith('collection'))
       await pool.query(
         "UPDATE collections SET last_error=$2,updated_at=now() WHERE id=$1 AND state IN ('processing','pending','unknown')",

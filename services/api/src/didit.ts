@@ -39,16 +39,21 @@ async function applyStatus(c: Client, current: { id: string; status: string }, s
   await c.query('UPDATE personal_didit_sessions SET status=$2,updated_at=now() WHERE id=$1', [current.id, status]);
 }
 
+let lastCreatingSweep = 0;
 /** Worker job: fetch the decision for a session whose webhook may have been missed. */
 export async function reconcileOneDiditSession(request: typeof fetch = fetch) {
   const apiKey = process.env.DIDIT_API_KEY;
   // A session left in 'creating' by a crash would otherwise block new attempts forever.
-  await pool.query("UPDATE personal_didit_sessions SET status='create_failed',updated_at=now() WHERE status='creating' AND created_at<now()-interval '10 minutes'");
+  if (Date.now() - lastCreatingSweep > 60_000) {
+    lastCreatingSweep = Date.now();
+    await pool.query("UPDATE personal_didit_sessions SET status='create_failed',updated_at=now() WHERE status='creating' AND created_at<now()-interval '10 minutes'");
+  }
   if (!apiKey) return false;
   const due = (await pool.query(`UPDATE personal_didit_sessions SET updated_at=now()
     WHERE id=(SELECT id FROM personal_didit_sessions WHERE provider_session_id IS NOT NULL
       AND status IN ('Not Started','In Progress','Awaiting User','In Review','Resubmitted')
-      AND updated_at<now()-interval '10 minutes' ORDER BY updated_at,id FOR UPDATE SKIP LOCKED LIMIT 1)
+      AND updated_at<now()-interval '10 minutes' AND created_at>now()-interval '30 days'
+      ORDER BY updated_at,id FOR UPDATE SKIP LOCKED LIMIT 1)
     RETURNING id,provider_session_id`)).rows[0];
   if (!due) return false;
   const response = await request(`${API_URL}${due.provider_session_id}/decision/`, {

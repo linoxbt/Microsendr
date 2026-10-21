@@ -99,15 +99,19 @@ use trusted Kora archives and isolated databases.
   stops the others. Failures are logged as JSON lines naming the queue.
 - The worker touches `/tmp/worker-heartbeat` (override with `KORA_WORKER_HEARTBEAT`)
   as iterations complete; the Compose healthcheck marks it unhealthy after two
-  minutes without one.
+  minutes without one. Docker does not restart unhealthy containers on its own:
+  alert on the health status and restart the worker.
 - Outbox jobs that fail 25 times (10 for an unmapped provider event) are parked:
   `SELECT id,kind,attempts,last_error FROM outbox WHERE dead_at IS NOT NULL`.
-  `POST /v1/operations/intents/:id/recover` re-queues a parked payment job.
+  Only consecutive failures count; ordinary status polls reset the streak.
+  `POST /v1/operations/intents/:id/recover` re-queues a parked payment job; after
+  fixing the cause of a parked rail job, run
+  `UPDATE outbox SET dead_at=NULL,failures=0,available_at=now() WHERE id=$1`.
 - Chain settlements whose evidence contradicts the instruction become
   `mismatched`; ones not final after seven days become `expired`. Review both:
   `SELECT id,status,last_error FROM chain_settlements WHERE status IN ('mismatched','expired')`.
 - Personal Paystack operations idle in flight for five minutes are re-verified by
-  reference. A payout Paystack has no record of after an hour releases its
-  reservation.
+  reference for up to 30 days. A payout Paystack has no record of after 24 hours
+  releases its reservation; a checkout with no charge after six hours fails.
 - Applied migrations are checksummed. Editing one fails `pnpm db:migrate`; add a
   new migration instead.

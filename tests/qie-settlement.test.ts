@@ -73,11 +73,15 @@ test('signed QIE settlement is idempotent, hash-unique, and reconciles only matc
       { status: 'mismatched', last_error: 'historical_transaction' });
     // Contradicting evidence is terminal; transient RPC errors back off.
     const contradicted = await fresh(), flaky = await fresh();
-    await submitNativeSettlement(userId,contradicted.id,`0x${randomBytes(32).toString('hex')}`);
+    const contestedHash = `0x${randomBytes(32).toString('hex')}`;
+    await submitNativeSettlement(userId,contradicted.id,contestedHash);
     await submitNativeSettlement(userId,flaky.id,`0x${randomBytes(32).toString('hex')}`);
     const failing = (error: Error): ChainSettlementAdapter => ({ ...adapter, nativeTransferEvidence: async () => { throw error; } });
     await reconcileChainSettlement(contradicted.id,failing(new QieEvidenceMismatch('mismatch')));
     assert.equal((await pool.query('SELECT status FROM chain_settlements WHERE id=$1',[contradicted.id])).rows[0].status,'mismatched');
+    // A claim proven mismatched no longer blocks the hash for its real sender.
+    const rightful = await fresh();
+    assert.equal((await submitNativeSettlement(userId,rightful.id,contestedHash)).tx_hash,contestedHash);
     await reconcileChainSettlement(flaky.id,failing(new Error('timeout')));
     const backoff = (await pool.query("SELECT status,check_failures,next_check_at>now()+interval '20 seconds' AS later FROM chain_settlements WHERE id=$1",[flaky.id])).rows[0];
     assert.deepEqual(backoff, { status: 'unknown', check_failures: 1, later: true });

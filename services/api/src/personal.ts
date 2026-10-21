@@ -161,11 +161,11 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
     const known = Boolean((await pool.query('SELECT 1 FROM personal_users WHERE email=$1', [email])).rowCount);
     await pool.query("INSERT INTO personal_email_challenges(id,email,code_hash,expires_at) VALUES($1,$2,$3,now()+interval '10 minutes')",
       [challengeId, email, codeHash(secret, challengeId, known ? code : randomBytes(16).toString('hex'))]);
-    try { if (known) await sendCode(email, code); }
-    catch {
-      await pool.query('DELETE FROM personal_email_challenges WHERE id=$1', [challengeId]);
-      throw new PaymentError(503, 'email_unavailable', 'Email delivery is temporarily unavailable');
-    }
+    // Delivery runs after the response so its latency and failures cannot reveal
+    // whether the email has an account. A failed send leaves a code nobody receives.
+    if (known)
+      void sendCode(email, code).catch(() =>
+        request.log.warn({ challenge: challengeId }, 'email code delivery failed'));
     reply.header('cache-control', 'no-store');
     return { sent: true, challenge_id: challengeId };
   });
@@ -188,6 +188,9 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
       if (!user) return null;
       // Claiming a previously unverified email invalidates any password planted by another
       // person. A signed-in owner verifying their own email keeps the password they chose.
+      // The presenting session is replaced by the one issued below.
+      if (current?.user_id === user.id)
+        await c.query('DELETE FROM personal_sessions WHERE token_hash=$1', [hashKey(request.cookies.kora_personal!)]);
       if (!user.email_verified_at && current?.user_id === user.id) {
         await c.query('UPDATE personal_users SET email_verified_at=now() WHERE id=$1',[user.id]);
       } else if (!user.email_verified_at) {

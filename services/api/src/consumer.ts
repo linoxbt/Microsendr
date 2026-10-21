@@ -75,14 +75,14 @@ const privateIdentityFields = [
   'region',
   'postal_code',
 ];
-// OWASP scrypt cost (N=2^17, r=8: 128 MiB per derivation). A small semaphore bounds
-// memory under concurrent sign-ins. Legacy N=2^15 hashes still verify and are
+// OWASP scrypt cost (N=2^17, r=8: 128 MiB per derivation). A semaphore of two bounds
+// memory and leaves libuv threadpool workers free for DNS and file IO. Legacy N=2^15 hashes still verify and are
 // upgraded on the next successful login.
 const CURRENT_N = 131072, LEGACY_N = 32768;
 let deriving = 0;
 const waiting: (() => void)[] = [];
 async function derive(value: string, salt: string, N = CURRENT_N) {
-  while (deriving >= 4) await new Promise<void>((resolve) => waiting.push(resolve));
+  while (deriving >= 2) await new Promise<void>((resolve) => waiting.push(resolve));
   deriving++;
   try {
     return await new Promise<Buffer>((resolve, reject) =>
@@ -102,7 +102,10 @@ export async function hashPassword(value: string) {
 const legacyHash = (stored: string | null) => !!stored?.startsWith('scrypt:');
 async function matches(value: string, stored: string | null) {
   const parts = (stored ?? '').split(':');
-  const [salt, hex, N] = parts[0] === 'scrypt2' ? [parts[2], parts[3], Number(parts[1])] : [parts[1], parts[2], LEGACY_N];
+  // Unknown accounts and unparseable hashes pay the current cost, so response time
+  // does not reveal whether an email has an account.
+  const [salt, hex, N] = parts[0] === 'scrypt2' ? [parts[2], parts[3], Number(parts[1])]
+    : parts[0] === 'scrypt' ? [parts[1], parts[2], LEGACY_N] : ['', '', CURRENT_N];
   if (![CURRENT_N, LEGACY_N].includes(N)) return false;
   const key = await derive(value, salt || 'microsendr-constant-time-missing-user', N);
   return !!hex && /^[a-f0-9]{128}$/.test(hex) && timingSafeEqual(key, Buffer.from(hex, 'hex'));
@@ -218,7 +221,14 @@ export function registerConsumer(app: FastifyInstance, deps: Dependencies) {
       window_started_at=CASE WHEN personal_auth_limits.window_started_at < now()-interval '15 minutes' THEN now() ELSE personal_auth_limits.window_started_at END RETURNING failures`,
         [limitKey],
       );
-      if (attempt.rows[0].failures > 10)
+      // A looser per-account cap across all addresses stops distributed guessing.
+      const accountLimit = await pool.query(
+        `INSERT INTO personal_auth_limits(email_hash,failures) VALUES($1,1)
+      ON CONFLICT(email_hash) DO UPDATE SET failures=CASE WHEN personal_auth_limits.window_started_at < now()-interval '15 minutes' THEN 1 ELSE personal_auth_limits.failures+1 END,
+      window_started_at=CASE WHEN personal_auth_limits.window_started_at < now()-interval '15 minutes' THEN now() ELSE personal_auth_limits.window_started_at END RETURNING failures`,
+        [hashKey(`${input.email}|*`)],
+      );
+      if (attempt.rows[0].failures > 10 || accountLimit.rows[0].failures > 100)
         throw new PaymentError(429, 'login_limited', 'Too many attempts. Try again in 15 minutes.');
       const user = (
         await pool.query(
@@ -246,7 +256,7 @@ export function registerConsumer(app: FastifyInstance, deps: Dependencies) {
         );
         return { token, csrf };
       });
-      await pool.query('DELETE FROM personal_auth_limits WHERE email_hash=$1', [limitKey]);
+      await pool.query('DELETE FROM personal_auth_limits WHERE email_hash=ANY($1::text[])', [[limitKey, hashKey(`${input.email}|*`)]]);
       // Upgrade a legacy hash outside the session transaction; skip if it changed meanwhile.
       if (legacyHash(user.password_hash))
         await pool.query('UPDATE personal_users SET password_hash=$2 WHERE id=$1 AND password_hash=$3', [

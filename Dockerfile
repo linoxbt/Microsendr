@@ -21,6 +21,7 @@ COPY --from=build --chown=node:node /app/connectors connectors
 COPY --from=build --chown=node:node /app/services services
 COPY --from=build --chown=node:node /app/apps/web/dist apps/web/dist
 USER node
-EXPOSE 4310
+# compose.public.yaml sets PORT=4312; the code default is 4310.
+EXPOSE 4312
 # Node runs as PID 1's child under --init (see compose) and receives SIGTERM directly.
 CMD ["node", "--import", "tsx", "services/api/src/index.ts"]

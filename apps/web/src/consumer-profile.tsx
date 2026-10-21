@@ -196,7 +196,7 @@ export function ConsumerSecurity({
         await consumerRequest('auth/verify', 'POST', { challenge_id: challenge, code });
         setChallenge('');
         await onSaved();
-        setNotice('Email verified. Set a password below to secure your account.');
+        setNotice('Email verified.');
       } else {
         const result = await consumerRequest('auth/start', 'POST', { email: profile.email });
         setChallenge(result.challenge_id);

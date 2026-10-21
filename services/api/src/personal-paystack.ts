@@ -189,7 +189,12 @@ export async function registerPersonalPaystack(app: FastifyInstance, dependencie
 async function verifyCollection(row: Record<string, any>, email: string, client: PaystackClient) {
   if (row.status === 'completed' || row.status === 'failed') return publicOperation(row);
   const raw = await client.verifyCollection(row.reference);
-  if (raw === null) return publicOperation(row);
+  if (raw === null) {
+    // No charge exists for this reference and its checkout has closed: nothing was paid.
+    if (checkoutClosed(row.created_at))
+      return publicOperation((await pool.query("UPDATE personal_paystack_operations SET status='failed',updated_at=now() WHERE id=$1 AND status NOT IN ('completed','failed') RETURNING *", [row.id])).rows[0] ?? row);
+    return publicOperation(row);
+  }
   const receipt = receiptSchema.parse(raw);
   if (receipt.reference !== row.reference || receipt.amount !== String(row.amount_minor) || receipt.customer.email.toLowerCase() !== email.toLowerCase())
     throw new PaymentError(422, 'receipt_mismatch', 'Payment evidence does not match this instruction');
@@ -283,6 +288,7 @@ export async function reconcileOnePersonalPaystack(client?: PaystackClient) {
   const row = (await pool.query(`UPDATE personal_paystack_operations SET updated_at=now()
     WHERE id=(SELECT id FROM personal_paystack_operations
       WHERE status IN ('submitting','checkout_ready','pending','unknown') AND provider_binding=$1 AND updated_at<now()-interval '5 minutes'
+        AND created_at>now()-interval '30 days'
       ORDER BY updated_at,id FOR UPDATE SKIP LOCKED LIMIT 1)
     RETURNING *`, [provider.binding])).rows[0];
   if (!row) return false;
