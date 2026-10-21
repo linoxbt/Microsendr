@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { id, pool, transaction } from '../../../packages/database/src/index.js';
 import { PaymentError } from '../../../packages/payments/src/errors.js';
 import { QieClient, QIE_CHAIN_ID, QIE_EXPLORER, QIE_NETWORK } from '../../../packages/qie/src/index.js';
-import { ensureManagedWallet } from './managed-wallet.js';
+import { ensureManagedWallet, findManagedWallet, managedWalletConfigured } from './managed-wallet.js';
 
 type Person = { user_id: string; account_id: string };
 const addressSchema = z.string().regex(/^0x[a-fA-F0-9]{40}$/);
@@ -44,7 +44,8 @@ export function registerPersonalWallets(
 ) {
   app.get('/personal/api/wallets', async request => {
     const person = await required(request);
-    const managed = await ensureManagedWallet(person.user_id, person.account_id).catch(() => null);
+    // Read-only: provisioning happens on registration, login or the explicit POST below.
+    const managed = await findManagedWallet(person.user_id, person.account_id);
     const rows = await pool.query(
       `SELECT id,address,label,network,created_at FROM personal_chain_wallets
        WHERE personal_user_id=$1 AND account_id=$2 AND status='active' ORDER BY created_at,id`,
@@ -55,9 +56,21 @@ export function registerPersonalWallets(
         ...(managed ? [{ ...managed, label: 'Your wallet', managed: true }] : []),
         ...rows.rows.map(row => ({ ...row, address: getAddress(row.address), managed: false })),
       ],
-      provisioning_available: !!(process.env.PRIVY_APP_ID && process.env.PRIVY_APP_SECRET),
+      provisioning_available: managedWalletConfigured(),
     };
   });
+
+  app.post('/personal/api/wallets/managed',
+    { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async request => {
+      const person = await required(request, true);
+      z.object({}).strict().parse(request.body ?? {});
+      const managed = await ensureManagedWallet(person.user_id, person.account_id).catch(error => {
+        request.log.warn({ reason: (error as { reason?: string }).reason ?? 'unknown' }, 'managed wallet provisioning failed');
+        throw error;
+      });
+      if (!managed) throw new PaymentError(503, 'wallet_provisioning_unconfigured', 'Account wallets are not available yet.');
+      return { ...managed, label: 'Your wallet', managed: true };
+    });
 
   app.post('/personal/api/wallets/challenge',
     { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async request => {

@@ -58,12 +58,17 @@ import { registerRails } from './rails.js';
 import { registerProduct } from './product.js';
 import { registerPersonal, type PersonalOptions } from './personal.js';
 import { registerDidit } from './didit.js';
+import { clientIp, trustedProxies } from './client-ip.js';
+// Keep in step with the [[headers]] block in netlify.toml, which serves production.
+export const contentSecurityPolicy =
+  "default-src 'self'; script-src 'self' https://challenges.cloudflare.com https://js.hcaptcha.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://auth.privy.io https://*.hcaptcha.com; font-src 'self'; connect-src 'self' https://auth.privy.io https://api.privy.io https://challenges.cloudflare.com https://*.hcaptcha.com https://verification.didit.me https://rpc1mainnet.qie.digital; frame-src https://auth.privy.io https://challenges.cloudflare.com https://*.hcaptcha.com https://verify.didit.me; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'";
 import { SettlementError } from '../../../packages/settlement/src/service.js';
 import { page, type ListTable } from './pagination.js';
 declare module 'fastify' {
   interface FastifyRequest {
     principal: Principal | null;
     rawBody: string;
+    clientIp: string;
   }
 }
 function publicQuote(q: Record<string, unknown>) {
@@ -116,15 +121,21 @@ export async function buildApi(options: ApiOptions = {}) {
         }
       : false,
     bodyLimit: 65536,
+    trustProxy: trustedProxies(),
     requestIdHeader: false,
     genReqId: () => id('req'),
     ajv: { customOptions: { removeAdditional: false, useDefaults: false, coerceTypes: false } },
   });
   app.decorateRequest('principal', null);
   app.decorateRequest('rawBody', '');
+  app.decorateRequest('clientIp', '');
+  app.addHook('onRequest', async (request) => {
+    request.clientIp = await clientIp(request);
+  });
   await app.register(rateLimit, {
     max: options.rateLimitMax ?? 300,
     timeWindow: '1 minute',
+    keyGenerator: (request) => request.clientIp || request.ip,
     allowList: (request) => request.method === 'GET' && /^\/(?:assets|images)\//.test(request.url),
   });
   await app.register(cookie);
@@ -343,10 +354,9 @@ export async function buildApi(options: ApiOptions = {}) {
       root: webRoot,
       prefix: '/',
       setHeaders: (res) => {
-        res.header(
-          'Content-Security-Policy',
-          "default-src 'self'; script-src 'self' https://challenges.cloudflare.com https://js.hcaptcha.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://auth.privy.io https://*.hcaptcha.com; font-src 'self'; connect-src 'self' https://auth.privy.io https://api.privy.io https://challenges.cloudflare.com https://*.hcaptcha.com; frame-src https://auth.privy.io https://challenges.cloudflare.com https://*.hcaptcha.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
-        );
+        res.header('Content-Security-Policy', contentSecurityPolicy);
+        res.header('X-Content-Type-Options', 'nosniff');
+        res.header('Referrer-Policy', 'strict-origin-when-cross-origin');
       },
     });
   app.setNotFoundHandler((request, reply) => {

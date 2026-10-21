@@ -1,6 +1,8 @@
 services:
   postgres:
     image: postgres:17-alpine
+    # Fixed name so `pnpm backup:drill` finds the container by default.
+    container_name: kora-postgres
     ports:
       - "127.0.0.1:55432:5432"
     environment:

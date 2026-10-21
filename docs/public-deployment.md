@@ -5,6 +5,7 @@ proxies API paths to `https://kora-api.13-140-188-185.sslip.io`. The API, worker
 and PostgreSQL run on the Microsendr host with `compose.public.yaml`. The database is
 stored in the `kora-public-postgres` Docker volume. Fiat providers remain in
 test mode. Linked native QIEV3 wallets use QIE Mainnet and can move real assets.
+See SECURITY.md for the custody boundary.
 
 ## Host configuration
 
@@ -14,8 +15,21 @@ Create an ignored, mode `600` `.env.public` at the repository root. Set
 random secrets. Set `KORA_CONSOLE_ORIGINS` to the exact Netlify HTTPS origin.
 Keep `KORA_MODE=sandbox`, and leave `PAYSTACK_SECRET_KEY` blank for the simulator.
 Never commit this file. The Compose file supplies the internal `DATABASE_URL`.
+The image runs with `NODE_ENV=production`, which requires `DATABASE_URL` and
+`KORA_MODE`, refuses an empty `KORA_CONSOLE_ORIGINS`, forces Secure cookies and
+disables the sandbox fixture routes (self-approval, simulated NGN, P2P and
+Personal Paystack test routes). `KORA_AUTH_SECRET` must be at least 32 bytes.
+
+Set the same random `KORA_PROXY_SIGNING_SECRET` in `.env.public` and in the
+Netlify site environment. Netlify signs proxied API requests with it, and the
+API then rate-limits by the real client address (`X-Nf-Client-Connection-Ip`)
+instead of the proxy's. Without it, all traffic shares the proxy's limits.
+
+Set `PRIVY_APP_ID` and a rotated, server-only `PRIVY_APP_SECRET` to issue each
+Personal account a managed wallet address. Outbound transfers from managed
+wallets are not built, so the client never shows that address for deposits.
 Personal registration and login use email and password with a server-side scrypt
-hash. Configure `SMTP_*` and `KORA_AUTH_SECRET` for email verification and
+hash (N=2^17; older N=2^15 hashes upgrade on login). Configure `SMTP_*` and `KORA_AUTH_SECRET` for email verification and
 password recovery. A wallet is optional at signup. Later, a user can link an
 existing QIE-compatible EVM wallet by signing an account-specific challenge.
 The wallet provider holds the signing key; the application never receives it.

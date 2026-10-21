@@ -2,11 +2,11 @@ import { spawn } from 'node:child_process';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { mkdir, writeFile, readFile, stat } from 'node:fs/promises';
 import pg from 'pg';
-import { pool } from '../packages/database/src/index.js';
+import { localDatabaseUrl, pool } from '../packages/database/src/index.js';
 const container = process.env.KORA_POSTGRES_CONTAINER ?? 'kora-postgres';
 if (!/^[a-zA-Z0-9_-]+$/.test(container)) throw new Error('Invalid PostgreSQL container identifier');
 const source = new URL(
-  process.env.DATABASE_URL ?? 'postgres://kora:kora_local_only@127.0.0.1:55432/kora',
+  process.env.DATABASE_URL ?? localDatabaseUrl,
 );
 const database = decodeURIComponent(source.pathname.slice(1)),
   user = decodeURIComponent(source.username);

@@ -159,9 +159,6 @@ test('a slow delivery queue does not block payment progress or shutdown', async 
       },
     ],
     () => running,
-    () => {
-      running = false;
-    },
   );
   await progressed;
   assert.equal(delivered, false);
@@ -171,46 +168,29 @@ test('a slow delivery queue does not block payment progress or shutdown', async 
   await worker;
   assert.equal(delivered, true);
 });
-test('queue errors stop new work and wait for in-flight IO before reporting failure', async () => {
+test('a failing queue is reported and retried with backoff while other queues keep working', async () => {
   let running = true,
-    settled = false,
-    release!: () => void,
-    stopped!: () => void;
-  const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    }),
-    signal = new Promise<void>((resolve) => {
-      stopped = resolve;
-    });
+    failures = 0,
+    healthy = 0;
+  const errors: number[] = [];
   const worker = runQueues(
     [
       async () => {
-        await gate;
-        return false;
+        failures++;
+        if (failures >= 3 && healthy >= 3) running = false;
+        throw new Error('Queue failure fixture');
       },
       async () => {
-        throw new Error('Queue failure fixture');
+        healthy++;
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        return true;
       },
     ],
     () => running,
-    () => {
-      running = false;
-      stopped();
-    },
+    { onError: (queue, _error, count) => errors.push(queue * 100 + count), backoffMs: () => 5 },
   );
-  worker.then(
-    () => {
-      settled = true;
-    },
-    () => {
-      settled = true;
-    },
-  );
-  const rejected = assert.rejects(worker, /Queue failure fixture/);
-  await signal;
-  assert.equal(running, false);
-  assert.equal(settled, false);
-  release();
-  await rejected;
-  assert.equal(settled, true);
+  await worker;
+  assert.ok(failures >= 3);
+  assert.ok(healthy >= 3);
+  assert.deepEqual(errors.slice(0, 3), [1, 2, 3]);
 });

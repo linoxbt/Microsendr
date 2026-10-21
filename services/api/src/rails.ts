@@ -17,6 +17,7 @@ import {
 import {
   resolveBank,
   registerBank,
+  createBankRecipient,
   localPayout,
   createCollection,
   collectionView,
@@ -57,21 +58,25 @@ export async function registerRails(app: FastifyInstance, injected?: PaystackCli
     if (!row) throw new PaymentError(404, 'resource_not_found', 'Resource not found');
     return row;
   }
-  function write<T>(
+  function write<T, P = undefined>(
     url: string,
     scope: Scope,
     schema: z.ZodType<T>,
-    run: (c: Client, m: string, input: T, r: FastifyRequest) => Promise<MutationResult>,
+    run: (c: Client, m: string, input: T, r: FastifyRequest, prepared: P) => Promise<MutationResult>,
+    // Idempotent provider reads run here, before the transaction opens, so a slow
+    // provider never holds a pooled connection or the idempotency lock.
+    prepare?: (m: string, input: T, r: FastifyRequest) => Promise<P>,
   ) {
     app.post(url, async (r, reply) => {
       const m = merchant(r, scope),
         input = schema.parse(r.body ?? {});
+      const prepared = (prepare ? await prepare(m, input, r) : undefined) as P;
       const result = await mutate(
         m,
         `POST ${r.routeOptions.url}:${JSON.stringify(r.params)}`,
         r.headers['idempotency-key'],
         input,
-        (c) => run(c, m, input, r),
+        (c) => run(c, m, input, r, prepared),
       );
       if (result.replayed) reply.header('idempotency-replayed', 'true');
       return reply.status(result.status).send(result.body);
@@ -98,18 +103,25 @@ export async function registerRails(app: FastifyInstance, injected?: PaystackCli
     merchant(r, 'customers:read');
     return { data: await client().banks() };
   });
-  write('/v1/bank_resolutions', 'customers:write', bankResolutionSchema, async (c, m, input) => ({
-    status: 201,
-    body: await resolveBank(c, m, client(), input),
-  }));
+  write(
+    '/v1/bank_resolutions',
+    'customers:write',
+    bankResolutionSchema,
+    async (c, m, input, _r, resolved: { account_name: string }) => ({
+      status: 201,
+      body: await resolveBank(c, m, client(), input, resolved),
+    }),
+    (_m, input) => client().resolveAccount(input.account_number, input.bank_code),
+  );
   write(
     '/v1/customers/:id/bank_accounts',
     'customers:write',
     bankAccountSchema,
-    async (c, m, input, r) => ({
+    async (c, m, input, r, recipient: { recipient_code: string }) => ({
       status: 201,
-      body: await registerBank(c, m, resourceId(r), client(), input),
+      body: await registerBank(c, m, resourceId(r), client(), input, recipient),
     }),
+    (m, input) => createBankRecipient(pool, m, client(), input.resolution_id),
   );
   app.get('/v1/customers/:id/bank_accounts', async (r) => {
     const row = await owned('customers', r, 'customers:read');

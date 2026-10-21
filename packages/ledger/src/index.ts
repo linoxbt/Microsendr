@@ -87,6 +87,8 @@ export async function balances(merchantId: string) {
   );
   return result.rows as { asset: AssetId; asset_position_id: string; purpose: string; minor: string }[];
 }
+const checked = (a: { merchant_id: string | null; owner_account_id: string | null; purpose: string }) =>
+  !!(a.merchant_id || a.owner_account_id) && ['available', 'pending', 'reserved'].includes(a.purpose);
 // Compose with the domain write inside the same PostgreSQL transaction.
 export async function postJournal(c: Client, journal: Journal): Promise<string> {
   if (!journal.reference || !journal.description || journal.entries.length < 2)
@@ -121,11 +123,15 @@ export async function postJournal(c: Client, journal: Journal): Promise<string> 
     return existing.id;
   }
   const accountIds = [...new Set(entries.map((e) => e.account_id))].sort();
+  // Only owned balance accounts need a row lock to serialize their non-negative check.
+  // Shared system accounts (clearing, fees, funding) are never locked, so they do not
+  // serialize every posting in the system. Locks are still taken in id order.
   const accounts = (
-    await c.query('SELECT * FROM ledger_accounts WHERE id=ANY($1::text[]) ORDER BY id FOR UPDATE', [
-      accountIds,
-    ])
+    await c.query('SELECT * FROM ledger_accounts WHERE id=ANY($1::text[]) ORDER BY id', [accountIds])
   ).rows;
+  const guarded = accounts.filter(checked).map((a) => a.id);
+  if (guarded.length)
+    await c.query('SELECT id FROM ledger_accounts WHERE id=ANY($1::text[]) ORDER BY id FOR UPDATE', [guarded]);
   if (accounts.length !== accountIds.length)
     throw new LedgerError('account_not_found', 'Journal refers to an unknown account');
   const totals = new Map<string, bigint>();
@@ -134,11 +140,7 @@ export async function postJournal(c: Client, journal: Journal): Promise<string> 
     for (const e of entries.filter((e) => e.account_id === a.id))
       delta += (e.side === 'debit' ? 1n : -1n) * minor(e.amount);
     totals.set(a.asset_position_id, (totals.get(a.asset_position_id) ?? 0n) + delta);
-    if (
-      (a.merchant_id || a.owner_account_id) &&
-      ['available', 'pending', 'reserved'].includes(a.purpose) &&
-      (await balance(c, a.id)) + delta < 0n
-    )
+    if (checked(a) && (await balance(c, a.id)) + delta < 0n)
       throw new LedgerError('insufficient_funds', 'Insufficient available or reserved funds');
   }
   if ([...totals.values()].some((total) => total !== 0n))
@@ -349,10 +351,10 @@ export async function reverseJournal(originalId: string, reference: string, reas
 }
 export async function invariantReport() {
   const unbalanced = await pool.query(
-    "SELECT e.journal_id,a.asset FROM ledger_entries e JOIN ledger_accounts a ON a.id=e.account_id GROUP BY e.journal_id,a.asset HAVING SUM(CASE WHEN side='debit' THEN amount ELSE -amount END)<>0",
+    "SELECT e.journal_id,a.asset_position_id FROM ledger_entries e JOIN ledger_accounts a ON a.id=e.account_id GROUP BY e.journal_id,a.asset_position_id HAVING SUM(CASE WHEN side='debit' THEN amount ELSE -amount END)<>0",
   );
   const negative = await pool.query(
-    "SELECT a.id FROM ledger_accounts a JOIN ledger_entries e ON e.account_id=a.id WHERE a.merchant_id IS NOT NULL AND a.purpose IN ('available','reserved') GROUP BY a.id HAVING SUM(CASE WHEN side='debit' THEN amount ELSE -amount END)<0",
+    "SELECT a.id FROM ledger_accounts a JOIN ledger_entries e ON e.account_id=a.id WHERE (a.merchant_id IS NOT NULL OR a.owner_account_id IS NOT NULL) AND a.purpose IN ('available','pending','reserved') GROUP BY a.id HAVING SUM(CASE WHEN side='debit' THEN amount ELSE -amount END)<0",
   );
   const empty = await pool.query(
     'SELECT id FROM journals WHERE NOT EXISTS(SELECT 1 FROM ledger_entries e WHERE e.journal_id=journals.id)',

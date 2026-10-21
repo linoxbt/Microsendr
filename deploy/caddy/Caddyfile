@@ -1,4 +1,11 @@
 kora-api.13-140-188-185.sslip.io {
     encode gzip
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        -Server
+    }
+    # Caddy replaces any client-supplied X-Forwarded-For with the connecting address;
+    # the API trusts only this private hop (KORA_TRUSTED_PROXIES).
     reverse_proxy api:4312
 }

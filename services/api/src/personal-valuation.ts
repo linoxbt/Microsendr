@@ -8,9 +8,10 @@ let cached: { prices: Prices; expires: number } | undefined;
 let pending: Promise<Prices | null> | undefined;
 
 function priceUnits(value: string): bigint | null {
-  if (!/^(?:0|[1-9]\d*)(?:\.\d{1,8})?$/.test(value)) return null;
+  // Explorers report up to 18 decimals; anything past 8 is below display precision.
+  if (!/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)) return null;
   const [whole, fraction = ''] = value.split('.');
-  const units = BigInt(whole) * 100_000_000n + BigInt(fraction.padEnd(8, '0'));
+  const units = BigInt(whole) * 100_000_000n + BigInt(fraction.slice(0, 8).padEnd(8, '0'));
   return units > 0n ? units : null;
 }
 
@@ -30,6 +31,10 @@ async function explorerPrices(): Promise<Prices | null> {
       if (typeof qie !== 'string' || typeof qusdc !== 'string' ||
         !priceUnits(qie) || !priceUnits(qusdc) ||
         token.address?.toLowerCase() !== QUSDC.toLowerCase()) return null;
+      // A single explorer is the price source, so implausible values fail closed: the
+      // dollar token must hold its peg and keep the six decimals balances are read with.
+      const peg = priceUnits(qusdc)!;
+      if (String(token.decimals) !== '6' || peg < 95_000_000n || peg > 105_000_000n) return null;
       const prices = { qie, qusdc, checked_at: new Date().toISOString() };
       cached = { prices, expires: Date.now() + CACHE_MS };
       return prices;

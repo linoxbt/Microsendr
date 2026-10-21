@@ -333,9 +333,9 @@ export async function dailyReport(c: Client, p: Principal, day: string) {
     await c.query(
       `SELECT jsonb_build_object(
  'snapshot_at',statement_timestamp(),'day',$2::text,'period_complete',$2::date<(now() AT TIME ZONE 'UTC')::date,
- 'unbalanced_journals',(SELECT count(*) FROM (SELECT e.journal_id,a.asset FROM ledger_entries e JOIN ledger_accounts a ON a.id=e.account_id GROUP BY e.journal_id,a.asset HAVING SUM(CASE WHEN e.side='debit' THEN e.amount ELSE -e.amount END)<>0) bad),
+ 'unbalanced_journals',(SELECT count(*) FROM (SELECT e.journal_id,a.asset_position_id FROM ledger_entries e JOIN ledger_accounts a ON a.id=e.account_id GROUP BY e.journal_id,a.asset_position_id HAVING SUM(CASE WHEN e.side='debit' THEN e.amount ELSE -e.amount END)<>0) bad),
  'empty_journals',(SELECT count(*) FROM journals j WHERE NOT EXISTS(SELECT 1 FROM ledger_entries e WHERE e.journal_id=j.id)),
- 'negative_accounts',(SELECT count(*) FROM (SELECT a.id FROM ledger_accounts a JOIN ledger_entries e ON e.account_id=a.id WHERE a.merchant_id=$1 AND a.purpose IN ('available','reserved') GROUP BY a.id HAVING SUM(CASE WHEN e.side='debit' THEN e.amount ELSE -e.amount END)<0) bad),
+ 'negative_accounts',(SELECT count(*) FROM (SELECT a.id FROM ledger_accounts a JOIN ledger_entries e ON e.account_id=a.id WHERE a.merchant_id=$1 AND a.purpose IN ('available','pending','reserved') GROUP BY a.id HAVING SUM(CASE WHEN e.side='debit' THEN e.amount ELSE -e.amount END)<0) bad),
  'open_intents',(SELECT count(*) FROM intents WHERE merchant_id=$1 AND state IN ('processing','unknown')),
  'missing_receipts',(SELECT count(*) FROM intents i WHERE i.merchant_id=$1 AND i.state='succeeded' AND NOT EXISTS(SELECT 1 FROM instructions ins JOIN receipts r ON r.instruction_id=ins.id WHERE ins.intent_id=i.id)),
  'unresolved_reconciliation',(SELECT count(*) FROM reconciliation_items r JOIN intents i ON i.id=r.intent_id WHERE i.merchant_id=$1 AND r.state='open'),

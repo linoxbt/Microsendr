@@ -14,6 +14,7 @@ import type { PaystackClient } from '../../../connectors/paystack/src/index.js';
 import { registerPersonalPaystack } from './personal-paystack.js';
 import { registerConsumer } from './consumer.js';
 import { registerPersonalWallets, requireLinkedWallet } from './personal-wallets.js';
+import { authSecret, requireOrigin, sandboxFixturesEnabled, secureCookie } from './config.js';
 
 const emailSchema = z.string().trim().toLowerCase().email().max(254);
 const minorSchema = z.string().regex(/^[1-9][0-9]{0,11}$/);
@@ -23,6 +24,7 @@ const personalAccount = (accountId: string) => `personal:${accountId}:NGN:availa
 export interface PersonalOptions {
   sendCode?: (email: string, code: string) => Promise<void>;
   codeSecret?: string;
+  sandboxFixtures?: boolean;
 }
 
 export function mailer(): PersonalOptions['sendCode'] | undefined {
@@ -45,12 +47,7 @@ export function mailer(): PersonalOptions['sendCode'] | undefined {
 }
 
 function origin(request: FastifyRequest) {
-  const current = request.headers.origin;
-  const allowed = (process.env.KORA_CONSOLE_ORIGINS ?? 'http://127.0.0.1:4310,http://localhost:4310,http://localhost:5173,http://127.0.0.1:5173,http://127.0.0.1:5176,http://localhost:5176')
-    .split(',').map((s) => s.trim());
-  if (typeof current !== 'string' || !allowed.includes(current))
-    throw new PaymentError(403, 'origin_denied', 'This origin is not allowed');
-  return current;
+  return requireOrigin(request);
 }
 export function codeHash(secret: string, challengeId: string, code: string) {
   return createHmac('sha256', secret).update(`${challengeId}:${code}`).digest('hex');
@@ -74,7 +71,7 @@ function csrf(request: FastifyRequest, row: { csrf_token: string }) {
       !timingSafeEqual(Buffer.from(token), Buffer.from(row.csrf_token)))
     throw new PaymentError(403, 'csrf_invalid', 'Refresh your session and try again');
 }
-async function required(request: FastifyRequest, write = false) {
+export async function required(request: FastifyRequest, write = false) {
   const row = await session(request);
   if (!row) throw new PaymentError(401, 'personal_login_required', 'Sign in to your Personal account');
   if (write) csrf(request, row);
@@ -87,11 +84,11 @@ function publicSession(row: Awaited<ReturnType<typeof required>>) {
 }
 function setCookie(request: FastifyRequest, reply: FastifyReply, token: string) {
   reply.setCookie('kora_personal', token, { httpOnly: true, sameSite: 'strict',
-    secure: origin(request).startsWith('https:'), path: '/', maxAge: 86400 });
+    secure: secureCookie(origin(request)), path: '/', maxAge: 86400 });
 }
 
 export async function registerPersonal(app: FastifyInstance, options: PersonalOptions = {}, privyConfig: PrivyConfig = privyConfiguration(), paystackClient?: PaystackClient) {
-  const secret = options.codeSecret ?? process.env.KORA_AUTH_SECRET;
+  const secret = authSecret(options.codeSecret);
   const sendCode = options.sendCode ?? mailer();
   const verifier = privyVerifier(privyConfig);
   registerConsumer(app, { required, origin, setCookie, emailEnabled: !!secret && !!sendCode });
@@ -159,9 +156,12 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
       throw new PaymentError(429, 'code_recently_sent', 'Wait a minute before requesting another code');
     const challengeId = id('otp');
     const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+    // Codes sign in to existing accounts only; registration collects the full profile.
+    // The response is identical for unknown emails, which never receive a code.
+    const known = Boolean((await pool.query('SELECT 1 FROM personal_users WHERE email=$1', [email])).rowCount);
     await pool.query("INSERT INTO personal_email_challenges(id,email,code_hash,expires_at) VALUES($1,$2,$3,now()+interval '10 minutes')",
-      [challengeId, email, codeHash(secret, challengeId, code)]);
-    try { await sendCode(email, code); }
+      [challengeId, email, codeHash(secret, challengeId, known ? code : randomBytes(16).toString('hex'))]);
+    try { if (known) await sendCode(email, code); }
     catch {
       await pool.query('DELETE FROM personal_email_challenges WHERE id=$1', [challengeId]);
       throw new PaymentError(503, 'email_unavailable', 'Email delivery is temporarily unavailable');
@@ -173,6 +173,7 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
     origin(request);
     if (!secret || !sendCode) throw new PaymentError(503, 'email_unavailable', 'Email sign-in is not configured');
     const { challenge_id, code } = z.object({ challenge_id: z.string().regex(/^otp_[a-f0-9]{32}$/), code: z.string().regex(/^[0-9]{6}$/) }).strict().parse(request.body);
+    const current = await session(request);
     const result = await transaction(async (c) => {
       const challenge = (await c.query('SELECT * FROM personal_email_challenges WHERE id=$1 FOR UPDATE', [challenge_id])).rows[0];
       if (!challenge || challenge.consumed_at || challenge.attempts >= 5 || new Date(challenge.expires_at).getTime() <= Date.now())
@@ -183,10 +184,13 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
         return null;
       }
       await c.query('UPDATE personal_email_challenges SET consumed_at=now() WHERE id=$1', [challenge_id]);
-      await c.query('INSERT INTO personal_users(id,email,email_verified_at) VALUES($1,$2,now()) ON CONFLICT(email) DO NOTHING', [id('usr'), challenge.email]);
       const user = (await c.query('SELECT id,email_verified_at FROM personal_users WHERE email=$1 FOR UPDATE', [challenge.email])).rows[0];
-      // Claiming a previously unverified email invalidates any password planted by another person.
-      if (!user.email_verified_at) {
+      if (!user) return null;
+      // Claiming a previously unverified email invalidates any password planted by another
+      // person. A signed-in owner verifying their own email keeps the password they chose.
+      if (!user.email_verified_at && current?.user_id === user.id) {
+        await c.query('UPDATE personal_users SET email_verified_at=now() WHERE id=$1',[user.id]);
+      } else if (!user.email_verified_at) {
         await c.query('UPDATE personal_users SET password_hash=NULL,email_verified_at=now() WHERE id=$1',[user.id]);
         await c.query('DELETE FROM personal_sessions WHERE personal_user_id=$1',[user.id]);
       }
@@ -211,21 +215,14 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
     return row ? publicSession(row) : { authenticated: false };
   });
   app.post('/personal/api/logout', async (request, reply) => {
-    await required(request, true);
-    await pool.query('DELETE FROM personal_sessions WHERE token_hash=$1', [hashKey(request.cookies.kora_personal!)]);
+    // Always clear the cookie, even for an expired session; the Origin check stops
+    // cross-site sign-out and only the presented token is revoked.
+    origin(request);
+    const token = request.cookies.kora_personal;
+    if (token && /^[a-f0-9]{64}$/.test(token))
+      await pool.query('DELETE FROM personal_sessions WHERE token_hash=$1', [hashKey(token)]);
     reply.clearCookie('kora_personal', { path: '/' });
     return { authenticated: false };
-  });
-  app.get('/personal/api/home', async (request) => {
-    const row = await required(request);
-    const available = await pool.connect();
-    try {
-      const amount = await balance(available, personalAccount(row.account_id));
-      const funded = Boolean((await available.query('SELECT 1 FROM personal_sandbox_funding WHERE personal_user_id=$1', [row.user_id])).rowCount);
-      return { account_id: row.account_id, email: row.email, kyc_state: row.kyc_state,
-        display_currency: row.display_currency, sandbox_funded: funded,
-        balance: { asset_position_id: ngn, asset: 'NGN', available_minor: amount.toString(), pending_minor: '0', held_minor: '0', simulated: true } };
-    } finally { available.release(); }
   });
   app.get('/personal/api/qie/balance', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request) => {
     const person = await required(request);
@@ -278,8 +275,24 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
     if (!record) throw new PaymentError(404,'settlement_not_found','Settlement not found');
     return publicSettlement(record);
   });
+  if (!(options.sandboxFixtures ?? sandboxFixturesEnabled())) return;
+  // Everything below is a local/CI fixture: simulated NGN and Paystack test mode.
+  app.get('/personal/api/home', async (request) => {
+    const row = await required(request);
+    const available = await pool.connect();
+    try {
+      const amount = await balance(available, personalAccount(row.account_id));
+      const funded = Boolean((await available.query('SELECT 1 FROM personal_sandbox_funding WHERE personal_user_id=$1', [row.user_id])).rowCount);
+      return { account_id: row.account_id, email: row.email, kyc_state: row.kyc_state,
+        display_currency: row.display_currency, sandbox_funded: funded,
+        balance: { asset_position_id: ngn, asset: 'NGN', available_minor: amount.toString(), pending_minor: '0', held_minor: '0', simulated: true } };
+    } finally { available.release(); }
+  });
   app.post('/personal/api/sandbox/verify', async (request) => {
     const row = await required(request, true);
+    const verified = (await pool.query('SELECT email_verified_at FROM personal_users WHERE id=$1', [row.user_id])).rows[0];
+    if (!verified?.email_verified_at)
+      throw new PaymentError(403, 'verified_email_required', 'Verify your email before enabling sandbox access');
     const input = z.object({ residence_country: z.literal('NG'), acknowledge_simulation: z.literal(true) }).strict().parse(request.body);
     void input;
     await pool.query("UPDATE personal_users SET residence_country='NG',kyc_state='sandbox_approved',updated_at=now() WHERE id=$1", [row.user_id]);
@@ -315,7 +328,7 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
           throw new PaymentError(409, 'idempotency_conflict', 'That request key was used for a different transfer');
         return { id: existing.id, amount_minor, recipient_email, status: 'completed', simulated: true };
       }
-      const recipient = (await c.query("SELECT a.id FROM personal_users u JOIN kora_accounts a ON a.personal_user_id=u.id WHERE u.email=$1 AND u.kyc_state='sandbox_approved' AND a.status='active'", [recipient_email])).rows[0];
+      const recipient = (await c.query("SELECT a.id FROM personal_users u JOIN kora_accounts a ON a.personal_user_id=u.id WHERE u.email=$1 AND u.email_verified_at IS NOT NULL AND u.kyc_state='sandbox_approved' AND a.status='active'", [recipient_email])).rows[0];
       if (!recipient || recipient.id === row.account_id)
         throw new PaymentError(422, 'recipient_unavailable', 'Choose another eligible Microsendr Personal recipient');
       const transferId = id('trf');

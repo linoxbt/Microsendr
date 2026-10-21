@@ -173,22 +173,30 @@ export class PaystackClient {
       .parse(await this.request('GET', '/balance'));
   }
   async statement() {
-    return z
-      .array(
-        z.object({
-          id: wireId,
-          domain: z.literal('test'),
-          currency: z.string(),
-          difference: z
-            .union([z.string().regex(/^-?\d+$/), z.number().int().safe()])
-            .transform(String),
-          model_responsible: z.string(),
-          model_row: wireId,
-          createdAt: z.string(),
-        }),
-      )
-      .max(1000)
-      .parse(await this.request('GET', '/balance/ledger'));
+    const line = z.object({
+      id: wireId,
+      domain: z.literal('test'),
+      currency: z.string(),
+      difference: z
+        .union([z.string().regex(/^-?\d+$/), z.number().int().safe()])
+        .transform(String),
+      model_responsible: z.string(),
+      model_row: wireId,
+      createdAt: z.string(),
+    });
+    // The ledger endpoint is paginated; reconciliation must see every line, not page one.
+    const perPage = 100,
+      lines: z.infer<typeof line>[] = [];
+    for (let page = 1; ; page++) {
+      if (page > 100)
+        throw new ProviderError('unknown', 'Provider statement exceeds the reconciliation limit', true);
+      const batch = z
+        .array(line)
+        .max(perPage)
+        .parse(await this.request('GET', `/balance/ledger?perPage=${perPage}&page=${page}`));
+      lines.push(...batch);
+      if (batch.length < perPage) return lines;
+    }
   }
   async banks() {
     return z

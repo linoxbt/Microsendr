@@ -22,6 +22,8 @@ export interface ChainSettlementAdapter {
   readonly requiredConfirmations: bigint;
   transactionUrl(hash: string): string;
   headBlock(): Promise<bigint>;
+  /** Sender of a broadcast transaction, or null while it is not yet visible. */
+  transactionSender?(hash: string): Promise<string | null>;
   nativeTransferEvidence(hash: string, instruction: NativeTransferInstruction): Promise<SettlementEvidence>;
 }
 

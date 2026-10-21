@@ -75,19 +75,36 @@ const privateIdentityFields = [
   'region',
   'postal_code',
 ];
-const derive = (value: string, salt: string) =>
-  new Promise<Buffer>((resolve, reject) =>
-    scrypt(value, salt, 64, { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }, (error, key) =>
-      error ? reject(error) : resolve(key),
-    ),
-  );
+// OWASP scrypt cost (N=2^17, r=8: 128 MiB per derivation). A small semaphore bounds
+// memory under concurrent sign-ins. Legacy N=2^15 hashes still verify and are
+// upgraded on the next successful login.
+const CURRENT_N = 131072, LEGACY_N = 32768;
+let deriving = 0;
+const waiting: (() => void)[] = [];
+async function derive(value: string, salt: string, N = CURRENT_N) {
+  while (deriving >= 4) await new Promise<void>((resolve) => waiting.push(resolve));
+  deriving++;
+  try {
+    return await new Promise<Buffer>((resolve, reject) =>
+      scrypt(value, salt, 64, { N, r: 8, p: 1, maxmem: 160 * 1024 * 1024 }, (error, key) =>
+        error ? reject(error) : resolve(key),
+      ),
+    );
+  } finally {
+    deriving--;
+    waiting.shift()?.();
+  }
+}
 export async function hashPassword(value: string) {
   const salt = randomBytes(16).toString('hex');
-  return `scrypt:${salt}:${(await derive(value, salt)).toString('hex')}`;
+  return `scrypt2:${CURRENT_N}:${salt}:${(await derive(value, salt)).toString('hex')}`;
 }
+const legacyHash = (stored: string | null) => !!stored?.startsWith('scrypt:');
 async function matches(value: string, stored: string | null) {
-  const [, salt, hex] = (stored ?? '').split(':');
-  const key = await derive(value, salt || 'microsendr-constant-time-missing-user');
+  const parts = (stored ?? '').split(':');
+  const [salt, hex, N] = parts[0] === 'scrypt2' ? [parts[2], parts[3], Number(parts[1])] : [parts[1], parts[2], LEGACY_N];
+  if (![CURRENT_N, LEGACY_N].includes(N)) return false;
+  const key = await derive(value, salt || 'microsendr-constant-time-missing-user', N);
   return !!hex && /^[a-f0-9]{128}$/.test(hex) && timingSafeEqual(key, Buffer.from(hex, 'hex'));
 }
 function profile(row: Record<string, any>) {
@@ -115,6 +132,14 @@ async function newSession(userId: string, method: string) {
     [hashKey(token), userId, csrf, method],
   );
   return { token, csrf };
+}
+async function provisionWallet(request: FastifyRequest, userId: string, accountId: string) {
+  // Sign-in must not fail because the wallet provider is slow; the failure is logged
+  // and the user can retry from the wallet screen.
+  return ensureManagedWallet(userId, accountId).catch((error) => {
+    request.log.warn({ reason: (error as { reason?: string }).reason ?? 'unknown' }, 'managed wallet provisioning failed');
+    return null;
+  });
 }
 function conflict() {
   return new PaymentError(
@@ -171,7 +196,7 @@ export function registerConsumer(app: FastifyInstance, deps: Dependencies) {
       const s = await newSession(userId, 'password');
       deps.setCookie(request, reply, s.token);
       const account = (await pool.query('SELECT id FROM kora_accounts WHERE personal_user_id=$1', [userId])).rows[0];
-      const wallet = await ensureManagedWallet(userId, account.id).catch(() => null);
+      const wallet = await provisionWallet(request, userId, account.id);
       return { authenticated: true, csrf_token: s.csrf, wallet_address: wallet?.address ?? null };
     },
   );
@@ -185,11 +210,13 @@ export function registerConsumer(app: FastifyInstance, deps: Dependencies) {
         .strict()
         .parse(request.body);
       // Durable per-identity limit, in addition to the IP limit. Count before hashing.
+      // Keyed by email and client address so a stranger cannot lock the owner out.
+      const limitKey = hashKey(`${input.email}|${request.clientIp || request.ip}`);
       const attempt = await pool.query(
         `INSERT INTO personal_auth_limits(email_hash,failures) VALUES($1,1)
       ON CONFLICT(email_hash) DO UPDATE SET failures=CASE WHEN personal_auth_limits.window_started_at < now()-interval '15 minutes' THEN 1 ELSE personal_auth_limits.failures+1 END,
       window_started_at=CASE WHEN personal_auth_limits.window_started_at < now()-interval '15 minutes' THEN now() ELSE personal_auth_limits.window_started_at END RETURNING failures`,
-        [hashKey(input.email)],
+        [limitKey],
       );
       if (attempt.rows[0].failures > 10)
         throw new PaymentError(429, 'login_limited', 'Too many attempts. Try again in 15 minutes.');
@@ -219,12 +246,15 @@ export function registerConsumer(app: FastifyInstance, deps: Dependencies) {
         );
         return { token, csrf };
       });
-      await pool.query('DELETE FROM personal_auth_limits WHERE email_hash=$1', [
-        hashKey(input.email),
-      ]);
+      await pool.query('DELETE FROM personal_auth_limits WHERE email_hash=$1', [limitKey]);
+      // Upgrade a legacy hash outside the session transaction; skip if it changed meanwhile.
+      if (legacyHash(user.password_hash))
+        await pool.query('UPDATE personal_users SET password_hash=$2 WHERE id=$1 AND password_hash=$3', [
+          user.id, await hashPassword(input.password), user.password_hash,
+        ]);
       deps.setCookie(request, reply, s.token);
       const account = (await pool.query('SELECT id FROM kora_accounts WHERE personal_user_id=$1', [user.id])).rows[0];
-      const wallet = await ensureManagedWallet(user.id, account.id).catch(() => null);
+      const wallet = await provisionWallet(request, user.id, account.id);
       return { authenticated: true, csrf_token: s.csrf, wallet_address: wallet?.address ?? null };
     },
   );

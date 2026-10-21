@@ -46,6 +46,7 @@ const app=await buildApi({serveWeb:false,rateLimitMax:10000,paystackClient:payst
 after(async()=>{await app.close();await pool.end();});
 async function login() {
   const email=`${id('paystackpersonal')}@example.test`;
+  await pool.query('INSERT INTO personal_users(id,email) VALUES($1,$2) ON CONFLICT(email) DO NOTHING',[id('usr'),email]);
   const start=await app.inject({method:'POST',url:'/personal/api/auth/start',headers:{origin},payload:{email}});
   assert.equal(start.statusCode,200,start.body);
   const verify=await app.inject({method:'POST',url:'/personal/api/auth/verify',headers:{origin},payload:{challenge_id:start.json().challenge_id,code:codes.get(email)}});

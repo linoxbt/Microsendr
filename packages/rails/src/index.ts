@@ -56,9 +56,11 @@ export async function resolveBank(
   m: string,
   client: PaystackClient,
   input: { account_number: string; bank_code: string },
+  // Resolved before the transaction so no connection or lock waits on Paystack.
+  prepared?: { account_name: string },
 ) {
   await assertEnabled(c, m);
-  const resolved = await client.resolveAccount(input.account_number, input.bank_code);
+  const resolved = prepared ?? (await client.resolveAccount(input.account_number, input.bank_code));
   return (
     await c.query(
       'INSERT INTO bank_resolutions(id,merchant_id,bank_code,account_last4,account_name,account_sealed,provider_binding) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,bank_code,account_last4,account_name,expires_at,created_at',
@@ -74,12 +76,40 @@ export async function resolveBank(
     )
   ).rows[0];
 }
+/** Paystack recipient creation is idempotent per account; call it outside any transaction. */
+export async function createBankRecipient(
+  db: Pick<Client, 'query'>,
+  m: string,
+  client: PaystackClient,
+  resolutionId: string,
+) {
+  const r = (
+    await db.query('SELECT * FROM bank_resolutions WHERE id=$1 AND merchant_id=$2 AND expires_at>now()', [
+      resolutionId,
+      m,
+    ])
+  ).rows[0];
+  if (!r)
+    throw new PaymentError(404, 'resolution_not_found', 'A current owned name enquiry is required');
+  if (r.provider_binding !== client.binding)
+    throw new PaymentError(
+      422,
+      'provider_binding_mismatch',
+      'Name enquiry belongs to another provider credential binding',
+    );
+  return client.createRecipient({
+    account_number: unseal(r.account_sealed),
+    bank_code: r.bank_code,
+    name: r.account_name,
+  });
+}
 export async function registerBank(
   c: Client,
   m: string,
   customer: string,
   client: PaystackClient,
   input: { resolution_id: string; label: string },
+  prepared?: { recipient_code: string },
 ) {
   await customerAllowed(c, m, customer);
   const r = (
@@ -96,11 +126,7 @@ export async function registerBank(
       'provider_binding_mismatch',
       'Name enquiry belongs to another provider credential binding',
     );
-  const recipient = await client.createRecipient({
-    account_number: unseal(r.account_sealed),
-    bank_code: r.bank_code,
-    name: r.account_name,
-  });
+  const recipient = prepared ?? (await createBankRecipient(pool, m, client, input.resolution_id));
   await c.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [
     `bank:${m}:${customer}:${recipient.recipient_code}`,
   ]);
@@ -316,6 +342,9 @@ export async function verifyCollection(
       'Collection evidence does not match reference, amount, currency or payer',
     );
   if (!['success', 'failed', 'abandoned'].includes(charge.status)) return false;
+  // Paystack reports an unfinished checkout as abandoned; the customer can still pay
+  // until the checkout window closes, so only a stale abandonment is final.
+  if (charge.status === 'abandoned' && !checkoutClosed(original.created_at)) return false;
   return transaction(async (c) => {
     const row = (await c.query('SELECT * FROM collections WHERE id=$1 FOR UPDATE', [collectionId]))
       .rows[0];
@@ -646,6 +675,10 @@ async function reconcileStatement(runId: string, client: PaystackClient) {
   });
   return true;
 }
+export const MAX_OUTBOX_ATTEMPTS = 25;
+export const CHECKOUT_WINDOW_MS = 6 * 60 * 60_000;
+export const checkoutClosed = (createdAt: Date | string) =>
+  Date.now() - new Date(createdAt).getTime() > CHECKOUT_WINDOW_MS;
 export async function runRailOnce(
   options: { client?: PaystackClient; onlyResource?: string; leaseMs?: number } = {},
 ): Promise<boolean> {
@@ -655,7 +688,7 @@ export async function runRailOnce(
   const job = await transaction(async (c) => {
     const row = (
       await c.query(
-        "SELECT * FROM outbox WHERE kind IN ('collection_init','collection_verify','provider_event','statement_sync','payout_verify') AND processed_at IS NULL AND available_at<=now() AND (locked_until IS NULL OR locked_until<now()) AND ($1::text IS NULL OR resource_id=$1) ORDER BY available_at,id FOR UPDATE SKIP LOCKED LIMIT 1",
+        "SELECT * FROM outbox WHERE kind IN ('collection_init','collection_verify','provider_event','statement_sync','payout_verify') AND processed_at IS NULL AND dead_at IS NULL AND available_at<=now() AND (locked_until IS NULL OR locked_until<now()) AND ($1::text IS NULL OR resource_id=$1) ORDER BY available_at,id FOR UPDATE SKIP LOCKED LIMIT 1",
         [options.onlyResource ?? null],
       )
     ).rows[0];
@@ -687,8 +720,8 @@ export async function runRailOnce(
       );
     else
       await pool.query(
-        "UPDATE outbox SET available_at=now()+interval '10 seconds',locked_by=NULL,locked_until=NULL,last_error='awaiting_verified_status' WHERE id=$1 AND locked_by=$2",
-        [job.id, token],
+        "UPDATE outbox SET available_at=now()+($3::integer*interval '1 second'),locked_by=NULL,locked_until=NULL,last_error='awaiting_verified_status' WHERE id=$1 AND locked_by=$2",
+        [job.id, token, Math.min(600, 10 * 2 ** Math.min(job.attempts - 1, 6))],
       );
   } catch (error) {
     if (job.kind === 'statement_sync')
@@ -702,10 +735,15 @@ export async function runRailOnce(
         : error instanceof PaystackApiError
           ? 'provider_unavailable'
           : 'provider_evidence_unavailable';
+    // Retries back off and are bounded; exhausted jobs are parked for operator review.
+    const limit = code === 'unmapped_provider_event' ? 10 : MAX_OUTBOX_ATTEMPTS;
+    const dead = job.attempts >= limit;
     await pool.query(
-      "UPDATE outbox SET available_at=now()+interval '30 seconds',locked_by=NULL,locked_until=NULL,last_error=$3 WHERE id=$1 AND locked_by=$2",
-      [job.id, token, code],
+      "UPDATE outbox SET available_at=now()+($4::integer*interval '1 second'),locked_by=NULL,locked_until=NULL,last_error=$3,dead_at=CASE WHEN $5 THEN now() END WHERE id=$1 AND locked_by=$2",
+      [job.id, token, code, Math.min(3600, 30 * 2 ** Math.min(job.attempts - 1, 7)), dead],
     );
+    console.error(JSON.stringify({ level: dead ? 'error' : 'warn', msg: dead ? 'outbox job parked' : 'outbox job failed',
+      job: job.id, kind: job.kind, attempts: job.attempts, code }));
     if (job.kind.startsWith('collection'))
       await pool.query(
         "UPDATE collections SET last_error=$2,updated_at=now() WHERE id=$1 AND state IN ('processing','pending','unknown')",

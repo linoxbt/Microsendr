@@ -47,7 +47,10 @@ export async function paystackHarness() {
         account_name: 'KORA TEST BENEFICIARY',
       });
     if (url.pathname === '/balance') return send([{ currency: 'NGN', balance: 100000000 }]);
-    if (url.pathname === '/balance/ledger') return send(statements);
+    if (url.pathname === '/balance/ledger') {
+      const perPage = Number(url.searchParams.get('perPage') ?? 50), page = Number(url.searchParams.get('page') ?? 1);
+      return send(statements.slice((page - 1) * perPage, page * perPage));
+    }
     if (url.pathname === '/transferrecipient') {
       const key = `${body.bank_code}:${body.account_number}`;
       let recipient = recipients.get(key);

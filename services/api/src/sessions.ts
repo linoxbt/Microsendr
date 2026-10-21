@@ -8,6 +8,7 @@ import { provisionWorkspace } from './workspace.js';
 import { identityPrincipal, privyConfiguration, privyVerifier, type TeamRole } from './identity.js';
 import { codeHash, mailer, type PersonalOptions } from './personal.js';
 import { accountId, postJournal } from '../../../packages/ledger/src/index.js';
+import { authSecret, requireOrigin, secureCookie } from './config.js';
 declare module 'fastify' {
   interface FastifyInstance {
     consoleAppId: string;
@@ -21,16 +22,7 @@ export interface ConsoleSession {
   role: TeamRole | null;
 }
 export function consoleOrigin(request: FastifyRequest) {
-  const origin = request.headers.origin;
-  const allowed = (
-    process.env.KORA_CONSOLE_ORIGINS ??
-    'http://127.0.0.1:4310,http://localhost:4310,http://localhost:5173,http://127.0.0.1:5173,http://127.0.0.1:5176,http://localhost:5176'
-  )
-    .split(',')
-    .map((x) => x.trim());
-  if (typeof origin !== 'string' || !allowed.includes(origin))
-    throw new PaymentError(403, 'console_origin_denied', 'This console origin is not allowed');
-  return origin;
+  return requireOrigin(request, 'console_origin_denied');
 }
 export async function readSession(request: FastifyRequest): Promise<ConsoleSession | null> {
   const token = request.cookies.kora_console;
@@ -102,7 +94,7 @@ function sessionCookie(request: FastifyRequest, reply: FastifyReply, token: stri
   reply.setCookie('kora_console', token, {
     httpOnly: true,
     sameSite: 'strict',
-    secure: consoleOrigin(request).startsWith('https:'),
+    secure: secureCookie(consoleOrigin(request)),
     path: '/',
     maxAge: 86400,
   });
@@ -120,7 +112,7 @@ async function createSession(
 export async function registerSessions(app: FastifyInstance, config = privyConfiguration(), emailOptions: PersonalOptions = {}) {
   app.decorate('consoleAppId', config.appId);
   const verifier = privyVerifier(config);
-  const secret = emailOptions.codeSecret ?? process.env.KORA_AUTH_SECRET;
+  const secret = authSecret(emailOptions.codeSecret);
   const sendCode = emailOptions.sendCode ?? mailer();
   app.get('/business/api/auth/config', async () => ({ enabled: !!(secret && sendCode), method: 'email_code' }));
   app.post('/business/api/auth/start', { config: { rateLimit: { max: 5, timeWindow: '1 hour' } } }, async (request) => {

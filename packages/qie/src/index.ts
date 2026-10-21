@@ -1,7 +1,7 @@
 import type { ChainSettlementAdapter, NativeTransferInstruction, SettlementEvidence } from '../../settlement/src/index.js';
 
 export const QIE_CHAIN_ID = 1990n;
-export const QIE_RPC_URL = 'https://rpc1mainnet.qie.digital/';
+export const QIE_RPC_URL = process.env.QIE_RPC_URL || 'https://rpc1mainnet.qie.digital/';
 export const QIE_EXPLORER = 'https://mainnet.qie.digital/';
 export const QIE_NETWORK = 'qie-mainnet';
 export const QIE_NATIVE_POSITION = 'pos_qiev3_mainnet';
@@ -11,6 +11,10 @@ const addressPattern = /^0x[a-fA-F0-9]{40}$/;
 const hashPattern = /^0x[a-fA-F0-9]{64}$/;
 
 export class QieRpcError extends Error {}
+/** The chain evidence contradicts the instruction; retrying cannot change the outcome. */
+export class QieEvidenceMismatch extends QieRpcError {}
+// eth_chainId is fixed per endpoint; verify once per RPC URL and process.
+const verifiedEndpoints = new Set<string>();
 
 export class QieClient implements ChainSettlementAdapter {
   readonly network = QIE_NETWORK;
@@ -42,9 +46,20 @@ export class QieClient implements ChainSettlementAdapter {
   }
 
   async assertMainnet(): Promise<void> {
+    if (this.request === fetch && verifiedEndpoints.has(this.rpcUrl)) return;
     const chainId = await this.rpc<string>('eth_chainId');
     if (typeof chainId !== 'string' || BigInt(chainId) !== QIE_CHAIN_ID)
       throw new QieRpcError('RPC does not serve QIE mainnet');
+    if (this.request === fetch) verifiedEndpoints.add(this.rpcUrl);
+  }
+
+  async transactionSender(hash: string): Promise<string | null> {
+    if (!hashPattern.test(hash)) throw new QieRpcError('Invalid transaction hash');
+    await this.assertMainnet();
+    const tx = await this.rpc<{ from?: string } | null>('eth_getTransactionByHash', [hash]);
+    if (!tx) return null;
+    if (typeof tx.from !== 'string' || !addressPattern.test(tx.from)) throw new QieRpcError('Invalid transaction response');
+    return tx.from.toLowerCase();
   }
 
   async nativeBalance(address: string): Promise<{ balance_wei: string; block_number: string }> {
@@ -100,7 +115,7 @@ export class QieClient implements ChainSettlementAdapter {
         tx.to?.toLowerCase() !== expected.to.toLowerCase() ||
         BigInt(tx.value) !== expected.amountAtomic ||
         receipt.transactionHash.toLowerCase() !== hash.toLowerCase())
-      throw new QieRpcError('Settlement transaction does not match instruction');
+      throw new QieEvidenceMismatch('Settlement transaction does not match instruction');
     if (!receipt.blockHash || !hashPattern.test(receipt.blockHash) ||
         (tx.blockHash && tx.blockHash.toLowerCase() !== receipt.blockHash.toLowerCase()))
       throw new QieRpcError('Invalid settlement block evidence');

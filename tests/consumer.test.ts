@@ -90,7 +90,7 @@ test('custom registration persists profile, hashes password and never grants ver
       auth.data.email,
     ])
   ).rows[0];
-  assert.match(user.password_hash, /^scrypt:/);
+  assert.match(user.password_hash, /^scrypt2:131072:[a-f0-9]{32}:[a-f0-9]{128}$/);
   assert.ok(!user.password_hash.includes(auth.data.password));
   assert.equal(user.kyc_state, 'not_started');
   const overview = (
@@ -234,6 +234,7 @@ test('claiming an unverified email revokes planted credentials and permits passw
 test('payment availability cannot fabricate a quote or expose simulated money', async () => {
   // Reuse an OTP account with an actual test ledger balance to prove it is excluded.
   const email = `${id('old')}@example.test`;
+  await pool.query('INSERT INTO personal_users(id,email) VALUES($1,$2) ON CONFLICT(email) DO NOTHING',[id('usr'),email]);
   const start = await app.inject({
     method: 'POST',
     url: '/personal/api/auth/start',

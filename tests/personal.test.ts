@@ -15,6 +15,8 @@ const app = await buildApi({ serveWeb: false, rateLimitMax: 10000, personal: {
 after(async () => { await app.close(); await pool.end(); });
 const cookie = (r: { headers: Record<string,unknown> }) => String(r.headers['set-cookie']).split(';')[0];
 async function login(email: string) {
+  // Email codes sign in to existing accounts only.
+  await pool.query('INSERT INTO personal_users(id,email) VALUES($1,$2) ON CONFLICT(email) DO NOTHING',[id('usr'),email]);
   const start = await app.inject({ method: 'POST', url: '/personal/api/auth/start', headers: { origin }, payload: { email } });
   assert.equal(start.statusCode, 200, start.body);
   const verify = await app.inject({ method: 'POST', url: '/personal/api/auth/verify', headers: { origin }, payload: { challenge_id: start.json().challenge_id, code: codes.get(email) } });
@@ -114,14 +116,15 @@ test('Privy Personal requires a matching signed identity token with verified ema
       assert.equal(provisional.json().email, null);
       assert.ok(provisional.json().account_id);
       const provisionalAuth = { cookie: cookie(provisional), csrf: provisional.json().csrf_token };
-      assert.equal((await write(provisionalAuth, '/personal/api/sandbox/verify', { residence_country: 'NG', acknowledge_simulation: true })).statusCode, 200);
+      // An account without a verified email cannot enable simulated money or receive transfers.
+      const unverified = await write(provisionalAuth, '/personal/api/sandbox/verify', { residence_country: 'NG', acknowledge_simulation: true });
+      assert.equal(unverified.statusCode, 403);
+      assert.equal(unverified.json().error.code, 'verified_email_required');
       assert.equal((await write(provisionalAuth, '/personal/api/paystack/collections', { amount_minor: '10000' }, id('key'))).statusCode, 403);
-      assert.equal((await write(provisionalAuth, '/personal/api/sandbox/fund', {})).statusCode, 200);
+      assert.equal((await write(provisionalAuth, '/personal/api/sandbox/fund', {})).statusCode, 403);
       const firstAuth = { cookie: cookie(first), csrf: first.json().csrf_token };
       assert.equal((await write(firstAuth, '/personal/api/sandbox/verify', { residence_country: 'NG', acknowledge_simulation: true })).statusCode, 200);
-      assert.equal((await write(provisionalAuth, '/personal/api/transfers', { recipient_email: email, amount_minor: '100' }, id('key'))).statusCode, 200);
-      const received = await configured.inject({ url: '/personal/api/activity', headers: { cookie: firstAuth.cookie } });
-      assert.equal(received.json().data[0].counterparty, 'Microsendr member');
+      assert.equal((await write(provisionalAuth, '/personal/api/transfers', { recipient_email: email, amount_minor: '100' }, id('key'))).statusCode, 403);
       const provisionalEmail = `${id('linked')}@example.test`;
       const linked = await configured.inject({ method: 'POST', url: '/personal/api/auth/privy', headers: { origin }, payload: {
         access_token: provisionalAccess,

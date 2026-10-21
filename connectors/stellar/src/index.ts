@@ -328,11 +328,21 @@ export class StellarTestnetConnector implements Connector {
         ])
       ).rows[0];
       if (!prepared) {
-        const busy = await c.query(
-          "SELECT 1 FROM stellar_transactions st JOIN instructions ins ON ins.id=st.instruction_id JOIN intents i ON i.id=ins.intent_id WHERE st.source_address=$1 AND i.state IN ('processing','unknown') AND st.instruction_id<>$2",
+        const pending = (await c.query(
+          "SELECT st.transaction_hash,st.expires_at FROM stellar_transactions st JOIN instructions ins ON ins.id=st.instruction_id JOIN intents i ON i.id=ins.intent_id WHERE st.source_address=$1 AND i.state IN ('processing','unknown') AND st.instruction_id<>$2",
           [this.config.treasury, request.instruction_id],
-        );
-        if (busy.rowCount)
+        )).rows;
+        // An envelope whose time bounds closed (with a minute of clock margin) and that
+        // the network never applied can no longer be included, so it must not block the
+        // treasury sequence forever. Its intent stays unknown for reconciliation.
+        const now = BigInt(Math.floor(Date.now() / 1000));
+        let busy = false;
+        for (const previous of pending)
+          if (BigInt(previous.expires_at) + 60n > now || (await this.transaction(previous.transaction_hash))) {
+            busy = true;
+            break;
+          }
+        if (busy)
           throw new ProviderError(
             'unavailable',
             'A previous treasury sequence awaits reconciliation',

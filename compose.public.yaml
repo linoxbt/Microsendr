@@ -1,5 +1,6 @@
 services:
   db:
+    # Pin by digest when deploying: docker pull postgres:17-alpine && docker inspect --format '{{index .RepoDigests 0}}'
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
@@ -24,12 +25,13 @@ services:
       HOST: 0.0.0.0
       PORT: 4312
       KORA_MODE: sandbox
+    init: true
     ports:
       - "127.0.0.1:4312:4312"
     depends_on:
       db:
         condition: service_healthy
-    command: ["sh", "-c", "pnpm db:migrate && exec pnpm start"]
+    command: ["sh", "-c", "node --import tsx packages/database/src/migrate.ts && exec node --import tsx services/api/src/index.ts"]
     healthcheck:
       test:
         - CMD
@@ -47,12 +49,20 @@ services:
     environment:
       DATABASE_URL: postgres://kora_public:${KORA_PUBLIC_DB_PASSWORD}@db:5432/kora_public
       KORA_MODE: sandbox
+    init: true
     depends_on:
       api:
         condition: service_healthy
-    command: ["pnpm", "worker"]
+    command: ["node", "--import", "tsx", "services/worker/src/index.ts"]
+    healthcheck:
+      # The worker records a heartbeat file each loop pass; stale means it is wedged.
+      test: ["CMD", "node", "-e", "const s=require('fs').statSync('/tmp/worker-heartbeat');if(Date.now()-s.mtimeMs>120000)process.exit(1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   proxy:
+    # Pin by digest when deploying, as for the database image.
     image: caddy:2.9-alpine
     restart: unless-stopped
     ports:

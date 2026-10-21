@@ -5,7 +5,7 @@ import { randomBytes } from 'node:crypto';
 import { id, pool } from '../packages/database/src/index.js';
 import { hashKey } from '../packages/payments/src/auth.js';
 import { buildApi } from '../services/api/src/app.js';
-import { QIE_CHAIN_ID, QIE_NATIVE_POSITION, QIE_NETWORK } from '../packages/qie/src/index.js';
+import { QIE_CHAIN_ID, QIE_NATIVE_POSITION, QIE_NETWORK, QieEvidenceMismatch } from '../packages/qie/src/index.js';
 import { nativeTransferAuthorization, type ChainSettlementAdapter, type SettlementEvidence } from '../packages/settlement/src/index.js';
 import { chainAdapters, createNativeSettlement, reconcileChainSettlement, submitNativeSettlement } from '../packages/settlement/src/service.js';
 
@@ -52,15 +52,41 @@ test('signed QIE settlement is idempotent, hash-unique, and reconciles only matc
     await assert.rejects(submitNativeSettlement(userId,created.id,'0x'+'c'.repeat(64)), { code: 'transaction_conflict' });
     await reconcileChainSettlement(created.id,adapter);
     assert.equal((await pool.query('SELECT status FROM chain_settlements WHERE id=$1',[created.id])).rows[0].status,'pending');
-    evidence = { ...evidence, state: 'confirmed', confirmations: '12', block_number: '99' };
-    await reconcileChainSettlement(created.id,adapter);
-    assert.equal((await pool.query('SELECT status,last_error FROM chain_settlements WHERE id=$1',[created.id])).rows[0].status,'unknown');
-    evidence = { ...evidence, block_number: '101' };
+    evidence = { ...evidence, state: 'confirmed', confirmations: '12', block_number: '101' };
     await reconcileChainSettlement(created.id,adapter);
     assert.equal((await pool.query('SELECT status,block_number FROM chain_settlements WHERE id=$1',[created.id])).rows[0].status,'confirmed');
-    const secondKey = id('key');
-    const second = await createNativeSettlement({ ...input, idempotencyKey: secondKey, signature: await signed(secondKey) });
+    // Terminal states cannot be rewritten, and instruction fields are immutable.
+    await assert.rejects(pool.query("UPDATE chain_settlements SET status='unknown' WHERE id=$1",[created.id]), /terminal/);
+    await assert.rejects(pool.query("UPDATE chain_settlements SET amount_atomic=1 WHERE id=$1",[created.id]), /immutable/);
+    const fresh = async () => {
+      const key = id('key');
+      return createNativeSettlement({ ...input, idempotencyKey: key, signature: await signed(key) });
+    };
+    const second = await fresh();
     await assert.rejects(submitNativeSettlement(userId,second.id,hash), { code: 'transaction_already_tracked' });
+    // A transaction mined before the instruction existed can never settle it.
+    const historical = await fresh();
+    await submitNativeSettlement(userId,historical.id,`0x${randomBytes(32).toString('hex')}`);
+    evidence = { ...evidence, block_number: '99' };
+    await reconcileChainSettlement(historical.id,adapter);
+    assert.deepEqual((await pool.query('SELECT status,last_error FROM chain_settlements WHERE id=$1',[historical.id])).rows[0],
+      { status: 'mismatched', last_error: 'historical_transaction' });
+    // Contradicting evidence is terminal; transient RPC errors back off.
+    const contradicted = await fresh(), flaky = await fresh();
+    await submitNativeSettlement(userId,contradicted.id,`0x${randomBytes(32).toString('hex')}`);
+    await submitNativeSettlement(userId,flaky.id,`0x${randomBytes(32).toString('hex')}`);
+    const failing = (error: Error): ChainSettlementAdapter => ({ ...adapter, nativeTransferEvidence: async () => { throw error; } });
+    await reconcileChainSettlement(contradicted.id,failing(new QieEvidenceMismatch('mismatch')));
+    assert.equal((await pool.query('SELECT status FROM chain_settlements WHERE id=$1',[contradicted.id])).rows[0].status,'mismatched');
+    await reconcileChainSettlement(flaky.id,failing(new Error('timeout')));
+    const backoff = (await pool.query("SELECT status,check_failures,next_check_at>now()+interval '20 seconds' AS later FROM chain_settlements WHERE id=$1",[flaky.id])).rows[0];
+    assert.deepEqual(backoff, { status: 'unknown', check_failures: 1, later: true });
+    // A visible transaction from another sender cannot be claimed.
+    const claimed = await fresh();
+    const withSender: ChainSettlementAdapter = { ...adapter, transactionSender: async () => '0x9999999999999999999999999999999999999999' };
+    chainAdapters[QIE_NETWORK] = () => withSender;
+    await assert.rejects(submitNativeSettlement(userId,claimed.id,`0x${randomBytes(32).toString('hex')}`), { code: 'transaction_sender_mismatch' });
+    chainAdapters[QIE_NETWORK] = () => adapter;
     assert.equal((await pool.query("SELECT COUNT(*)::int count FROM chain_settlements WHERE tx_hash=$1",[hash])).rows[0].count,1);
     const token = randomBytes(32).toString('hex'), csrf = randomBytes(32).toString('hex');
     await pool.query("INSERT INTO personal_sessions(token_hash,personal_user_id,csrf_token,expires_at) VALUES($1,$2,$3,now()+interval '1 day')",[hashKey(token),userId,csrf]);

@@ -36,7 +36,7 @@ export async function registry(c: Client) {
     participants: (await c.query('SELECT * FROM network_participants ORDER BY role,id')).rows,
     corridors: (
       await c.query(
-        "SELECT n.*,COALESCE(sum(r.amount_minor) FILTER(WHERE r.state IN ('held','consumed')),0)::text allocated_minor,(n.capacity_minor-COALESCE(sum(r.amount_minor) FILTER(WHERE r.state IN ('held','consumed')),0))::text available_minor FROM network_corridors n LEFT JOIN network_reservations r ON r.corridor_id=n.id GROUP BY n.id ORDER BY n.id",
+        "SELECT n.*,COALESCE(sum(r.amount_minor) FILTER(WHERE (r.state='held' OR (r.state='consumed' AND r.updated_at>now()-interval '24 hours'))),0)::text allocated_minor,(n.capacity_minor-COALESCE(sum(r.amount_minor) FILTER(WHERE (r.state='held' OR (r.state='consumed' AND r.updated_at>now()-interval '24 hours'))),0))::text available_minor FROM network_corridors n LEFT JOIN network_reservations r ON r.corridor_id=n.id GROUP BY n.id ORDER BY n.id",
       )
     ).rows.map((r) => ({ ...r, capacity_minor: String(r.capacity_minor) })),
   };
@@ -222,7 +222,9 @@ export async function reserveCorridor(
   }
   const used = (
     await c.query(
-      "SELECT COALESCE(sum(amount_minor),0)::text amount FROM network_reservations WHERE corridor_id=$1 AND state IN ('held','consumed')",
+      // Capacity is a rolling 24-hour limit: held amounts count until released, consumed
+      // amounts for a day after settlement.
+      "SELECT COALESCE(sum(amount_minor),0)::text amount FROM network_reservations WHERE corridor_id=$1 AND (state='held' OR (state='consumed' AND updated_at>now()-interval '24 hours'))",
       [corridor.id],
     )
   ).rows[0].amount;

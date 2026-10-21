@@ -7,36 +7,42 @@
   to = "https://kora-api.13-140-188-185.sslip.io/console/:splat"
   status = 200
   force = true
+  signed = "KORA_PROXY_SIGNING_SECRET"
 
 [[redirects]]
   from = "/personal/api/*"
   to = "https://kora-api.13-140-188-185.sslip.io/personal/api/:splat"
   status = 200
   force = true
+  signed = "KORA_PROXY_SIGNING_SECRET"
 
 [[redirects]]
   from = "/business/api/*"
   to = "https://kora-api.13-140-188-185.sslip.io/business/api/:splat"
   status = 200
   force = true
+  signed = "KORA_PROXY_SIGNING_SECRET"
 
 [[redirects]]
   from = "/v1/*"
   to = "https://kora-api.13-140-188-185.sslip.io/v1/:splat"
   status = 200
   force = true
+  signed = "KORA_PROXY_SIGNING_SECRET"
 
 [[redirects]]
   from = "/openapi.json"
   to = "https://kora-api.13-140-188-185.sslip.io/openapi.json"
   status = 200
   force = true
+  signed = "KORA_PROXY_SIGNING_SECRET"
 
 [[redirects]]
   from = "/reference/*"
   to = "https://kora-api.13-140-188-185.sslip.io/reference/:splat"
   status = 200
   force = true
+  signed = "KORA_PROXY_SIGNING_SECRET"
 
 [[redirects]]
   from = "/docs"
@@ -90,3 +96,15 @@
   to = "/personal/login"
   status = 301
   force = true
+
+# Production pages are served here, not by the API, so the security headers live here too.
+# Keep the CSP in step with contentSecurityPolicy in services/api/src/app.ts.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "default-src 'self'; script-src 'self' https://challenges.cloudflare.com https://js.hcaptcha.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://auth.privy.io https://*.hcaptcha.com; font-src 'self'; connect-src 'self' https://auth.privy.io https://api.privy.io https://challenges.cloudflare.com https://*.hcaptcha.com https://verification.didit.me https://rpc1mainnet.qie.digital; frame-src https://auth.privy.io https://challenges.cloudflare.com https://*.hcaptcha.com https://verify.didit.me; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(self \"https://verify.didit.me\"), microphone=(), geolocation=()"

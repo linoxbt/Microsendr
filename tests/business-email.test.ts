@@ -9,6 +9,7 @@ after(async()=>{await app.close();await pool.end();});
 
 test('Business email account is distinct from Personal and gated by sandbox KYB',async()=>{
   const email=`${id('biz')}@example.test`;
+  await pool.query('INSERT INTO personal_users(id,email) VALUES($1,$2) ON CONFLICT(email) DO NOTHING',[id('usr'),email]);
   const personalStart=await app.inject({method:'POST',url:'/personal/api/auth/start',headers:{origin},payload:{email}});
   assert.equal(personalStart.statusCode,200,personalStart.body);
   const personalCode=codes.get(email);
