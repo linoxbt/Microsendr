@@ -159,3 +159,11 @@ body {
 :root[data-theme='dark'] .logo.microsendr-wordmark {
   color: #f7f3e9;
 }
+/* Mark colours; on dark surfaces the tile inverts so the mark keeps its edge. */
+.microsendr-mark-tile { fill: #203749; }
+.microsendr-mark-back { fill: #7fb3dd; }
+.microsendr-mark-front { fill: #4f93c8; }
+.microsendr-mark-accent { fill: #f7f3e9; }
+:root[data-theme='dark'] .microsendr-mark-tile { fill: #f7f3e9; }
+:root[data-theme='dark'] .microsendr-mark-front { fill: #2f6e9f; }
+:root[data-theme='dark'] .microsendr-mark-accent { fill: #203749; }
