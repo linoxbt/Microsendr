@@ -178,6 +178,13 @@ export function PersonalPage({
     setError('');
     window.scrollTo(0, 0);
   }, [tab]);
+  // On a phone the receipt opens below the list, so bring it into view.
+  useEffect(() => {
+    if (!selected || window.innerWidth > 650) return;
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    requestAnimationFrame(() =>
+      document.querySelector('.fin-receipt')?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' }));
+  }, [selected]);
   // Poll the overview only while the page is visible; a 401 fires the session-expired handler.
   useEffect(() => {
     if (!session?.authenticated) return;
@@ -322,7 +329,7 @@ export function PersonalPage({
             <span>
               <b>{statusLabel(item.status)}</b>
               <small>
-                View details <ChevronRight size={12} />
+                <span className="fin-tx-cta">View details</span> <ChevronRight size={12} />
               </small>
             </span>
           </button>
@@ -458,7 +465,7 @@ export function PersonalPage({
                 <div className="fin-wallet-amount">
                   <span>Estimated wallet value · USD</span>
                   <div>
-                    <strong>{hidden ? '••••' : formattedWalletValue}</strong>
+                    <strong className={formattedWalletValue.length > 13 ? 'fin-amount-xlong' : formattedWalletValue.length > 10 ? 'fin-amount-long' : undefined}>{hidden ? '••••' : formattedWalletValue}</strong>
                     <button
                       aria-label={hidden ? 'Show balance' : 'Hide balance'}
                       onClick={() => setHidden(!hidden)}
@@ -553,7 +560,7 @@ export function PersonalPage({
                     <Search size={18} />
                     <input
                       aria-label="Search payments"
-                      placeholder="Search reference or recipient"
+                      placeholder="Search payments"
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                     />

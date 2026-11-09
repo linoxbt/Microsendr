@@ -1,0 +1,17 @@
+{
+  "name": "Roots",
+  "short_name": "Roots",
+  "description": "Everyday digital money on the QIE network.",
+  "id": "/personal/home",
+  "start_url": "/personal/home",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f7f3e9",
+  "theme_color": "#203749",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

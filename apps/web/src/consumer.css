@@ -1989,3 +1989,98 @@
   height: 20px;
   accent-color: #2f6e9f;
 }
+
+/* ---- Mobile polish ---------------------------------------------------- */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.fin-wallet-amount strong {
+  white-space: nowrap;
+}
+.fin-wallet-amount strong.fin-amount-long {
+  font-size: clamp(26px, 4.2vw, 46px);
+}
+.fin-wallet-amount strong.fin-amount-xlong {
+  font-size: clamp(22px, 3.4vw, 38px);
+}
+@media (max-width: 650px) {
+  /* Room for the bottom navigation and the iPhone home indicator. */
+  .fin-app {
+    padding-bottom: calc(84px + env(safe-area-inset-bottom));
+  }
+  .fin-sidebar {
+    height: calc(72px + env(safe-area-inset-bottom));
+    padding-bottom: max(6px, env(safe-area-inset-bottom));
+  }
+  .theme-toggle {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+  .theme-toggle-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .fin-wallet-amount strong {
+    font-size: clamp(30px, 11vw, 48px);
+  }
+  .fin-wallet-amount strong.fin-amount-long {
+    font-size: clamp(26px, 8.6vw, 40px);
+  }
+  .fin-wallet-amount strong.fin-amount-xlong {
+    font-size: clamp(22px, 7vw, 34px);
+  }
+  .fin-tx-cta {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .fin-transaction > span:last-child {
+    max-width: none;
+    flex: none;
+  }
+  .fin-transaction small {
+    overflow-wrap: anywhere;
+  }
+  /* 16px stops iOS Safari from zooming into a field on focus. */
+  .fin-app input,
+  .fin-app select,
+  .fin-app textarea,
+  .fin-auth input,
+  .fin-auth select {
+    font-size: 16px;
+  }
+}
+/* Comfortable touch targets wherever the pointer is a finger. */
+@media (pointer: coarse), (max-width: 650px) {
+  .fin-text,
+  .fin-back,
+  .fin-forgot,
+  .fin-asset-back,
+  .fin-asset-refresh,
+  .fin-asset-detail-section-title button,
+  .fin-chain-receive a,
+  .fin-chain-pending a,
+  .fin-app-footer button,
+  .fin-app-footer a,
+  .fin-auth button:not(.fin-primary):not(.personal-primary),
+  .fin-wallet-amount button,
+  .fin-avatar,
+  .fin-icon-button,
+  .fin-link-row {
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}

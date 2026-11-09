@@ -144,3 +144,14 @@ test('reduced motion disables animation, reveal and smooth scrolling', async ({ 
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await expect(page.locator('.lp-site')).toHaveClass(/lp-motion/);
 });
+
+test('Roots can be installed on a phone home screen', async ({ page, request }) => {
+  await page.goto('/');
+  await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', '/manifest.webmanifest');
+  await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute('href', '/icons/apple-touch-icon.png');
+  const manifest = await (await request.get('/manifest.webmanifest')).json();
+  expect(manifest).toMatchObject({ name: 'Roots', display: 'standalone', start_url: '/personal/home' });
+  for (const icon of manifest.icons) expect((await request.get(icon.src)).ok()).toBe(true);
+  expect(manifest.icons.some((icon: { purpose: string }) => icon.purpose === 'maskable')).toBe(true);
+  await expect(page.locator('meta[name="viewport"]')).toHaveAttribute('content', /viewport-fit=cover/);
+});

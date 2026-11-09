@@ -7,6 +7,8 @@ const children = ['services/api/src/index.ts', 'services/worker/src/index.ts'].m
       ...process.env,
       HOST: '127.0.0.1',
       PORT: '4310',
+      // Many browser tests load pages from one address within a minute.
+      KORA_RATE_LIMIT_MAX: '10000',
       PAYSTACK_SECRET_KEY: '',
       PRIVY_APP_ID: '',
       PRIVY_APP_SECRET: '',

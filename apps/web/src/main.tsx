@@ -1,3 +1,4 @@
+import { Moon, Sun } from 'lucide-react';
 import React, { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@fontsource-variable/dm-sans';
@@ -63,8 +64,11 @@ function App() {
   const [path, go] = usePath();
   const [personalAuthenticated, setPersonalAuthenticated] = useState(false);
   useEffect(() => {
-    document.documentElement.dataset.theme =
-      path.startsWith('/personal') && personalAuthenticated ? theme : 'light';
+    const active = path.startsWith('/personal') && personalAuthenticated ? theme : 'light';
+    document.documentElement.dataset.theme = active;
+    // The phone's status and address bar follow the app's theme, not only the system's.
+    for (const meta of document.querySelectorAll('meta[name="theme-color"]'))
+      meta.setAttribute('content', active === 'dark' ? '#172d40' : '#f7f3e9');
     try {
       localStorage.setItem('roots-theme', theme);
     } catch {
@@ -77,7 +81,8 @@ function App() {
       aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
       onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
     >
-      {theme === 'dark' ? 'Light' : 'Dark'} theme
+      {theme === 'dark' ? <Sun size={17} aria-hidden="true" /> : <Moon size={17} aria-hidden="true" />}
+      <span className="theme-toggle-label">{theme === 'dark' ? 'Light' : 'Dark'} theme</span>
     </button>
   );
   if (path.startsWith('/personal'))
