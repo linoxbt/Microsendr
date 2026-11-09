@@ -1969,3 +1969,23 @@
   font-size: 15px;
   font-weight: 650;
 }
+/* P2P: resolved recipient and the username payments switch. */
+.fin-recipient {
+  margin: -4px 0 0;
+  font-size: 14px;
+  color: var(--fin-muted, #4d6170);
+}
+.fin-recipient-error {
+  color: #b42318;
+}
+.fin-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+}
+.fin-switch input {
+  width: 20px;
+  height: 20px;
+  accent-color: #2f6e9f;
+}

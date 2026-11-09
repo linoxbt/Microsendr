@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { CheckCircle2, ShieldCheck, ArrowRight, Mail, LockKeyhole } from 'lucide-react';
+import { CheckCircle2, ShieldCheck, ArrowRight, Mail, LockKeyhole, AtSign } from 'lucide-react';
 import { ConsumerFields } from './consumer-fields.js';
 import { consumerRequest, profileDraft, profilePayload, type ConsumerProfile } from './consumer-api.js';
 
@@ -209,6 +209,7 @@ export function ConsumerSecurity({
   }
   return (
     <div className="fin-security">
+      <PaymentSettings csrf={csrf} />
       <section className="fin-panel">
         <Mail size={24} />
         <h2>Email verification</h2>
@@ -290,5 +291,60 @@ export function ConsumerSecurity({
         </div>
       )}
     </div>
+  );
+}
+
+type PaymentSettingsState = { username: string | null; payable_by_username: boolean; receiving_address: string | null };
+
+/** Opt-in to being paid by @username. Off by default: a username reveals no wallet without consent. */
+function PaymentSettings({ csrf }: { csrf: string }) {
+  const [settings, setSettings] = useState<PaymentSettingsState>();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    void consumerRequest<PaymentSettingsState>('payment-settings').then(setSettings).catch((e) => setError((e as Error).message));
+  }, []);
+  async function toggle(next: boolean) {
+    const previous = settings;
+    // Reflect the choice at once; roll back if the server refuses it.
+    if (previous) setSettings({ ...previous, payable_by_username: next });
+    setBusy(true);
+    setError('');
+    try {
+      setSettings(await consumerRequest<PaymentSettingsState>('payment-settings', 'POST', { payable_by_username: next }, csrf));
+    } catch (e) {
+      setSettings(previous);
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <section className="fin-panel fin-payment-settings" aria-label="Payments by username">
+      <AtSign size={24} />
+      <h2>Get paid by username</h2>
+      {settings ? (
+        <>
+          <p>
+            {settings.username
+              ? <>Let other Roots users pay <b>@{settings.username}</b> without asking for your wallet address. They see your first name and last initial, and the address they pay.</>
+              : 'Choose a username in your profile to be payable by username.'}
+          </p>
+          <label className="fin-switch">
+            <input type="checkbox" checked={settings.payable_by_username} disabled={busy || !settings.username}
+              onChange={(e) => void toggle(e.target.checked)} />
+            <span>{settings.payable_by_username ? 'On' : 'Off'}</span>
+          </label>
+          {settings.payable_by_username && (
+            <p className="fin-muted">
+              {settings.receiving_address
+                ? <>Payments go to {settings.receiving_address.slice(0, 8)}…{settings.receiving_address.slice(-6)}.</>
+                : 'Link a QIE wallet to start receiving payments by username.'}
+            </p>
+          )}
+        </>
+      ) : !error && <p role="status">Loading…</p>}
+      {error && <p className="fin-error" role="alert">{error}</p>}
+    </section>
   );
 }

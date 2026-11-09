@@ -4,6 +4,7 @@ import { formatEther, getAddress, isAddress, parseEther } from 'viem';
 import { ArrowRight, ArrowUpRight, Copy, Link2, RefreshCw, ShieldCheck, Unlink, Wallet } from 'lucide-react';
 import { consumerRequest } from './consumer-api.js';
 import { ManagedWalletPanel, type ManagedLimits } from './managed-wallet-panel.js';
+import { RecipientStatus, recipientPattern, useRecipient } from './recipient.js';
 
 type WalletRecord = {
   id: string;
@@ -80,6 +81,7 @@ export function ConsumerChainWallet({
   const [qr, setQr] = useState('');
   const [amount, setAmount] = useState('');
   const [destination, setDestination] = useState('');
+  const payee = useRecipient(destination);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -177,8 +179,9 @@ export function ConsumerChainWallet({
     if (!selected || pending) return;
     setBusy(true); setError(''); setNotice('');
     try {
-      if (!isAddress(destination) || getAddress(destination) === getAddress(selected.address))
-        throw new Error('Enter a different valid QIE recipient address.');
+      const target = payee.recipient?.address;
+      if (!target || getAddress(target) === getAddress(selected.address))
+        throw new Error(payee.error ?? 'Enter a QIE address or the @username of a Roots user.');
       if (!/^\d+(?:\.\d{1,18})?$/.test(amount)) throw new Error('Enter a valid QIE amount.');
       const atomic = parseEther(amount);
       if (atomic <= 0n) throw new Error('Enter an amount above zero.');
@@ -194,11 +197,11 @@ export function ConsumerChainWallet({
       const authorization = await consumerRequest<{
         message: string; idempotency_key: string; expires_at: string; network: string;
       }>('settlements/authorization', 'POST', {
-        from: selected.address, to: getAddress(destination), amount_atomic: atomic.toString(),
+        from: selected.address, to: target, amount_atomic: atomic.toString(),
       }, csrf);
       const signed = await signature(injected, selected.address, authorization.message);
       const settlement = await consumerRequest<{ id: string }>('settlements', 'POST', {
-        network: authorization.network, from: selected.address, to: getAddress(destination),
+        network: authorization.network, from: selected.address, to: target,
         amount_atomic: atomic.toString(), expires_at: authorization.expires_at, signature: signed,
       }, csrf, { 'Idempotency-Key': authorization.idempotency_key });
       setPending({ id: settlement.id });
@@ -206,7 +209,7 @@ export function ConsumerChainWallet({
       if (await injected.request({ method: 'eth_chainId' }) !== qieChainId)
         throw new Error('Network changed. No transfer was requested. Switch back to QIE Mainnet.');
       const hash = await injected.request({ method: 'eth_sendTransaction', params: [{
-        from: selected.address, to: getAddress(destination), value: `0x${atomic.toString(16)}`,
+        from: selected.address, to: target, value: `0x${atomic.toString(16)}`,
         chainId: qieChainId,
       }] });
       if (typeof hash !== 'string' || !/^0x[a-fA-F0-9]{64}$/.test(hash))
@@ -284,9 +287,10 @@ export function ConsumerChainWallet({
             <a href={`${explorer}address/${selected.address}`} target="_blank" rel="noreferrer">View on explorer <ArrowUpRight size={15} /></a>
           </div>}
           {mode === 'send' && <form className="fin-chain-send" onSubmit={send}>
-            <label>Recipient QIE address<input value={destination} onChange={e => setDestination(e.target.value.trim())}
-              placeholder="0x…" autoComplete="off" required disabled={!!pending}
-              pattern="0x[a-fA-F0-9]{40}" title="A 0x-prefixed QIE address" /></label>
+            <label>Recipient<input value={destination} onChange={e => setDestination(e.target.value.trim())}
+              placeholder="@username or 0x…" autoComplete="off" required disabled={!!pending}
+              pattern={recipientPattern} title="A Roots @username or a 0x-prefixed QIE address" /></label>
+            <RecipientStatus state={payee} />
             <label>Amount in QIEV3<input value={amount} onChange={e => setAmount(e.target.value)}
               placeholder="0.00" inputMode="decimal" required disabled={!!pending}
               pattern="[0-9]+(\.[0-9]{1,18})?" title="A QIE amount, up to 18 decimal places" /></label>

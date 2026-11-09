@@ -47,3 +47,16 @@ Crypto↔fiat conversion needs a contracted provider and an executable supported
 ## Verification
 
 `tests/consumer.test.ts` covers registration, hashing, contact verification separation, date-only preservation, CSRF, version conflicts, identity locks, session revocation, recovery and exclusion of simulated balances. Browser tests create an account, defer KYC, edit a profile, sign out/in, check both conversion directions and test each page at phone width.
+
+## Pay by @username (P2P payments)
+
+Roots users can pay each other by username. Being payable is opt-in (Security page,
+"Get paid by username"); until then a username reveals nothing. Looking up
+`@username` returns only the recipient's first name and last initial and the address
+they receive at: their most recently linked wallet, or their account wallet only
+while account wallet sends are enabled. Lookups are rate limited to deter scraping.
+The payment itself is an ordinary QIE transfer from the sender's linked or account
+wallet, settled and reconciled like any other.
+
+A P2P trading marketplace (swapping crypto for naira between users) is not built: it
+needs escrow, dispute handling, payment confirmation and regulatory review first.

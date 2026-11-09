@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import { formatEther, getAddress, isAddress, parseEther } from 'viem';
 import { ArrowRight, ArrowUpRight, Copy, RefreshCw, ShieldCheck } from 'lucide-react';
 import { consumerRequest } from './consumer-api.js';
+import { RecipientStatus, recipientPattern, useRecipient } from './recipient.js';
 
 export type ManagedLimits = { per_transfer_wei: string; daily_wei: string; requires_identity_verification: boolean };
 type Balance = { balance_wei: string };
@@ -23,6 +24,7 @@ export function ManagedWalletPanel({ wallet, limits, mode, csrf, onChanged }: {
   const [balance, setBalance] = useState<Balance>();
   const [qr, setQr] = useState('');
   const [to, setTo] = useState('');
+  const payee = useRecipient(to);
   const [amount, setAmount] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -52,10 +54,11 @@ export function ManagedWalletPanel({ wallet, limits, mode, csrf, onChanged }: {
     if (busy) return;
     setBusy(true); setError(''); setNotice('');
     try {
-      if (!isAddress(to) || getAddress(to) === getAddress(wallet.address)) throw new Error('Enter a different valid QIE recipient address.');
+      const target = payee.recipient?.address;
+      if (!target || getAddress(target) === getAddress(wallet.address)) throw new Error(payee.error ?? 'Enter a QIE address or the @username of a Roots user.');
       if (!/^\d+(?:\.\d{1,18})?$/.test(amount) || parseEther(amount) <= 0n) throw new Error('Enter a QIE amount above zero.');
       const result = await consumerRequest<{ id: string; tx_hash: string | null }>('wallets/managed/transfers', 'POST',
-        { to: getAddress(to), amount_atomic: parseEther(amount).toString(), password }, csrf, { 'Idempotency-Key': requestKey });
+        { to: target, amount_atomic: parseEther(amount).toString(), password }, csrf, { 'Idempotency-Key': requestKey });
       setSent(result);
       setPassword('');
       setRequestKey(crypto.randomUUID());
@@ -87,8 +90,9 @@ export function ManagedWalletPanel({ wallet, limits, mode, csrf, onChanged }: {
       </div>
       <button className="fin-text" type="button" onClick={() => { setSent(undefined); setTo(''); setAmount(''); }}>New send</button>
     </div> : <form className="fin-chain-send" onSubmit={send}>
-      <label>Recipient QIE address<input value={to} onChange={e => { setTo(e.target.value.trim()); resetKey(); }}
-        placeholder="0x…" autoComplete="off" required pattern="0x[a-fA-F0-9]{40}" title="A 0x-prefixed QIE address" /></label>
+      <label>Recipient<input value={to} onChange={e => { setTo(e.target.value.trim()); resetKey(); }}
+        placeholder="@username or 0x…" autoComplete="off" required pattern={recipientPattern} title="A Roots @username or a 0x-prefixed QIE address" /></label>
+      <RecipientStatus state={payee} />
       <label>Amount in QIEV3<input value={amount} onChange={e => { setAmount(e.target.value); resetKey(); }}
         placeholder="0.00" inputMode="decimal" required pattern="[0-9]+(\.[0-9]{1,18})?" title="A QIE amount, up to 18 decimal places" /></label>
       <label>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)}
