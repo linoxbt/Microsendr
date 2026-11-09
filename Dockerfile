@@ -4,6 +4,8 @@ ARG NODE_IMAGE=node:22.22.0-bookworm-slim@sha256:dd9d21971ec4395903fa6143c2b9267
 FROM ${NODE_IMAGE} AS build
 WORKDIR /app
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+# Non-interactive pnpm: prune would otherwise refuse to remove modules without a TTY.
+ENV CI=true
 RUN corepack enable
 COPY . .
 RUN pnpm install --frozen-lockfile
