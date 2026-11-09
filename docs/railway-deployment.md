@@ -12,8 +12,13 @@ repository `Dockerfile`. CI builds that image and boots it on every push (the
 | `api` | `deploy/railway/api.json` | Runs migrations before each deploy, then the API; health check `/health`; give it a public domain |
 | `worker` | `deploy/railway/worker.json` | Background queues; no public domain |
 
-Create both app services from the GitHub repository and set each one's
-config file path in its settings. Both deploy from `main`.
+Both app services deploy from `main` of the GitHub repository. Railway no longer
+lets new services read a config file, so the settings in `deploy/railway/*.json`
+(start command, pre-deploy migration, health check, restart policy) are set on
+each service directly; keep the two in step.
+
+The live project is `microsendr` (production environment). The API's Railway
+domain is `api-production-7b1b.up.railway.app`.
 
 ## Variables
 
