@@ -368,7 +368,7 @@ test('managed account wallet never shows a receive address or QR, and can be che
   await expect(page.locator('body')).not.toContainText(managedAddress);
   await expect(page.locator('body')).not.toContainText(managedAddress.toLowerCase());
   await page.goto('/personal/send');
-  await expect(page.getByLabel('Recipient QIE address')).toHaveCount(0);
+  await expect(page.getByLabel('Recipient', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Link QIE wallet' })).toBeVisible();
   await expect(page.locator('body')).not.toContainText(managedAddress);
 });
@@ -425,7 +425,7 @@ test('links a self-custody wallet by signature, receives to it, and unlinks it',
   await expect(page.locator('body')).not.toContainText(managedAddress);
   await page.screenshot({ path: '/tmp/roots-linked-wallet-receive.png', fullPage: true });
   await page.goto('/personal/send');
-  await expect(page.getByLabel('Recipient QIE address')).toBeVisible();
+  await expect(page.getByLabel('Recipient', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Review in wallet' })).toBeEnabled();
   await page.getByRole('button', { name: 'Unlink wallet' }).click();
   await page.getByRole('button', { name: 'Confirm unlink' }).click();
@@ -540,7 +540,7 @@ test('when account wallet sends are enabled it can receive and send with the pas
   await expect(panel.locator('code')).toHaveText(managedAddress);
   await expect(panel.getByAltText(/QR code for your account wallet/)).toBeVisible();
   await page.goto('/personal/send');
-  await panel.getByLabel('Recipient QIE address').fill(recipient);
+  await panel.getByLabel('Recipient', { exact: true }).fill(recipient);
   await panel.getByLabel('Amount in QIEV3').fill('1.5');
   await panel.getByLabel('Password').fill('my-account-password');
   await expect(panel).toContainText('Up to 1000 QIE per transfer');
