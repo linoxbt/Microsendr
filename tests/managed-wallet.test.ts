@@ -35,9 +35,9 @@ test('signup wallet provisioning is owned, persistent and idempotent', async () 
     assert.equal(headers['privy-app-id'], 'test-app');
     assert.equal(headers.authorization, `Basic ${Buffer.from('test-app:test-secret').toString('base64')}`);
     assert.equal(headers['privy-idempotency-key'], undefined);
-    if (String(url).endsWith(`/ext_wal_microsendr_${userId}`)) return Response.json({ id: walletId, address });
+    if (String(url).endsWith(`/ext_wal_roots_${userId}`)) return Response.json({ id: walletId, address });
     assert.equal(String(url), 'https://api.privy.io/v1/wallets');
-    assert.deepEqual(JSON.parse(String(init?.body)), { chain_type: 'ethereum', external_id: `microsendr_${userId}` });
+    assert.deepEqual(JSON.parse(String(init?.body)), { chain_type: 'ethereum', external_id: `roots_${userId}` });
     // The external id is write-once: a second create is a conflict, then looked up.
     return creates++ === 0 ? Response.json({ id: walletId, address }) : new Response('{}', { status: 409 });
   }, async () => {
