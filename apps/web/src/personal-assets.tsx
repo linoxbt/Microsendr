@@ -74,7 +74,7 @@ export function AssetDetail({ asset, activity, go, hidden, refresh, refreshing }
       <div className="fin-asset-detail-balance">
         <span>Your balance</span>
         <strong>{hidden ? '••••' : assetAmount(asset)} <small>{asset.amount_atomic === null ? '' : asset.code}</small></strong>
-        <p>{asset.status === 'ready' ? 'Across your Microsendr wallets' : asset.code === 'NGN'
+        <p>{asset.status === 'ready' ? 'Across your Roots wallets' : asset.code === 'NGN'
           ? 'Naira accounts are not available yet' : 'Balance could not be loaded'}</p>
       </div>
       <div className="fin-asset-detail-actions">
@@ -82,7 +82,7 @@ export function AssetDetail({ asset, activity, go, hidden, refresh, refreshing }
           <button onClick={() => go('/personal/deposit')}><span><ArrowDownLeft size={20} /></span>Receive QIE</button>
           <button onClick={() => go('/personal/send')}><span><ArrowUpRight size={20} /></span>Send QIE</button>
         </>}
-        {asset.code === 'QUSDC' && <span className="fin-asset-detail-note">QUSDC that arrives in your linked wallets shows here. Sending QUSDC from Microsendr is not available yet.</span>}
+        {asset.code === 'QUSDC' && <span className="fin-asset-detail-note">QUSDC that arrives in your linked wallets shows here. Sending QUSDC from Roots is not available yet.</span>}
         {asset.code === 'NGN' && <span className="fin-asset-detail-note">Bank deposits and payouts are not available yet.</span>}
       </div>
     </section>

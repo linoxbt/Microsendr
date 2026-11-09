@@ -24,7 +24,7 @@ process.on('SIGTERM', () => {
 });
 try {
   await pool.query('SELECT 1');
-  console.log('Microsendr worker ready');
+  console.log('Roots worker ready');
   const dispatch = () => runOnce({ onlyIntent });
   const rail = () => (onlyIntent ? Promise.resolve(false) : runRailOnce());
   const webhooks = () => deliverOne({ onlyMerchant });

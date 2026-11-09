@@ -1,1 +1,1 @@
-{"name":"@microsendr/stellar-payments","version":"0.4.0","private":true,"type":"module","exports":"./src/index.ts"}
+{"name":"@roots/stellar-payments","version":"0.4.0","private":true,"type":"module","exports":"./src/index.ts"}

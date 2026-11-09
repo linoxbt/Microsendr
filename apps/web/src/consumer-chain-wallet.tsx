@@ -147,7 +147,7 @@ export function ConsumerChainWallet({
       await consumerRequest(`wallets/${encodeURIComponent(selected.id)}`, 'DELETE', undefined, csrf);
       setConfirmUnlink(false);
       await loadWallets();
-      setNotice('Wallet unlinked. It keeps its funds; Microsendr no longer shows it.');
+      setNotice('Wallet unlinked. It keeps its funds; Roots no longer shows it.');
       await notifyChanged();
     } catch (cause) { setError((cause as Error).message); }
     finally { setBusy(false); }
@@ -232,11 +232,11 @@ export function ConsumerChainWallet({
   }
 
   const managedOpen = !!managed?.can_send && !!managedLimits;
-  const accountWallet = wallets && !managedOpen && <div className="fin-chain-account" aria-label="Microsendr account wallet" role="group">
+  const accountWallet = wallets && !managedOpen && <div className="fin-chain-account" aria-label="Roots account wallet" role="group">
     <ShieldCheck size={19} />
     <div>
-      <b>Microsendr account wallet</b>
-      {managed ? <p>Microsendr manages this wallet's signing key. Deposits to and sends from the account wallet are not open yet, so no address is shown. Use a linked wallet you control for QIE.</p>
+      <b>Roots account wallet</b>
+      {managed ? <p>Roots manages this wallet's signing key. Deposits to and sends from the account wallet are not open yet, so no address is shown. Use a linked wallet you control for QIE.</p>
         : <p>Your account wallet isn't set up yet. Deposits to the account wallet are not open yet either way.</p>}
       {!managed && <button className="fin-text" type="button" onClick={() => void setUpAccountWallet()} disabled={busy}>
         <RefreshCw size={14} /> Check wallet
@@ -255,7 +255,7 @@ export function ConsumerChainWallet({
     {managedOpen && <h3 className="fin-chain-subhead">Your own wallets</h3>}
     {!wallets ? <p className="fin-chain-empty" role="status">Loading your wallets…</p>
       : !linked.length ? <div className="fin-chain-empty">
-        <p>{managedOpen ? 'You can also link' : 'Link'} a self-custody EVM wallet to {mode === 'receive' ? 'receive' : 'send'} native QIEV3 on QIE Mainnet. Your wallet keeps control of its keys; Microsendr never holds them.</p>
+        <p>{managedOpen ? 'You can also link' : 'Link'} a self-custody EVM wallet to {mode === 'receive' ? 'receive' : 'send'} native QIEV3 on QIE Mainnet. Your wallet keeps control of its keys; Roots never holds them.</p>
         <button className="fin-primary" type="button" onClick={() => void linkWallet()} disabled={busy}>
           <Link2 size={17} /> {busy ? 'Connecting…' : 'Link QIE wallet'}
         </button>
@@ -280,7 +280,7 @@ export function ConsumerChainWallet({
             {qr && <img src={qr} alt="QR code for the QIE wallet address shown below" width="240" height="240" />}
             <code>{selected.address}</code>
             <button className="fin-secondary" type="button" onClick={() => void copyAddress()}><Copy size={16} /> Copy address</button>
-            <p>This is your own linked wallet: you hold its keys. Send only native QIEV3 on QIE Mainnet to this address. Other assets and networks are not shown by Microsendr.</p>
+            <p>This is your own linked wallet: you hold its keys. Send only native QIEV3 on QIE Mainnet to this address. Other assets and networks are not shown by Roots.</p>
             <a href={`${explorer}address/${selected.address}`} target="_blank" rel="noreferrer">View on explorer <ArrowUpRight size={15} /></a>
           </div>}
           {mode === 'send' && <form className="fin-chain-send" onSubmit={send}>

@@ -1,5 +1,5 @@
 {
-  "name": "@microsendr/sdk",
+  "name": "@roots/sdk",
   "version": "0.8.0",
   "type": "module",
   "main": "./dist/index.js",

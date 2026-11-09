@@ -1,4 +1,4 @@
-// Register or reuse the exact Microsendr webhook destination. Never prints secrets.
+// Register or reuse the exact Roots webhook destination. Never prints secrets.
 // Run after setting DIDIT_API_KEY in .env.local. .env.public is ignored by git.
 import { readFileSync, writeFileSync, chmodSync } from 'node:fs';
 import dotenv from 'dotenv';
@@ -27,7 +27,7 @@ const existing = destinations.find((d) => d.url === url);
 const destination = existing
   ? await api(`/webhook/destinations/${existing.uuid}/`)
   : await api('/webhook/destinations/', 'POST', {
-      label: 'Microsendr Personal identity',
+      label: 'Roots Personal identity',
       url,
       webhook_version: 'v3',
       subscribed_events: ['status.updated'],

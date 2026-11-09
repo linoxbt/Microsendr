@@ -34,7 +34,7 @@ import {
   type ConsumerProfile,
 } from './consumer-api.js';
 import { logoutPrivyIfMounted } from './auth-shell.js';
-import { MicrosendrMark } from './microsendr-logo.js';
+import { RootsMark } from './roots-logo.js';
 import { ConsumerChainWallet } from './consumer-chain-wallet.js';
 import { AssetDetail, AssetIcon, assetAmount, assetDefaults, type PersonalAsset } from './personal-assets.js';
 
@@ -93,7 +93,7 @@ function PersonalLoading() {
   return (
     <div className="personal-loading" role="status" aria-label="Loading account">
       <span className="personal-loading-mark">
-        <MicrosendrMark />
+        <RootsMark />
       </span>
     </div>
   );
@@ -238,14 +238,14 @@ export function PersonalPage({
     ]);
     if (server.status === 'rejected' && !isSessionExpired(server.reason))
       setSignInNotice(
-        'You are signed out on this device. We could not reach Microsendr to end the session, so it will expire on its own.',
+        'You are signed out on this device. We could not reach Roots to end the session, so it will expire on its own.',
       );
     signingOut.current = false;
   }
   if (!session || (session.authenticated && (!profile || !overview)))
     return error ? (
       <div className="fin-connection">
-        <MicrosendrMark />
+        <RootsMark />
         <h1>Let’s reconnect.</h1>
         <p role="alert">{error}</p>
         <button className="fin-primary" onClick={retry}>
@@ -389,7 +389,7 @@ export function PersonalPage({
         <header className="fin-topbar">
           <div>
             <span className="fin-mobile-logo">
-              <MicrosendrMark />
+              <RootsMark />
             </span>
             <span className="fin-topbar-brand">{brand}</span>
           </div>
@@ -433,7 +433,7 @@ export function PersonalPage({
             <>
               <div className="fin-home-heading">
                 <div>
-                  <span className="fin-kicker">YOUR MICROSENDR SPACE</span>
+                  <span className="fin-kicker">YOUR ROOTS SPACE</span>
                   <h1>
                     Hello{p.first_name ? `, ${p.first_name}` : ''}
                     <span className="fin-greeting-dot">.</span>
@@ -623,7 +623,7 @@ export function PersonalPage({
                         );
                         const a = document.createElement('a');
                         a.href = url;
-                        a.download = `microsendr-${receipt.id}.json`;
+                        a.download = `roots-${receipt.id}.json`;
                         a.click();
                         setTimeout(() => URL.revokeObjectURL(url), 1000);
                       }}
@@ -661,7 +661,7 @@ export function PersonalPage({
           {['identity', 'onboarding'].includes(tab) && (
             <>
               <PageHeading
-                kicker={tab === 'onboarding' ? 'WELCOME TO MICROSENDR' : 'ACCOUNT VERIFICATION'}
+                kicker={tab === 'onboarding' ? 'WELCOME TO ROOTS' : 'ACCOUNT VERIFICATION'}
                 title={
                   tab === 'onboarding'
                     ? `You’re in${p.first_name ? `, ${p.first_name}` : ''}.`
@@ -717,7 +717,7 @@ export function PersonalPage({
             </section>
           )}
           <footer className="fin-app-footer">
-            <span>© {new Date().getFullYear()} Microsendr</span>
+            <span>© {new Date().getFullYear()} Roots</span>
             <button onClick={() => go('/personal/security')}>
               <LockKeyhole size={12} /> Account security
             </button>

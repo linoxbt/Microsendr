@@ -17,7 +17,7 @@ lets new services read a config file, so the settings in `deploy/railway/*.json`
 (start command, pre-deploy migration, health check, restart policy) are set on
 each service directly; keep the two in step.
 
-The live project is `microsendr` (production environment). The API's Railway
+The live project is `roots` (production environment). The API's Railway
 domain is `api-production-7b1b.up.railway.app`.
 
 ## Variables

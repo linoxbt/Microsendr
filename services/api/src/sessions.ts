@@ -131,7 +131,7 @@ export async function registerSessions(app: FastifyInstance, config = privyConfi
   app.post('/business/api/auth/verify', { config: { rateLimit: { max: 10, timeWindow: '1 hour' } } }, async (request, reply) => {
     consoleOrigin(request);
     if (!secret || !sendCode) throw new PaymentError(503,'email_unavailable','Email sign-in is not configured');
-    const { challenge_id, code, name, link_current, invite_token } = z.object({ challenge_id: z.string().regex(/^otp_[a-f0-9]{32}$/), code: z.string().regex(/^[0-9]{6}$/), name: z.string().trim().min(1).max(80).default('My Microsendr business'), link_current: z.boolean().default(false), invite_token: z.string().regex(/^kora_inv_[a-f0-9]{64}$/).optional() }).strict().parse(request.body);
+    const { challenge_id, code, name, link_current, invite_token } = z.object({ challenge_id: z.string().regex(/^otp_[a-f0-9]{32}$/), code: z.string().regex(/^[0-9]{6}$/), name: z.string().trim().min(1).max(80).default('My Roots business'), link_current: z.boolean().default(false), invite_token: z.string().regex(/^kora_inv_[a-f0-9]{64}$/).optional() }).strict().parse(request.body);
     if (link_current && invite_token) throw new PaymentError(400,'login_options_conflict','Choose one workspace action');
     const previous = await readSession(request);
     if (previous) requireCsrf(request,previous);
@@ -173,7 +173,7 @@ export async function registerSessions(app: FastifyInstance, config = privyConfi
       const input = z
         .object({
           access_token: z.string().min(1).max(8192),
-          name: z.string().trim().min(1).max(80).default('My Microsendr workspace'),
+          name: z.string().trim().min(1).max(80).default('My Roots workspace'),
           link_current: z.boolean().default(false),
           invite_token: z
             .string()
@@ -272,7 +272,7 @@ export async function registerSessions(app: FastifyInstance, config = privyConfi
       const previous = await readSession(request);
       if (previous) requireCsrf(request, previous);
       const input = z
-        .object({ name: z.string().trim().min(1).max(80).default('Microsendr Sandbox') })
+        .object({ name: z.string().trim().min(1).max(80).default('Roots Sandbox') })
         .strict()
         .parse(request.body ?? {});
       const principal = await provisionWorkspace(app, input.name);
@@ -311,7 +311,7 @@ export async function registerSessions(app: FastifyInstance, config = privyConfi
     z.object({ acknowledge_simulation: z.literal(true) }).strict().parse(request.body);
     return transaction(async (c) => {
       const organization=(await c.query('SELECT kyb_state,kyb_required,sandbox_funding_on_approval FROM organizations WHERE legacy_merchant_id=$1 FOR UPDATE',[session.principal.merchant_id])).rows[0];
-      if(!organization?.kyb_required) throw new PaymentError(403,'business_account_required','Open a Microsendr Business account first');
+      if(!organization?.kyb_required) throw new PaymentError(403,'business_account_required','Open a Roots Business account first');
       if(organization.kyb_state!=='sandbox_approved') {
         if(organization.sandbox_funding_on_approval)
           await postJournal(c,{reference:`business:sandbox-fund:${session.principal.merchant_id}`,description:'Business sandbox NGN fixture',entries:[

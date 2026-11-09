@@ -1434,7 +1434,7 @@
 .fin-topbar > div:first-child > span b {
   font-weight: 700;
 }
-.fin-topbar-brand .logo.microsendr-wordmark {
+.fin-topbar-brand .logo.roots-wordmark {
   font-size: 22px;
   color: var(--fin-ink);
 }
@@ -1740,10 +1740,10 @@
   .fin-topbar > div:first-child > span:not(.fin-mobile-logo) {
     font-size: 16px;
   }
-  .fin-topbar-brand .logo.microsendr-wordmark {
+  .fin-topbar-brand .logo.roots-wordmark {
     font-size: 17px;
   }
-  .fin-topbar-brand .logo.microsendr-wordmark > svg {
+  .fin-topbar-brand .logo.roots-wordmark > svg {
     display: none;
   }
   .fin-mobile-logo {

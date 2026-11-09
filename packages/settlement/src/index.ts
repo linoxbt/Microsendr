@@ -34,7 +34,7 @@ export function nativeTransferAuthorization(input: {
   amountAtomic: bigint; idempotencyKey: string; expiresAt: string;
 }): string {
   return [
-    'Microsendr settlement authorization',
+    'Roots settlement authorization',
     `Account: ${input.accountId}`,
     `Network: ${input.network}`,
     `Chain ID: ${input.chainId}`,

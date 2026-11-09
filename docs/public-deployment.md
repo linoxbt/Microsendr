@@ -1,8 +1,8 @@
-# Microsendr public sandbox deployment
+# Roots public sandbox deployment
 
 The frontend is published at `https://kora-sandbox-linoxbt.netlify.app` and
 proxies API paths to `https://kora-api.13-140-188-185.sslip.io`. The API, worker,
-and PostgreSQL run on the Microsendr host with `compose.public.yaml`. The database is
+and PostgreSQL run on the Roots host with `compose.public.yaml`. The database is
 stored in the `kora-public-postgres` Docker volume. Fiat providers remain in
 test mode. Linked native QIEV3 wallets use QIE Mainnet and can move real assets.
 See SECURITY.md for the custody boundary.

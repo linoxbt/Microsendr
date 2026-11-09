@@ -108,7 +108,7 @@ export async function matches(value: string, stored: string | null) {
   const [salt, hex, N] = parts[0] === 'scrypt2' ? [parts[2], parts[3], Number(parts[1])]
     : parts[0] === 'scrypt' ? [parts[1], parts[2], LEGACY_N] : ['', '', CURRENT_N];
   if (![CURRENT_N, LEGACY_N].includes(N)) return false;
-  const key = await derive(value, salt || 'microsendr-constant-time-missing-user', N);
+  const key = await derive(value, salt || 'roots-constant-time-missing-user', N);
   return !!hex && /^[a-f0-9]{128}$/.test(hex) && timingSafeEqual(key, Buffer.from(hex, 'hex'));
 }
 function profile(row: Record<string, any>) {
@@ -440,7 +440,7 @@ export function registerConsumer(app: FastifyInstance, deps: Dependencies) {
         withdrawal: { available: false, reason: 'Bank withdrawals are not available yet.' },
         transfer: {
           available: false,
-          reason: 'Transfers from your Microsendr balance are not available yet.',
+          reason: 'Transfers from your Roots balance are not available yet.',
         },
         conversion: {
           available: false,

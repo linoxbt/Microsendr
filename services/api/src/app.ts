@@ -143,7 +143,7 @@ export async function buildApi(options: ApiOptions = {}) {
     openapi: {
       openapi: '3.0.3',
       info: {
-        title: 'Microsendr API',
+        title: 'Roots API',
         version: '0.8.0',
         description:
           'African financial interoperability infrastructure. Paystack NGN collections and payouts accept test keys only. Cross-border routes and identity checks remain sandbox simulations.',

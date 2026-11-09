@@ -34,6 +34,8 @@ export async function ensureManagedWallet(userId: string, accountId: string): Pr
   const appId = process.env.PRIVY_APP_ID;
   const secret = process.env.PRIVY_APP_SECRET;
   if (!appId || !secret) return null;
+  // Persisted at Privy for every wallet already issued (the app's former name).
+  // Changing it would orphan those wallets, so it stays.
   const externalId = `microsendr_${userId}`;
   const call = async (url: string, init: RequestInit = {}) => {
     let response: Response;

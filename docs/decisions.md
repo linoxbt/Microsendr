@@ -2,7 +2,7 @@
 
 ## Product name and scope
 
-The current product is **Microsendr**, a consumer financial account with
+The current product is **Roots**, a consumer financial account with
 QIE as its intended primary settlement network. The current launch scope is
 Personal. Business and Stellar Testnet modules remain historical sandbox work.
 The previous Kora name and network scope are retained in archived material only.

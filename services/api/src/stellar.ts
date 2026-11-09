@@ -74,7 +74,7 @@ export async function registerStellar(app: FastifyInstance, injected?: StellarTe
       network: 'testnet',
       configured,
       asset_code: 'KUSD',
-      asset_name: 'Microsendr Test USD',
+      asset_name: 'Roots Test USD',
       issuer: c?.config.issuer ?? null,
       treasury: c?.config.treasury ?? null,
       fx_basis: 'fixture_1600_ngn_per_kusd',

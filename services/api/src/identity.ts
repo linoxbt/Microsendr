@@ -60,7 +60,7 @@ export function privyVerifier(config: PrivyConfig) {
         throw new PaymentError(
           503,
           'login_not_configured',
-          'Email login is not configured yet. You can explore Microsendr in a guest sandbox.',
+          'Email login is not configured yet. You can explore Roots in a guest sandbox.',
         );
       try {
         const { payload } = await jwtVerify(token, publicKey, {

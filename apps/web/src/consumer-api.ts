@@ -16,7 +16,7 @@ export class SessionExpiredError extends ConsumerRequestError {
     this.name = 'SessionExpiredError';
   }
 }
-export const sessionExpiredEvent = 'microsendr:personal-session-expired';
+export const sessionExpiredEvent = 'roots:personal-session-expired';
 // Credential errors from sign-in routes (invalid_code, invalid_credentials) are not session expiry.
 const expiredCodes = new Set(['personal_login_required', 'csrf_invalid']);
 export function isSessionExpired(error: unknown): error is SessionExpiredError {

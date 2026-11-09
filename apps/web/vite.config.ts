@@ -30,7 +30,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@microsendr/sdk': fileURLToPath(new URL('../../sdks/typescript/src/index.ts', import.meta.url)),
+      '@roots/sdk': fileURLToPath(new URL('../../sdks/typescript/src/index.ts', import.meta.url)),
     },
   },
   server: {

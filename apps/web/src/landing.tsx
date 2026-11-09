@@ -58,12 +58,12 @@ const previews = {
 type Preview = keyof typeof previews;
 const questions = [
   [
-    'What can I do on Microsendr today?',
-    'You can create your Personal account, complete your profile, link a self-custody QIE wallet you control, and use it to receive or send native QIEV3 on QIE Mainnet. Deposits to and sends from a Microsendr-managed account wallet, digital-dollar deposits, exchange, and bank payments are still coming.',
+    'What can I do on Roots today?',
+    'You can create your Personal account, complete your profile, link a self-custody QIE wallet you control, and use it to receive or send native QIEV3 on QIE Mainnet. Deposits to and sends from a Roots-managed account wallet, digital-dollar deposits, exchange, and bank payments are still coming.',
   ],
   [
     'Do I need a crypto wallet to register?',
-    'No. Create your Microsendr account with your email and password. You do not need to connect an external wallet to sign up.',
+    'No. Create your Roots account with your email and password. You do not need to connect an external wallet to sign up.',
   ],
   [
     'When do I verify my identity?',
@@ -100,7 +100,7 @@ export function LandingPage({ brand, go }: Props) {
   const Icon = current.icon;
   const start = () => go(authenticated ? '/personal/home' : '/personal/login');
   useEffect(() => {
-    document.title = 'Microsendr | Money for the life you’re building.';
+    document.title = 'Roots | Money for the life you’re building.';
   }, []);
   return (
     <div className="ms-site lp-site">
@@ -108,7 +108,7 @@ export function LandingPage({ brand, go }: Props) {
         Skip to content
       </a>
       <header className="public-header lp-header">
-        <a className="lp-brand" href="/" aria-label="Microsendr home">
+        <a className="lp-brand" href="/" aria-label="Roots home">
           {brand}
         </a>
         <nav
@@ -154,7 +154,7 @@ export function LandingPage({ brand, go }: Props) {
             </h1>
             <p>
               A fresh take on everyday money. Digital dollars, local payments and everything in
-              between — coming together in Microsendr.
+              between — coming together in Roots.
             </p>
             <div className="lp-hero-actions">
               <button className="lp-button" onClick={start}>
@@ -170,7 +170,7 @@ export function LandingPage({ brand, go }: Props) {
           </div>
           <div
             className="lp-hero-art"
-            aria-label="Microsendr product concept alongside everyday payment photography"
+            aria-label="Roots product concept alongside everyday payment photography"
           >
             <div className="lp-orbit lp-orbit-one" />
             <div className="lp-orbit lp-orbit-two" />
@@ -473,7 +473,7 @@ export function LandingPage({ brand, go }: Props) {
               the full picture.
             </h2>
             <p>
-              Good financial experiences start with knowing where you stand. Here’s where Microsendr
+              Good financial experiences start with knowing where you stand. Here’s where Roots
               stands today.
             </p>
             <div className="lp-control-principles">
@@ -500,7 +500,7 @@ export function LandingPage({ brand, go }: Props) {
               <b className="lp-open">Available</b>
             </div>
             <div>
-              <span>Microsendr account wallet deposits & sends</span>
+              <span>Roots account wallet deposits & sends</span>
               <b>Coming</b>
             </div>
             <div>
@@ -551,7 +551,7 @@ export function LandingPage({ brand, go }: Props) {
             your next move.
           </h2>
           <button className="lp-button" onClick={start}>
-            Get started with Microsendr <ArrowUpRight size={20} />
+            Get started with Roots <ArrowUpRight size={20} />
           </button>
           <p>Your account starts here. Money services are on the way.</p>
         </section>
@@ -577,7 +577,7 @@ export function LandingPage({ brand, go }: Props) {
           </nav>
         </div>
         <div className="lp-footer-bottom">
-          <span>© {new Date().getFullYear()} Microsendr</span>
+          <span>© {new Date().getFullYear()} Roots</span>
           <span>Personal finance. A fresh perspective.</span>
           <a href="#landing-title">Back to top ↑</a>
         </div>

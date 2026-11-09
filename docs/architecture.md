@@ -1,6 +1,6 @@
 # Architecture
 
-Microsendr is a TypeScript monorepo with a Fastify API, durable worker, React client and PostgreSQL. The financial core is a modular monolith. API and worker share domain packages but run as separate processes.
+Roots is a TypeScript monorepo with a Fastify API, durable worker, React client and PostgreSQL. The financial core is a modular monolith. API and worker share domain packages but run as separate processes.
 
 ## Boundaries
 
@@ -27,6 +27,6 @@ Unknown external outcomes remain owned and visible. The orchestrator queries the
 
 ## Deployment boundaries
 
-The frontend is on Netlify. The API, worker and PostgreSQL run separately. The API hostname predates the rename and remains an infrastructure endpoint. Provider keys and signing material are server-side only. See [public deployment](public-deployment.md) and [settlement status](microsendr-settlement-status.md).
+The frontend is on Netlify. The API, worker and PostgreSQL run separately. The API hostname predates the rename and remains an infrastructure endpoint. Provider keys and signing material are server-side only. See [public deployment](public-deployment.md) and [settlement status](roots-settlement-status.md).
 
 Historical Business and Stellar modules remain isolated from Personal routes. A production digital-dollar product requires an allowlisted QIE asset, reliable deposit attribution, signing/custody, provider settlement, reconciliation and partner approval.

@@ -1,11 +1,11 @@
 import { test, expect, type Page } from '@playwright/test';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 
-test('landing presents Microsendr Personal and routes prompts', async ({ page }) => {
+test('landing presents Roots Personal and routes prompts', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Money for');
   await expect(
-    page.locator('.public-header').getByRole('img', { name: 'Microsendr', exact: true }),
+    page.locator('.public-header').getByRole('img', { name: 'Roots', exact: true }),
   ).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await expect(page.getByRole('button', { name: 'Switch to dark theme' })).toHaveCount(0);
@@ -16,7 +16,7 @@ test('landing presents Microsendr Personal and routes prompts', async ({ page })
   await expect(page.getByLabel('Email address')).toBeEnabled();
   await expect(page.getByLabel('Password', { exact: true })).toBeEnabled();
   await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeEnabled();
-  await expect(page).toHaveTitle('Sign in | Microsendr');
+  await expect(page).toHaveTitle('Sign in | Roots');
   await expect(page.getByRole('button', { name: 'Switch to dark theme' })).toHaveCount(0);
   await expect(page.locator('.fin-auth-art')).toBeVisible();
   await page.goto('/business');
@@ -32,16 +32,16 @@ test('landing presents Microsendr Personal and routes prompts', async ({ page })
 
 test('landing product tour, FAQs and mobile navigation work', async ({ page }) => {
   await page.goto('/');
-  await expect(page).toHaveTitle('Microsendr | Money for the life you’re building.');
+  await expect(page).toHaveTitle('Roots | Money for the life you’re building.');
   await page.getByRole('tab', { name: 'Exchange', exact: true }).click();
   await expect(page.getByRole('tabpanel')).toContainText('Know what you’ll get.');
   await page.getByRole('tab', { name: 'Exchange', exact: true }).press('ArrowRight');
   await expect(page.getByRole('tab', { name: 'Withdraw', exact: true })).toBeFocused();
   await expect(page.getByRole('tabpanel')).toContainText('From your screen to real life.');
-  await page.getByText('What can I do on Microsendr today?', { exact: true }).click();
+  await page.getByText('What can I do on Roots today?', { exact: true }).click();
   await expect(page.locator('details[open]')).toContainText('native QIEV3 on QIE Mainnet');
   await expect(page.locator('#availability')).toContainText('Personal account & profile');
-  await page.screenshot({ path: '/tmp/microsendr-landing-desktop.png', fullPage: true });
+  await page.screenshot({ path: '/tmp/roots-landing-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => scrollTo(0, 0));
   await page.getByRole('button', { name: 'Open navigation' }).click();
@@ -55,7 +55,7 @@ test('landing product tour, FAQs and mobile navigation work', async ({ page }) =
     'false',
   );
   await page.evaluate(() => scrollTo(0, 0));
-  await page.screenshot({ path: '/tmp/microsendr-landing-phone.png', fullPage: true });
+  await page.screenshot({ path: '/tmp/roots-landing-phone.png', fullPage: true });
   for (const width of [320, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     expect(
@@ -88,7 +88,7 @@ test('Personal sign-in keeps the form ahead of the photo on phones', async ({ pa
   await expect(page).toHaveURL('/');
 });
 
-test('default theme uses a cream canvas across Microsendr Personal pages', async ({ page }) => {
+test('default theme uses a cream canvas across Roots Personal pages', async ({ page }) => {
   for (const [path, surface] of [
     ['/', '.ms-site'],
     ['/personal/login', '.fin-auth'],
@@ -105,7 +105,7 @@ test('default theme uses a cream canvas across Microsendr Personal pages', async
     'background-color',
     'rgb(70, 130, 180)',
   );
-  await page.evaluate(() => localStorage.setItem('microsendr-theme', 'dark'));
+  await page.evaluate(() => localStorage.setItem('roots-theme', 'dark'));
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 });
@@ -183,7 +183,7 @@ test('custom registration, optional identity, profile editing and mobile money n
   await expect(page.getByRole('heading', { name: 'Page not found' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Receive QIE' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'QIE activity' })).toBeVisible();
-  await page.screenshot({ path: '/tmp/microsendr-asset-qie-desktop.png', fullPage: true });
+  await page.screenshot({ path: '/tmp/roots-asset-qie-desktop.png', fullPage: true });
   await page.getByRole('button', { name: 'All assets' }).click();
   await page.getByRole('button', { name: 'View QUSDC details' }).click();
   await expect(page.getByRole('region', { name: 'QUSDC details' })).toContainText('2.5 QUSDC');
@@ -200,7 +200,7 @@ test('custom registration, optional identity, profile editing and mobile money n
   await expect(page.getByText('From digital to')).toHaveCount(0);
   await expect(page.getByText('sandbox', { exact: false })).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'QIE wallet' })).toHaveCount(0);
-  await page.screenshot({ path: '/tmp/microsendr-dashboard-desktop.png', fullPage: true });
+  await page.screenshot({ path: '/tmp/roots-dashboard-desktop.png', fullPage: true });
   await page.getByRole('button', { name: 'Switch to dark theme' }).click();
   await expect(page.locator('.fin-app')).toHaveCSS('background-color', 'rgb(9, 9, 9)');
   await page.getByRole('button', { name: 'Switch to light theme' }).click();
@@ -219,7 +219,7 @@ test('custom registration, optional identity, profile editing and mobile money n
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Hello, Amara.' })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.screenshot({ path: '/tmp/microsendr-dashboard-phone.png', fullPage: true });
+  await page.screenshot({ path: '/tmp/roots-dashboard-phone.png', fullPage: true });
   for (const path of [
     'home',
     'assets/qie',
@@ -237,7 +237,7 @@ test('custom registration, optional identity, profile editing and mobile money n
   ]) {
     await page.goto('/personal/' + path);
     await expect(page.locator('h1')).toBeVisible();
-    if (path === 'assets/qie') await page.screenshot({ path: '/tmp/microsendr-asset-qie-phone.png', fullPage: true });
+    if (path === 'assets/qie') await page.screenshot({ path: '/tmp/roots-asset-qie-phone.png', fullPage: true });
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth - innerWidth),
       path,
@@ -267,7 +267,7 @@ test('custom registration, optional identity, profile editing and mobile money n
   await page.reload();
   await page.getByRole('button', { name: 'Crypto transfer', exact: true }).click();
   // A managed (custodial) wallet cannot send yet, so it is never offered as a deposit address.
-  await expect(page.getByRole('group', { name: 'Microsendr account wallet' })).toContainText('not open yet');
+  await expect(page.getByRole('group', { name: 'Roots account wallet' })).toContainText('not open yet');
   await expect(page.getByRole('button', { name: 'Link QIE wallet' })).toBeVisible();
   await expect(page.getByRole('img', { name: /QR code/ })).toHaveCount(0);
   await expect(page.locator('main')).not.toContainText(wallet.address);
@@ -304,7 +304,7 @@ const overview = {
     fiat_deposit: { available: false, reason: 'Bank deposits are not available yet.' },
     crypto_deposit: { available: false, reason: 'Your deposit account is not available yet.' },
     withdrawal: { available: false, reason: 'Bank withdrawals are not available yet.' },
-    transfer: { available: false, reason: 'Transfers from your Microsendr balance are not available yet.' },
+    transfer: { available: false, reason: 'Transfers from your Roots balance are not available yet.' },
     conversion: { available: false, reason: 'No exchange route is available for these currencies yet.' },
   },
 };
@@ -359,10 +359,10 @@ test('managed account wallet never shows a receive address or QR, and can be che
     return route.fulfill(json({ id: managedRecord.id, address: managedAddress, network: 'qie-mainnet', custody: 'managed' }));
   });
   await page.goto('/personal/deposit');
-  const account = page.getByRole('group', { name: 'Microsendr account wallet' });
+  const account = page.getByRole('group', { name: 'Roots account wallet' });
   await expect(account).toContainText("isn't set up yet");
   await account.getByRole('button', { name: 'Check wallet' }).click();
-  await expect(account).toContainText("Microsendr manages this wallet's signing key");
+  await expect(account).toContainText("Roots manages this wallet's signing key");
   expect(managedBodies).toEqual([{}]);
   await expect(page.getByRole('img', { name: /QR code/ })).toHaveCount(0);
   await expect(page.locator('body')).not.toContainText(managedAddress);
@@ -404,7 +404,7 @@ test('links a self-custody wallet by signature, receives to it, and unlinks it',
   });
   await page.route('**/personal/api/wallets/challenge', (route) => {
     expect(route.request().postDataJSON()).toEqual({ address: linkedAddress });
-    return route.fulfill(json({ challenge_id: 'cwc_' + 'b'.repeat(32), message: 'Link this QIE wallet to your Microsendr account', expires_at: '2026-10-21T10:05:00.000Z' }));
+    return route.fulfill(json({ challenge_id: 'cwc_' + 'b'.repeat(32), message: 'Link this QIE wallet to your Roots account', expires_at: '2026-10-21T10:05:00.000Z' }));
   });
   let deleted = '';
   await page.route('**/personal/api/wallets/cwa_*', (route) => {
@@ -421,9 +421,9 @@ test('links a self-custody wallet by signature, receives to it, and unlinks it',
   expect(await page.evaluate(() => (window as unknown as { ethereumCalls: string[] }).ethereumCalls)).toContain('personal_sign');
   await expect(page.getByRole('img', { name: 'QR code for the QIE wallet address shown below' })).toBeVisible();
   await expect(page.locator('.fin-chain-receive code')).toHaveText(linkedAddress);
-  await expect(page.locator('.fin-chain-receive')).not.toContainText('Microsendr manages');
+  await expect(page.locator('.fin-chain-receive')).not.toContainText('Roots manages');
   await expect(page.locator('body')).not.toContainText(managedAddress);
-  await page.screenshot({ path: '/tmp/microsendr-linked-wallet-receive.png', fullPage: true });
+  await page.screenshot({ path: '/tmp/roots-linked-wallet-receive.png', fullPage: true });
   await page.goto('/personal/send');
   await expect(page.getByLabel('Recipient QIE address')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Review in wallet' })).toBeEnabled();
@@ -486,14 +486,14 @@ test('recovery code screen offers resend and a different email with neutral copy
   await page.getByRole('button', { name: 'Forgot password or upgrading an existing account?' }).click();
   await page.getByLabel('Email address').fill('nobody@example.test');
   await page.getByRole('button', { name: 'Send verification code' }).click();
-  await expect(page.getByRole('status')).toContainText('If nobody@example.test belongs to a Microsendr account');
+  await expect(page.getByRole('status')).toContainText('If nobody@example.test belongs to a Roots account');
   const codeInput = page.getByLabel('Verification code');
   await expect(codeInput).toHaveAttribute('pattern', '[0-9]{6}');
   await codeInput.fill('12ab34');
   await expect(codeInput).toHaveValue('1234');
   await codeInput.fill('123456');
   await page.getByRole('button', { name: 'Verify code' }).click();
-  await expect(page.getByRole('alert')).toContainText('Recovery only works for an existing Microsendr account');
+  await expect(page.getByRole('alert')).toContainText('Recovery only works for an existing Roots account');
   await expect(page).toHaveURL(/\/personal\/login$/);
   await page.getByRole('button', { name: 'Resend code' }).click();
   await expect.poll(() => starts.length).toBe(2);
@@ -536,7 +536,7 @@ test('when account wallet sends are enabled it can receive and send with the pas
     return route.fulfill(json({ id: 'stl_' + 'b'.repeat(32), tx_hash: '0x' + 'd'.repeat(64), status: 'submitted', custody: 'managed' }));
   });
   await page.goto('/personal/deposit');
-  const panel = page.getByRole('group', { name: 'Microsendr account wallet' });
+  const panel = page.getByRole('group', { name: 'Roots account wallet' });
   await expect(panel.locator('code')).toHaveText(managedAddress);
   await expect(panel.getByAltText(/QR code for your account wallet/)).toBeVisible();
   await page.goto('/personal/send');

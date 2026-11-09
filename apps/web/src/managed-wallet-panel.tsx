@@ -10,7 +10,7 @@ const explorer = 'https://mainnet.qie.digital/';
 const qie = (wei: string) => formatEther(BigInt(wei)).replace(/(\.\d{0,6})\d*$/, '$1').replace(/\.$/, '');
 
 /**
- * The Microsendr account wallet: Microsendr holds its key (through Privy) and signs
+ * The Roots account wallet: Roots holds its key (through Privy) and signs
  * sends server-side after the account password confirms each one.
  */
 export function ManagedWalletPanel({ wallet, limits, mode, csrf, onChanged }: {
@@ -67,7 +67,7 @@ export function ManagedWalletPanel({ wallet, limits, mode, csrf, onChanged }: {
   }
   const resetKey = () => setRequestKey(crypto.randomUUID());
 
-  return <div className="fin-chain-managed" role="group" aria-label="Microsendr account wallet">
+  return <div className="fin-chain-managed" role="group" aria-label="Roots account wallet">
     <div className="fin-chain-balance">
       <span><ShieldCheck size={15} /> Account wallet balance</span>
       <strong>{balance ? qie(balance.balance_wei) : '—'} <small>QIEV3</small></strong>
@@ -77,7 +77,7 @@ export function ManagedWalletPanel({ wallet, limits, mode, csrf, onChanged }: {
       {qr && <img src={qr} alt="QR code for your account wallet address shown below" width="240" height="240" />}
       <code>{wallet.address}</code>
       <button className="fin-secondary" type="button" onClick={() => void copy()}><Copy size={16} /> Copy address</button>
-      <p>Your Microsendr account wallet. Microsendr holds its key and sends only when you confirm with your password. Send only native QIEV3 on QIE Mainnet here.</p>
+      <p>Your Roots account wallet. Roots holds its key and sends only when you confirm with your password. Send only native QIEV3 on QIE Mainnet here.</p>
       <a href={`${explorer}address/${wallet.address}`} target="_blank" rel="noreferrer">View on explorer <ArrowUpRight size={15} /></a>
     </div>}
     {mode === 'send' && (sent ? <div className="fin-chain-pending">

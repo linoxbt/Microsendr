@@ -126,7 +126,7 @@ importers:
 
   apps/web:
     dependencies:
-      '@microsendr/sdk':
+      '@roots/sdk':
         specifier: workspace:*
         version: link:../../sdks/typescript
 

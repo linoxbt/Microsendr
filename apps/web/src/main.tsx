@@ -6,8 +6,8 @@ import './base.css';
 import { LandingPage } from './landing.js';
 import './personal.css';
 import './consumer.css';
-import './microsendr.css';
-import { MicrosendrMark, MicrosendrWordmark } from './microsendr-logo.js';
+import './roots.css';
+import { RootsMark, RootsWordmark } from './roots-logo.js';
 
 const PersonalPage = lazy(() =>
   import('./personal.js').then((module) => ({ default: module.PersonalPage })),
@@ -46,7 +46,7 @@ function Loading() {
   return (
     <div className="personal-loading" role="status" aria-label="Loading account">
       <span className="personal-loading-mark">
-        <MicrosendrMark />
+        <RootsMark />
       </span>
     </div>
   );
@@ -55,7 +55,7 @@ function Loading() {
 function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     try {
-      return localStorage.getItem('microsendr-theme') === 'dark' ? 'dark' : 'light';
+      return localStorage.getItem('roots-theme') === 'dark' ? 'dark' : 'light';
     } catch {
       return 'light';
     }
@@ -66,7 +66,7 @@ function App() {
     document.documentElement.dataset.theme =
       path.startsWith('/personal') && personalAuthenticated ? theme : 'light';
     try {
-      localStorage.setItem('microsendr-theme', theme);
+      localStorage.setItem('roots-theme', theme);
     } catch {
       /* storage can be unavailable */
     }
@@ -86,12 +86,12 @@ function App() {
         <PersonalPage
           go={go}
           path={path}
-          brand={<MicrosendrWordmark />}
+          brand={<RootsWordmark />}
           themeToggle={themeToggle}
           onAuthChange={setPersonalAuthenticated}
         />
       </Suspense>
     );
-  return <LandingPage brand={<MicrosendrWordmark />} go={go} />;
+  return <LandingPage brand={<RootsWordmark />} go={go} />;
 }
 createRoot(document.getElementById('root')!).render(<App />);

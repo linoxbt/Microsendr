@@ -135,7 +135,7 @@ export async function reconcileChainSettlement(settlementId: string, adapter: Ch
     });
     if (evidence.block_number !== null && BigInt(evidence.block_number) < BigInt(row.minimum_block_number))
       throw new SettlementError(422, 'historical_transaction', 'Transaction predates the settlement instruction');
-    // A transfer Microsendr signed is re-sent byte for byte while unmined, in case
+    // A transfer Roots signed is re-sent byte for byte while unmined, in case
     // the first broadcast never reached the network. It is never re-signed.
     if (evidence.state === 'pending' && row.signed_transaction)
       await adapter.sendRawTransaction?.(row.signed_transaction).catch(() => undefined);
