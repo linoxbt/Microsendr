@@ -101,9 +101,9 @@ test('default theme uses a cream canvas across Roots Personal pages', async ({ p
   await expect(
     page.getByRole('heading', { name: 'Money for the life you’re building.' }),
   ).toBeVisible();
-  await expect(page.locator('.lp-button').first()).toHaveCSS(
+  await expect(page.locator('.lp-hero-actions .lp-button')).toHaveCSS(
     'background-color',
-    'rgb(70, 130, 180)',
+    'rgb(32, 55, 73)',
   );
   await page.evaluate(() => localStorage.setItem('roots-theme', 'dark'));
   await page.reload();

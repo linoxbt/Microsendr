@@ -1,18 +1,24 @@
-import React, { useEffect, useState, type ReactNode } from 'react';
+import React, { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import {
   ArrowDownLeft,
   ArrowRight,
   ArrowUpRight,
+  AtSign,
+  BadgeCheck,
   Check,
   ChevronDown,
+  Clock,
   Fingerprint,
-  Globe2,
+  House,
+  KeyRound,
+  Landmark,
+  LineChart,
   Menu,
-  Plus,
+  Receipt,
   Repeat2,
   ShieldCheck,
-  Smartphone,
-  Wallet,
+  TriangleAlert,
+  UserRound,
   X,
 } from 'lucide-react';
 import './landing.css';
@@ -21,565 +27,982 @@ type Props = {
   brand: ReactNode;
   go: (path: string) => void;
 };
-const previews = {
-  Receive: {
-    title: 'A simpler way to get paid.',
-    text: 'A digital-dollar experience built around you. Clear deposit instructions, with the important details exactly where you need them.',
-    label: 'Receive digital dollars',
-    value: '@yourname',
-    detail: 'Your personal payment identity',
-    icon: ArrowDownLeft,
-  },
+
+const navigation = [
+  { id: 'product', label: 'Product' },
+  { id: 'how-it-works', label: 'How it works' },
+  { id: 'security', label: 'Security' },
+  { id: 'questions', label: 'FAQs' },
+] as const;
+
+const reduceMotion = () =>
+  typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ------------------------------------------------------------------------------------------
+ * Product tour. Every panel states plainly whether the feature is live or coming soon.
+ * ---------------------------------------------------------------------------------------- */
+const tour = {
   Send: {
-    title: 'People first. Payments second.',
-    text: 'A familiar name. A clear amount. A review before you confirm. Sending money should feel that straightforward.',
-    label: 'Send to a person',
-    value: '@amara',
-    detail: 'Review recipient, amount and fees',
-    icon: ArrowUpRight,
+    status: 'available',
+    title: 'Pay people, not long addresses.',
+    text: 'Send native QIE on QIE Mainnet from a self-custody wallet you link to Roots, or pay another Roots user by their @username. You approve every transfer in your own wallet.',
+    points: [
+      'Look up a Roots user by @username and see their name before you pay',
+      'Or paste any QIE Mainnet wallet address',
+      'Your wallet signs the transfer; Roots never holds its keys',
+    ],
+  },
+  Receive: {
+    status: 'available',
+    title: 'Payments that show up on their own.',
+    text: 'Incoming QIE and QUSDC payments to your linked wallet appear in Activity automatically, checked against the QIE network, with a receipt for each one.',
+    points: [
+      'QIE and QUSDC (digital dollars on QIE) supported',
+      'Every incoming payment verified on chain',
+      'Live balances with an approximate USD value',
+    ],
   },
   Exchange: {
+    status: 'soon',
     title: 'Know what you’ll get.',
-    text: 'A clear view of the exchange rate, total fees and final amount before you make your next move.',
-    label: 'Digital dollars to naira',
-    value: 'USD → NGN',
-    detail: 'An available provider quote is required',
-    icon: Repeat2,
+    text: 'Currency conversion between naira and US dollars is coming soon. When it launches, you will see the amount you will receive before you confirm.',
+    points: ['NGN and USD conversion inside Roots', 'Not available yet'],
   },
   Withdraw: {
+    status: 'soon',
     title: 'From your screen to real life.',
-    text: 'Bank withdrawals designed around the details that matter: the right recipient, a clear total and a payment you can follow.',
-    label: 'Withdraw to your bank',
-    value: 'Your bank account',
-    detail: 'Confirm the recipient before paying',
-    icon: Wallet,
+    text: 'Bank deposits and withdrawals are coming soon, so you can move money between Roots and a bank account you own.',
+    points: ['Deposits from and withdrawals to your bank', 'Not available yet'],
   },
-};
-type Preview = keyof typeof previews;
-const questions = [
+} as const;
+type TourKey = keyof typeof tour;
+const tourKeys = Object.keys(tour) as TourKey[];
+
+const pillars = [
+  {
+    icon: AtSign,
+    title: 'Pay by @username',
+    text: 'Send to people on Roots by name, instead of copying a long wallet address.',
+  },
+  {
+    icon: KeyRound,
+    title: 'Your keys stay yours',
+    text: 'Link a self-custody EVM wallet. Roots never holds its keys.',
+  },
+  {
+    icon: BadgeCheck,
+    title: 'Verified on chain',
+    text: 'Incoming QIE and QUSDC payments land in Activity with a receipt.',
+  },
+  {
+    icon: LineChart,
+    title: 'Live balances',
+    text: 'See what is in your wallet, with an approximate value in US dollars.',
+  },
+];
+
+const steps = [
+  {
+    title: 'Create your free account',
+    text: 'Sign up with your email and a password. You don’t need a crypto wallet to get started.',
+  },
+  {
+    title: 'Set up your profile',
+    text: 'Choose a username, link a self-custody wallet, and verify your identity if you choose to.',
+  },
+  {
+    title: 'Send, receive and track',
+    text: 'Pay people by @username, send QIE, and watch incoming payments arrive in Activity.',
+  },
+];
+
+const security = [
+  {
+    icon: KeyRound,
+    title: 'Self-custody by default',
+    text: 'The wallet you link stays yours. You approve each transfer in that wallet, and Roots never sees or stores its keys.',
+  },
+  {
+    icon: BadgeCheck,
+    title: 'Checked on chain',
+    text: 'Incoming payments are matched against the QIE network before they appear in your Activity, each with a receipt.',
+  },
+  {
+    icon: AtSign,
+    title: 'Opt-in usernames',
+    text: 'Nobody can pay you by @username until you switch it on. You can turn it off again in your settings.',
+  },
+  {
+    icon: Fingerprint,
+    title: 'Optional identity checks',
+    text: 'Verify your identity with our provider Didit when you’re ready. It’s optional for what Roots offers today.',
+  },
+];
+
+const availability: { name: string; detail: string; soon?: boolean }[] = [
+  { name: 'Personal account & profile', detail: 'Free account with email and password, profile and security settings' },
+  { name: 'Identity verification', detail: 'Optional, provided by Didit' },
+  { name: 'Linked self-custody wallet', detail: 'Any EVM wallet you control, on QIE Mainnet' },
+  { name: 'Send and receive QIE', detail: 'Native QIE on QIE Mainnet, from your linked wallet' },
+  { name: 'Incoming QIE & QUSDC in Activity', detail: 'Verified on chain, with receipts' },
+  { name: 'Pay Roots users by @username', detail: 'Recipients opt in to be payable by username' },
+  { name: 'Live balances', detail: 'With an approximate USD value' },
+  { name: 'Roots account wallet deposits & sends', detail: 'A wallet held by Roots for you', soon: true },
+  { name: 'Bank deposits & withdrawals', detail: 'Move money to and from your bank', soon: true },
+  { name: 'Currency conversion', detail: 'Naira (NGN) and US dollars (USD)', soon: true },
+  { name: 'P2P trading marketplace', detail: 'Trade with other Roots users', soon: true },
+];
+
+const questions: [string, string][] = [
   [
     'What can I do on Roots today?',
-    'You can create your Personal account, complete your profile, link a self-custody QIE wallet you control, and use it to receive or send native QIEV3 on QIE Mainnet. Deposits to and sends from a Roots-managed account wallet, digital-dollar deposits, exchange, and bank payments are still coming.',
+    'You can open a free Roots account, complete your profile and link a self-custody EVM wallet you control. With it you can send and receive native QIEV3 on QIE Mainnet, pay other Roots users by @username, and see incoming QIE and QUSDC payments in Activity with receipts. Roots account wallet deposits and sends, bank deposits and withdrawals, currency conversion and the P2P trading marketplace are coming soon.',
   ],
   [
-    'Do I need a crypto wallet to register?',
-    'No. Create your Roots account with your email and password. You do not need to connect an external wallet to sign up.',
+    'Is Roots a bank?',
+    'No. Roots is not a bank, and money in your wallet is not a bank deposit. Digital assets such as QIE and QUSDC are not covered by deposit insurance or protection schemes.',
   ],
   [
-    'When do I verify my identity?',
-    'You can create your account and complete your profile first. Identity verification may be required for regulated services as they become available. You can return to the Identity section when you’re ready.',
+    'Do I need a crypto wallet to sign up?',
+    'No. You create your Roots account with an email address and a password. You only need a self-custody wallet when you want to send or receive QIE.',
   ],
   [
-    'Is a digital-dollar balance a bank account?',
-    'No. Digital dollars refer to supported digital assets, not insured bank deposits. Asset and network details will be shown wherever they are needed for a safe deposit or withdrawal.',
+    'Who holds the keys to my wallet?',
+    'You do. When you link a self-custody wallet, its keys stay in that wallet and you approve every transfer there. Roots never holds them.',
   ],
   [
-    'What will a payment cost?',
-    'Before an enabled payment is authorised, its quote must show the service fee, any provider or network costs, and the amount the recipient will receive. There are no live exchange rates or executable payments on this landing page.',
+    'How does paying by @username work?',
+    'Search for a Roots user by their username and check their name before you send QIE. People can only be paid this way after they choose to be payable by username in their settings.',
+  ],
+  [
+    'What is QUSDC?',
+    'QUSDC is a digital dollar on the QIE network. Incoming QUSDC payments to your linked wallet appear in your Activity alongside QIE.',
+  ],
+  [
+    'Do I have to verify my identity?',
+    'Not for what Roots offers today. You can verify with our identity provider, Didit, from your account whenever you’re ready. Some services may require it once they become available.',
+  ],
+  [
+    'Can a payment be reversed?',
+    'No. Transfers on the QIE network are final once confirmed and cannot be reversed by you or by Roots. Always check the recipient and amount before you approve.',
   ],
 ];
 
+/* ------------------------------------------------------------------------------------------
+ * Small presentational pieces
+ * ---------------------------------------------------------------------------------------- */
+function Status({ soon }: { soon?: boolean }) {
+  return soon ? (
+    <span className="lp-badge lp-badge-soon">
+      <Clock size={13} aria-hidden="true" /> Coming soon
+    </span>
+  ) : (
+    <span className="lp-badge lp-badge-live">
+      <Check size={13} aria-hidden="true" /> Available
+    </span>
+  );
+}
+
+function Token({ symbol }: { symbol: 'QIE' | 'QUSDC' }) {
+  return (
+    <span className={symbol === 'QIE' ? 'lp-token lp-token-qie' : 'lp-token lp-token-usd'} aria-hidden="true">
+      {symbol === 'QIE' ? 'Q' : '$'}
+    </span>
+  );
+}
+
+/** Phone mockup built in HTML/CSS. Purely illustrative; hidden from assistive tech as a whole. */
+function PhonePreview() {
+  return (
+    <div className="lp-phone" aria-hidden="true">
+      <div className="lp-phone-bar">
+        <span>9:41</span>
+        <span className="lp-phone-island" />
+        <span className="lp-phone-signal">
+          <i />
+          <i />
+          <i />
+        </span>
+      </div>
+      <div className="lp-phone-screen">
+        <div className="lp-phone-head">
+          <div>
+            <small>Good morning</small>
+            <b>Ada</b>
+          </div>
+          <span className="lp-phone-avatar">A</span>
+        </div>
+        <div className="lp-phone-balance">
+          <small>Wallet balance</small>
+          <strong>
+            ≈ $1,284<span>.50</span>
+          </strong>
+          <div className="lp-phone-assets">
+            <span>
+              <Token symbol="QIE" /> 1,034.50 QIE
+            </span>
+            <span>
+              <Token symbol="QUSDC" /> 250.00 QUSDC
+            </span>
+          </div>
+        </div>
+        <div className="lp-phone-actions">
+          <span>
+            <i>
+              <ArrowUpRight size={16} />
+            </i>
+            Send
+          </span>
+          <span>
+            <i>
+              <ArrowDownLeft size={16} />
+            </i>
+            Receive
+          </span>
+          <span>
+            <i>
+              <AtSign size={16} />
+            </i>
+            Pay
+          </span>
+          <span className="is-soon">
+            <i>
+              <Repeat2 size={16} />
+            </i>
+            Soon
+          </span>
+        </div>
+        <div className="lp-phone-list">
+          <b>Activity</b>
+          <div className="lp-phone-row">
+            <span className="lp-phone-icon is-in">
+              <ArrowDownLeft size={14} />
+            </span>
+            <div>
+              <b>Received QUSDC</b>
+              <small>
+                <BadgeCheck size={11} /> Verified on chain
+              </small>
+            </div>
+            <em className="is-in">+250.00</em>
+          </div>
+          <div className="lp-phone-row">
+            <span className="lp-phone-icon">
+              <AtSign size={14} />
+            </span>
+            <div>
+              <b>Paid @amara</b>
+              <small>QIE · Today</small>
+            </div>
+            <em>−40.00</em>
+          </div>
+          <div className="lp-phone-row">
+            <span className="lp-phone-icon is-in">
+              <ArrowDownLeft size={14} />
+            </span>
+            <div>
+              <b>Received QIE</b>
+              <small>
+                <BadgeCheck size={11} /> Verified on chain
+              </small>
+            </div>
+            <em className="is-in">+120.00</em>
+          </div>
+        </div>
+        <div className="lp-phone-nav">
+          <span className="is-active">
+            <House size={16} />
+            Home
+          </span>
+          <span>
+            <Receipt size={16} />
+            Activity
+          </span>
+          <span>
+            <UserRound size={16} />
+            Account
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TourVisual({ name }: { name: TourKey }) {
+  if (name === 'Send')
+    return (
+      <div className="lp-ui-card" aria-hidden="true">
+        <div className="lp-ui-head">
+          <b>Send QIE</b>
+          <small>QIE Mainnet</small>
+        </div>
+        <div className="lp-ui-field">
+          <small>To</small>
+          <div className="lp-ui-recipient">
+            <span className="lp-phone-avatar is-small">A</span>
+            <div>
+              <b>Amara O.</b>
+              <small>@amara</small>
+            </div>
+            <BadgeCheck size={16} className="lp-ui-ok" />
+          </div>
+        </div>
+        <div className="lp-ui-field">
+          <small>Amount</small>
+          <div className="lp-ui-amount">
+            40.00 <span>QIE</span>
+          </div>
+        </div>
+        <div className="lp-ui-button">Review in your wallet</div>
+        <p className="lp-ui-note">
+          <TriangleAlert size={13} /> Transfers on QIE are final once confirmed.
+        </p>
+      </div>
+    );
+  if (name === 'Receive')
+    return (
+      <div className="lp-ui-card" aria-hidden="true">
+        <div className="lp-ui-head">
+          <b>Receipt</b>
+          <span className="lp-ui-pill">
+            <BadgeCheck size={12} /> Verified on chain
+          </span>
+        </div>
+        <div className="lp-ui-received">
+          <Token symbol="QUSDC" />
+          <strong>+250.00 QUSDC</strong>
+          <small>≈ $250.00</small>
+        </div>
+        <dl className="lp-ui-list">
+          <div>
+            <dt>From</dt>
+            <dd>0x8f3…a21c</dd>
+          </div>
+          <div>
+            <dt>Network</dt>
+            <dd>QIE Mainnet</dd>
+          </div>
+          <div>
+            <dt>Status</dt>
+            <dd>Confirmed</dd>
+          </div>
+        </dl>
+      </div>
+    );
+  return (
+    <div className="lp-ui-card is-soon" aria-hidden="true">
+      <div className="lp-ui-head">
+        <b>{name === 'Exchange' ? 'Convert' : 'Withdraw'}</b>
+        <span className="lp-ui-pill is-soon">
+          <Clock size={12} /> Coming soon
+        </span>
+      </div>
+      {name === 'Exchange' ? (
+        <div className="lp-ui-convert">
+          <div>
+            <small>You convert</small>
+            <b>NGN</b>
+          </div>
+          <span>
+            <Repeat2 size={16} />
+          </span>
+          <div>
+            <small>You receive</small>
+            <b>USD</b>
+          </div>
+        </div>
+      ) : (
+        <div className="lp-ui-convert">
+          <div>
+            <small>From</small>
+            <b>Roots</b>
+          </div>
+          <span>
+            <ArrowRight size={16} />
+          </span>
+          <div>
+            <small>To</small>
+            <b>
+              <Landmark size={15} /> Your bank
+            </b>
+          </div>
+        </div>
+      )}
+      <div className="lp-ui-skeleton">
+        <i />
+        <i />
+      </div>
+      <div className="lp-ui-button is-disabled">Not available yet</div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------------------------------
+ * Page
+ * ---------------------------------------------------------------------------------------- */
 export function LandingPage({ brand, go }: Props) {
+  const root = useRef<HTMLDivElement>(null);
+  const toggle = useRef<HTMLButtonElement>(null);
+  const sentinel = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState(false);
+  const [condensed, setCondensed] = useState(false);
+  const [motion, setMotion] = useState(false);
+  const [active, setActive] = useState<TourKey>('Send');
   // "My account" reflects the Personal session, not the retired Business console session.
   const [authenticated, setAuthenticated] = useState(false);
+
   useEffect(() => {
-    let active = true;
+    let live = true;
     void fetch('/personal/api/session', { credentials: 'include' })
       .then((response) => (response.ok ? response.json() : { authenticated: false }))
       .then((session) => {
-        if (active) setAuthenticated(session?.authenticated === true);
+        if (live) setAuthenticated(session?.authenticated === true);
       })
       .catch(() => undefined);
     return () => {
-      active = false;
+      live = false;
     };
   }, []);
-  const [preview, setPreview] = useState<Preview>('Receive');
-  const current = previews[preview];
-  const Icon = current.icon;
-  const start = () => go(authenticated ? '/personal/home' : '/personal/login');
+
   useEffect(() => {
     document.title = 'Roots | Money for the life you’re building.';
   }, []);
+
+  // Header condenses once the top-of-page sentinel scrolls away.
+  useEffect(() => {
+    const target = sentinel.current;
+    if (!target || typeof IntersectionObserver !== 'function') return;
+    const observer = new IntersectionObserver(([entry]) => setCondensed(!entry.isIntersecting));
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, []);
+
+  // Reveal-on-scroll, only when motion is welcome. Content is visible by default without JS.
+  useEffect(() => {
+    if (typeof IntersectionObserver !== 'function' || typeof matchMedia !== 'function') return;
+    const query = matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => setMotion(!query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+  useEffect(() => {
+    const container = root.current;
+    if (!motion || !container) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries)
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible');
+            observer.unobserve(entry.target);
+          }
+      },
+      { rootMargin: '0px 0px -8% 0px', threshold: 0.12 },
+    );
+    container.querySelectorAll('[data-reveal]:not(.is-visible)').forEach((node) => observer.observe(node));
+    return () => observer.disconnect();
+  }, [motion]);
+
+  // Mobile menu: Escape closes and returns focus; clicks outside close; first link takes focus.
+  useEffect(() => {
+    if (!menu) return;
+    root.current?.querySelector<HTMLAnchorElement>('#landing-navigation a')?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMenu(false);
+        toggle.current?.focus();
+      }
+    };
+    const onPointer = (event: PointerEvent) => {
+      const header = root.current?.querySelector('.lp-header');
+      if (header && !header.contains(event.target as Node)) setMenu(false);
+    };
+    const desktop = matchMedia('(min-width: 961px)');
+    const onResize = () => desktop.matches && setMenu(false);
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onPointer);
+    desktop.addEventListener('change', onResize);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPointer);
+      desktop.removeEventListener('change', onResize);
+    };
+  }, [menu]);
+
+  const scrollToSection = useCallback((id: string, smooth: boolean) => {
+    const target = document.getElementById(id);
+    if (!target) return false;
+    target.scrollIntoView({ behavior: smooth && !reduceMotion() ? 'smooth' : 'auto', block: 'start' });
+    target.focus({ preventScroll: true });
+    return true;
+  }, []);
+
+  // Honour a hash on first load (the page renders after the browser's own anchor jump).
+  useEffect(() => {
+    const id = decodeURIComponent(location.hash.slice(1));
+    if (id) requestAnimationFrame(() => scrollToSection(id, false));
+  }, [scrollToSection]);
+
+  const jump = (event: MouseEvent<HTMLAnchorElement>) => {
+    const id = event.currentTarget.hash.slice(1);
+    if (!id || event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+    setMenu(false);
+    if (scrollToSection(id, true)) {
+      event.preventDefault();
+      if (location.hash !== `#${id}`) history.pushState(null, '', `#${id}`);
+    }
+  };
+
+  const start = () => go(authenticated ? '/personal/home' : '/personal/login');
+  const startLabel = authenticated ? 'Open your account' : 'Get started';
+  const current = tour[active];
+
   return (
-    <div className="ms-site lp-site">
+    <div
+      ref={root}
+      className={`ms-site lp-site${motion ? ' lp-motion' : ''}${menu ? ' lp-menu-is-open' : ''}`}
+    >
       <a className="lp-skip" href="#main-content">
         Skip to content
       </a>
-      <header className="public-header lp-header">
-        <a className="lp-brand" href="/" aria-label="Roots home">
-          {brand}
-        </a>
-        <nav
-          aria-label="Main navigation"
-          className={menu ? 'lp-nav is-open' : 'lp-nav'}
-          id="landing-navigation"
-        >
-          <a href="#platform" onClick={() => setMenu(false)}>
-            The experience
+      <div ref={sentinel} className="lp-sentinel" aria-hidden="true" />
+      <header className={`public-header lp-header${condensed ? ' is-condensed' : ''}`}>
+        <div className="lp-container lp-header-inner">
+          <a className="lp-brand" href="/" aria-label="Roots home">
+            {brand}
           </a>
-          <a href="#how-it-works" onClick={() => setMenu(false)}>
-            Getting started
-          </a>
-          <a href="#questions" onClick={() => setMenu(false)}>
-            FAQs
-          </a>
-        </nav>
-        <button className="lp-signin" onClick={start}>
-          {authenticated ? 'My account' : 'Sign in'} <ArrowUpRight size={15} />
-        </button>
-        <button
-          className="lp-menu"
-          aria-label={menu ? 'Close navigation' : 'Open navigation'}
-          aria-expanded={menu}
-          aria-controls="landing-navigation"
-          onClick={() => setMenu(!menu)}
-        >
-          {menu ? <X /> : <Menu />}
-        </button>
-      </header>
-      <main id="main-content">
-        <section className="lp-hero" aria-labelledby="landing-title">
-          <div className="lp-hero-copy">
-            <a className="lp-eyebrow lp-announcement" href="#availability">
-              <span /> Meet your next money move <ArrowUpRight size={14} />
-            </a>
-            <h1 id="landing-title">
-              Money for
-              <br />
-              the life you’re
-              <br />
-              <span>building.</span>
-            </h1>
-            <p>
-              A fresh take on everyday money. Digital dollars, local payments and everything in
-              between — coming together in Roots.
-            </p>
-            <div className="lp-hero-actions">
-              <button className="lp-button" onClick={start}>
-                {authenticated ? 'Open your account' : 'Get started'} <ArrowUpRight size={20} />
-              </button>
-              <a href="#platform" className="lp-text-link">
-                Meet the app <ArrowRight size={17} />
-              </a>
-            </div>
-            <p className="lp-early">
-              <span /> Early access · Account creation is open. Money services are coming.
-            </p>
+          <div className="lp-menu-panel" id="landing-menu">
+            <nav aria-label="Main navigation" id="landing-navigation" className="lp-nav">
+              {navigation.map((item) => (
+                <a key={item.id} href={`#${item.id}`} onClick={jump}>
+                  {item.label}
+                </a>
+              ))}
+            </nav>
+            <button className="lp-button lp-menu-cta" onClick={start}>
+              {startLabel} <ArrowRight size={16} aria-hidden="true" />
+            </button>
           </div>
-          <div
-            className="lp-hero-art"
-            aria-label="Roots product concept alongside everyday payment photography"
-          >
-            <div className="lp-orbit lp-orbit-one" />
-            <div className="lp-orbit lp-orbit-two" />
-            <div className="lp-photo">
+          <div className="lp-header-actions">
+            <button className="lp-signin" onClick={start}>
+              {authenticated ? 'My account' : 'Sign in'}
+            </button>
+            {!authenticated && (
+              <button className="lp-button lp-button-sm lp-header-cta" onClick={start}>
+                Get started
+              </button>
+            )}
+            <button
+              ref={toggle}
+              className="lp-menu-toggle"
+              aria-label={menu ? 'Close navigation' : 'Open navigation'}
+              aria-expanded={menu}
+              aria-controls="landing-menu"
+              onClick={() => setMenu(!menu)}
+            >
+              {menu ? <X size={20} aria-hidden="true" /> : <Menu size={20} aria-hidden="true" />}
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main id="main-content" tabIndex={-1}>
+        {/* Hero */}
+        <section className="lp-hero" aria-labelledby="landing-title">
+          <div className="lp-container lp-hero-grid">
+            <div className="lp-hero-copy">
+              <a className="lp-kicker" href="#pay" onClick={jump}>
+                <span className="lp-kicker-dot" aria-hidden="true" />
+                New: pay people on Roots by @username
+                <ArrowRight size={14} aria-hidden="true" />
+              </a>
+              <h1 id="landing-title">
+                Money for the life you’re <span>building.</span>
+              </h1>
+              <p className="lp-lead">
+                Roots is a free account for everyday digital money on the QIE network. Pay people by
+                @username, send from a wallet you control, and see every incoming payment verified on
+                chain.
+              </p>
+              <div className="lp-hero-actions">
+                <button className="lp-button lp-button-lg" onClick={start}>
+                  {startLabel} <ArrowRight size={18} aria-hidden="true" />
+                </button>
+                <a className="lp-button-secondary lp-button-lg" href="#how-it-works" onClick={jump}>
+                  See how it works
+                </a>
+              </div>
+              <ul className="lp-hero-facts" aria-label="Good to know">
+                <li>
+                  <Check size={15} aria-hidden="true" /> Free to open
+                </li>
+                <li>
+                  <Check size={15} aria-hidden="true" /> No wallet needed to sign up
+                </li>
+                <li>
+                  <Check size={15} aria-hidden="true" /> Your keys stay yours
+                </li>
+              </ul>
+            </div>
+            <figure className="lp-hero-visual" aria-label="Illustrative preview of the Roots app">
+              <div className="lp-hero-stage" aria-hidden="true">
+                <span className="lp-hero-ring" />
+              </div>
+              <PhonePreview />
+              <div className="lp-float-card lp-floating lp-float-received" aria-hidden="true">
+                <span className="lp-floating-icon is-in">
+                  <ArrowDownLeft size={16} />
+                </span>
+                <div>
+                  <b>Payment received</b>
+                  <small>+250.00 QUSDC · Verified on chain</small>
+                </div>
+              </div>
+              <div className="lp-float-card lp-float-user" aria-hidden="true">
+                <span className="lp-phone-avatar is-small">A</span>
+                <div>
+                  <b>@amara</b>
+                  <small>Payable by username</small>
+                </div>
+                <BadgeCheck size={16} className="lp-ui-ok" />
+              </div>
+              <figcaption className="lp-preview-label">Illustrative preview · sample data</figcaption>
+            </figure>
+          </div>
+        </section>
+
+        {/* Value pillars */}
+        <section className="lp-pillars" aria-label="Why Roots">
+          <div className="lp-container">
+            <ul className="lp-pillar-grid">
+              {pillars.map(({ icon: Icon, title, text }, index) => (
+                <li key={title} data-reveal style={{ '--reveal-delay': `${index * 70}ms` } as React.CSSProperties}>
+                  <span className="lp-icon">
+                    <Icon size={20} aria-hidden="true" />
+                  </span>
+                  <h3>{title}</h3>
+                  <p>{text}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        {/* Product tour */}
+        <section className="lp-section" id="product" tabIndex={-1} aria-labelledby="product-title">
+          <div className="lp-container">
+            <div className="lp-heading" data-reveal>
+              <span className="lp-eyebrow">Product</span>
+              <h2 id="product-title">One account for everyday digital money.</h2>
+              <p>
+                Here is what Roots does today, and what is on the way. Anything that isn’t live yet is
+                marked <strong>Coming soon</strong>.
+              </p>
+            </div>
+            <div className="lp-tour" data-reveal>
+              <div className="lp-tabs" role="tablist" aria-label="Roots features">
+                {tourKeys.map((name, index) => (
+                  <button
+                    key={name}
+                    role="tab"
+                    id={`tab-${name}`}
+                    aria-selected={active === name}
+                    aria-controls="product-panel"
+                    tabIndex={active === name ? 0 : -1}
+                    onClick={() => setActive(name)}
+                    onKeyDown={(event) => {
+                      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+                      event.preventDefault();
+                      const count = tourKeys.length;
+                      const next =
+                        event.key === 'Home'
+                          ? 0
+                          : event.key === 'End'
+                            ? count - 1
+                            : (index + (event.key === 'ArrowRight' ? 1 : count - 1)) % count;
+                      setActive(tourKeys[next]);
+                      document.getElementById(`tab-${tourKeys[next]}`)?.focus();
+                    }}
+                  >
+                    {name}
+                    {tour[name].status === 'soon' && <span className="lp-tab-dot" aria-hidden="true" />}
+                  </button>
+                ))}
+              </div>
+              <div
+                className="lp-panel"
+                id="product-panel"
+                role="tabpanel"
+                aria-labelledby={`tab-${active}`}
+                tabIndex={0}
+              >
+                <div className="lp-panel-copy" key={`copy-${active}`}>
+                  <Status soon={current.status === 'soon'} />
+                  <h3>{current.title}</h3>
+                  <p>{current.text}</p>
+                  <ul className="lp-checklist">
+                    {current.points.map((point) => (
+                      <li key={point}>
+                        {current.status === 'soon' ? (
+                          <Clock size={16} aria-hidden="true" />
+                        ) : (
+                          <Check size={16} aria-hidden="true" />
+                        )}
+                        {point}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="lp-panel-visual" key={`visual-${active}`}>
+                  <TourVisual name={active} />
+                  <small className="lp-preview-label">Illustrative preview</small>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* P2P payments */}
+        <section className="lp-section lp-pay" id="pay" tabIndex={-1} aria-labelledby="pay-title">
+          <div className="lp-container lp-split">
+            <div className="lp-photo" data-reveal>
               <img
                 src="/images/payment-cafe.webp"
-                alt="A customer paying by card at a café"
-                fetchPriority="high"
+                alt="A customer paying at a café counter"
+                loading="lazy"
+                decoding="async"
                 width="1280"
                 height="1920"
               />
-              <span>Made for your everyday.</span>
-            </div>
-            <div className="lp-phone">
-              <div className="lp-phone-top">
-                <span>9:41</span>
-                <span className="lp-island" />
-                <span>•••</span>
-              </div>
-              <div className="lp-phone-content">
-                <div className="lp-phone-greeting">
-                  <div>
-                    <small>YOUR PERSONAL ACCOUNT</small>
-                    <b>
-                      Hello, Alex <span>↗</span>
-                    </b>
-                  </div>
-                  <span className="lp-avatar">A</span>
-                </div>
-                <div className="lp-balance">
-                  <span>
-                    Your money <Globe2 size={15} />
-                  </span>
-                  <strong>
-                    $0<span>.00</span>
-                  </strong>
-                  <small>Digital dollars</small>
-                  <div className="lp-balance-line" />
-                </div>
-                <div className="lp-phone-actions">
-                  {[
-                    [Plus, 'Add'],
-                    [ArrowUpRight, 'Send'],
-                    [Repeat2, 'Exchange'],
-                    [ArrowDownLeft, 'Withdraw'],
-                  ].map(([Action, label]) => {
-                    const ActionIcon = Action as typeof Plus;
-                    return (
-                      <div key={String(label)}>
-                        <span>
-                          <ActionIcon size={18} />
-                        </span>
-                        <small>{String(label)}</small>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="lp-profile-note">
-                  <ShieldCheck size={23} />
-                  <div>
-                    <b>Make it yours</b>
-                    <small>Complete your personal profile</small>
-                  </div>
-                  <ArrowRight size={16} />
-                </div>
-                <div className="lp-phone-activity">
-                  <b>Your activity</b>
-                  <span>All in one place</span>
-                  <div>
-                    <div className="lp-activity-lines">
-                      <i />
-                      <i />
-                      <i />
-                    </div>
-                    <p>Your next chapter starts here.</p>
-                  </div>
-                </div>
-                <div className="lp-phone-nav">
-                  <span>
-                    <Wallet size={17} />
-                    Home
-                  </span>
-                  <span>
-                    <Repeat2 size={17} />
-                    Payments
-                  </span>
-                  <span>
-                    <Fingerprint size={17} />
-                    Account
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="lp-floating">
-              <span>
-                <Globe2 size={23} />
-              </span>
-              <div>
-                <b>Big plans. One place.</b>
-                <small>Built around your next move.</small>
-              </div>
-            </div>
-            <span className="lp-preview-label">PRODUCT PREVIEW · MONEY SERVICES COMING</span>
-          </div>
-        </section>
-        <div className="lp-principles">
-          <span>
-            ONE ACCOUNT.
-            <br />
-            <b>MORE POSSIBILITY.</b>
-          </span>
-          <div>
-            <Globe2 /> A global outlook
-          </div>
-          <div>
-            <Smartphone /> An everyday experience
-          </div>
-          <div>
-            <ShieldCheck /> You stay in control
-          </div>
-        </div>
-        <section className="lp-platform lp-section" id="platform">
-          <div className="lp-section-heading">
-            <span className="lp-eyebrow">YOUR MONEY, CONNECTED</span>
-            <h2>
-              Less figuring it out.
-              <br />
-              <span>More getting on with life.</span>
-            </h2>
-            <p>We’re bringing your everyday money moves into one thoughtfully designed app.</p>
-          </div>
-          <div
-            className="lp-product-tabs"
-            role="tablist"
-            aria-label="Explore planned money services"
-          >
-            {(Object.keys(previews) as Preview[]).map((name) => (
-              <button
-                key={name}
-                role="tab"
-                id={`tab-${name}`}
-                aria-selected={preview === name}
-                aria-controls="product-panel"
-                tabIndex={preview === name ? 0 : -1}
-                onClick={() => setPreview(name)}
-                onKeyDown={(event) => {
-                  const names = Object.keys(previews) as Preview[];
-                  if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
-                    event.preventDefault();
-                    const next =
-                      event.key === 'Home'
-                        ? 0
-                        : event.key === 'End'
-                          ? 3
-                          : (names.indexOf(name) + (event.key === 'ArrowRight' ? 1 : 3)) % 4;
-                    setPreview(names[next]);
-                    document.getElementById(`tab-${names[next]}`)?.focus();
-                  }
-                }}
-              >
-                {name}
-                <ArrowUpRight size={17} />
-              </button>
-            ))}
-          </div>
-          <div
-            className="lp-product-panel"
-            id="product-panel"
-            role="tabpanel"
-            aria-labelledby={`tab-${preview}`}
-            tabIndex={0}
-          >
-            <div className="lp-product-copy">
-              <span className="lp-status">IN DEVELOPMENT</span>
-              <h3>{current.title}</h3>
-              <p>{current.text}</p>
-              <a className="lp-text-link" href="#availability">
-                See what’s available <ArrowRight size={17} />
-              </a>
-            </div>
-            <div className="lp-product-art">
-              <div className="lp-route-dot">$</div>
-              <div className="lp-route-dash" />
-              <div className="lp-product-card" key={preview}>
-                <span className="lp-product-icon">
-                  <Icon size={26} />
-                </span>
-                <small>{current.label}</small>
-                <strong>{current.value}</strong>
-                <p>{current.detail}</p>
+              <div className="lp-photo-card" aria-hidden="true">
+                <span className="lp-phone-avatar is-small">A</span>
                 <div>
-                  <ShieldCheck size={16} /> Clear details. Your confirmation.
+                  <b>Pay @amara</b>
+                  <small>Amara O. · 40.00 QIE</small>
+                </div>
+                <span className="lp-photo-card-action">
+                  <ArrowUpRight size={16} />
+                </span>
+              </div>
+            </div>
+            <div className="lp-split-copy" data-reveal>
+              <span className="lp-eyebrow">Payments between people</span>
+              <h2 id="pay-title">Pay anyone on Roots by their @username.</h2>
+              <p>
+                No more copying long wallet addresses. Type a username, check the name that comes back,
+                and approve the payment in your wallet. It arrives as QIE on QIE Mainnet.
+              </p>
+              <ul className="lp-checklist lp-checklist-lg">
+                <li>
+                  <Check size={18} aria-hidden="true" />
+                  <span>
+                    <b>See who you’re paying.</b> Roots shows the recipient’s name before you send.
+                  </span>
+                </li>
+                <li>
+                  <Check size={18} aria-hidden="true" />
+                  <span>
+                    <b>Opt in to be paid.</b> Your username can’t receive payments until you turn it on.
+                  </span>
+                </li>
+                <li>
+                  <Check size={18} aria-hidden="true" />
+                  <span>
+                    <b>Tracked for both sides.</b> Payments show up in Activity with a receipt.
+                  </span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        {/* How it works */}
+        <section className="lp-section lp-steps-section" id="how-it-works" tabIndex={-1} aria-labelledby="steps-title">
+          <div className="lp-container">
+            <div className="lp-heading lp-heading-center" data-reveal>
+              <span className="lp-eyebrow">How it works</span>
+              <h2 id="steps-title">Up and running in three steps.</h2>
+            </div>
+            <ol className="lp-steps">
+              {steps.map((step, index) => (
+                <li key={step.title} data-reveal style={{ '--reveal-delay': `${index * 90}ms` } as React.CSSProperties}>
+                  <span className="lp-step-number" aria-hidden="true">
+                    {index + 1}
+                  </span>
+                  <h3>{step.title}</h3>
+                  <p>{step.text}</p>
+                </li>
+              ))}
+            </ol>
+            <div className="lp-center" data-reveal>
+              <button className="lp-button" onClick={start}>
+                {authenticated ? 'Open your account' : 'Create your free account'}
+                <ArrowRight size={17} aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* Security */}
+        <section className="lp-section lp-security" id="security" tabIndex={-1} aria-labelledby="security-title">
+          <div className="lp-container">
+            <div className="lp-security-grid">
+              <div className="lp-heading lp-heading-invert" data-reveal>
+                <span className="lp-eyebrow">Security &amp; control</span>
+                <h2 id="security-title">You stay in control of your money.</h2>
+                <p>
+                  Roots is built so that you approve what leaves your wallet, and so that what arrives is
+                  checked before you see it.
+                </p>
+                <div className="lp-callout">
+                  <ShieldCheck size={20} aria-hidden="true" />
+                  <p>
+                    Transfers on the QIE network are final once confirmed. Always check the recipient
+                    and amount before you approve.
+                  </p>
                 </div>
               </div>
-              <div className="lp-route-dot lp-naira">₦</div>
-              <small className="lp-art-caption">Concept preview · No money is moved</small>
+              <ul className="lp-security-list">
+                {security.map(({ icon: Icon, title, text }, index) => (
+                  <li key={title} data-reveal style={{ '--reveal-delay': `${index * 70}ms` } as React.CSSProperties}>
+                    <span className="lp-icon lp-icon-invert">
+                      <Icon size={20} aria-hidden="true" />
+                    </span>
+                    <div>
+                      <h3>{title}</h3>
+                      <p>{text}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
         </section>
-        <section className="lp-life lp-section">
-          <div className="lp-life-photo">
-            <img
-              src="/images/payment-tanzania.jpg"
-              alt="A contactless card payment at a shop counter"
-              loading="lazy"
-              width="1400"
-              height="1001"
-            />
-            <div>
-              <span className="lp-eyebrow">FOR THE EVERYDAY. AND THE WHAT’S NEXT.</span>
-              <h2>
-                Your life doesn’t
-                <br />
-                stand still.
-                <br />
-                Neither should
-                <br />
-                your money.
-              </h2>
+
+        {/* Availability */}
+        <section className="lp-section" id="availability" tabIndex={-1} aria-labelledby="availability-title">
+          <div className="lp-container lp-availability-grid">
+            <div className="lp-heading" data-reveal>
+              <span className="lp-eyebrow">Availability</span>
+              <h2 id="availability-title">What’s live, and what’s next.</h2>
+              <p>
+                We’d rather be clear than clever. This is exactly where Roots stands today. We’ll update
+                this list as new services launch.
+              </p>
+            </div>
+            <div className="lp-table-card" data-reveal>
+              <table className="lp-table">
+                <caption className="lp-visually-hidden">Roots features and their availability</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Feature</th>
+                    <th scope="col">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {availability.map((row) => (
+                    <tr key={row.name} className={row.soon ? 'is-soon' : undefined}>
+                      <th scope="row">
+                        <span>{row.name}</span>
+                        <small>{row.detail}</small>
+                      </th>
+                      <td>
+                        <Status soon={row.soon} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
-          <div className="lp-life-copy">
-            <span className="lp-eyebrow">MADE WITH YOU IN MIND</span>
-            <h2>
-              Big ambitions.
-              <br />
-              Everyday needs.
-            </h2>
-            <p>
-              From your first freelance project to your next chapter abroad, we’re building for the
-              way you live and work.
-            </p>
-            <article>
-              <span>01</span>
-              <div>
-                <h3>For the independent</h3>
-                <p>A clearer home for the money you earn, wherever work takes you.</p>
+        </section>
+
+        {/* FAQ */}
+        <section className="lp-section lp-faq" id="questions" tabIndex={-1} aria-labelledby="faq-title">
+          <div className="lp-container lp-faq-grid">
+            <div className="lp-heading" data-reveal>
+              <span className="lp-eyebrow">FAQs</span>
+              <h2 id="faq-title">Questions, answered.</h2>
+              <p>Straight answers about what Roots is, and what it isn’t.</p>
+            </div>
+            <div className="lp-faq-list" data-reveal>
+              {questions.map(([question, answer]) => (
+                <details key={question}>
+                  <summary>
+                    {question}
+                    <ChevronDown size={18} aria-hidden="true" />
+                  </summary>
+                  <p>{answer}</p>
+                </details>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Final CTA */}
+        <section className="lp-section lp-final" aria-labelledby="final-title">
+          <div className="lp-container">
+            <div className="lp-final-card" data-reveal>
+              <h2 id="final-title">Start with a free Roots account.</h2>
+              <p>Sign up with your email address. Link a wallet whenever you’re ready.</p>
+              <div className="lp-final-actions">
+                <button className="lp-button lp-button-light lp-button-lg" onClick={start}>
+                  {startLabel} <ArrowRight size={18} aria-hidden="true" />
+                </button>
+                <a className="lp-button-ghost lp-button-lg" href="#questions" onClick={jump}>
+                  Read the FAQs
+                </a>
               </div>
-            </article>
-            <article>
-              <span>02</span>
-              <div>
-                <h3>For the connected</h3>
-                <p>Payments designed around people, with the details easy to follow.</p>
-              </div>
-            </article>
-            <article>
-              <span>03</span>
-              <div>
-                <h3>For the forward-looking</h3>
-                <p>Digital dollars and local payments, built into one everyday experience.</p>
-              </div>
-            </article>
-          </div>
-        </section>
-        <section className="lp-start lp-section" id="how-it-works">
-          <div className="lp-section-heading">
-            <span className="lp-eyebrow">A SIMPLE START</span>
-            <h2>
-              A few details.
-              <br />
-              <span>A place to make your own.</span>
-            </h2>
-          </div>
-          <div className="lp-step-grid">
-            {[
-              [
-                '01',
-                'Create your account',
-                'Sign up with your email and password. No external wallet needed.',
-              ],
-              [
-                '02',
-                'Make it personal',
-                'Add your name, phone, address and username. Your profile stays in your control.',
-              ],
-              [
-                '03',
-                'Get ready for what’s next',
-                'Explore the app now. Return to identity verification before using eligible money services.',
-              ],
-            ].map(([number, title, body]) => (
-              <article key={number}>
-                <span>{number}</span>
-                <h3>{title}</h3>
-                <p>{body}</p>
-              </article>
-            ))}
-          </div>
-          <button className="lp-button" onClick={start}>
-            Get started <ArrowUpRight size={19} />
-          </button>
-        </section>
-        <section className="lp-control lp-section" id="availability">
-          <div>
-            <span className="lp-eyebrow">CLARITY COMES FIRST</span>
-            <h2>
-              Your money deserves
-              <br />
-              the full picture.
-            </h2>
-            <p>
-              Good financial experiences start with knowing where you stand. Here’s where Roots
-              stands today.
-            </p>
-            <div className="lp-control-principles">
-              <span>
-                <Fingerprint /> Personal identity checks
-              </span>
-              <span>
-                <ShieldCheck /> Explicit payment approval
-              </span>
-              <span>
-                <Check /> Clear fees before confirmation
-              </span>
             </div>
           </div>
-          <div className="lp-availability">
-            <span className="lp-eyebrow">PRODUCT AVAILABILITY</span>
-            <h3>Building the next chapter.</h3>
-            <div>
-              <span>Personal account & profile</span>
-              <b className="lp-open">Available</b>
-            </div>
-            <div>
-              <span>Native QIE transfers with your linked wallet</span>
-              <b className="lp-open">Available</b>
-            </div>
-            <div>
-              <span>Roots account wallet deposits & sends</span>
-              <b>Coming</b>
-            </div>
-            <div>
-              <span>Digital-dollar deposits & transfers</span>
-              <b>Coming</b>
-            </div>
-            <div>
-              <span>Currency exchange</span>
-              <b>Coming</b>
-            </div>
-            <div>
-              <span>Local deposits & bank withdrawals</span>
-              <b>Coming</b>
-            </div>
-            <p>
-              Native QIE transfers use a self-custody wallet you link and control. Digital-dollar and fiat services depend
-              on supported assets, providers and verification. Digital assets are not insured bank deposits.
-            </p>
-          </div>
-        </section>
-        <section className="lp-faq lp-section" id="questions">
-          <div>
-            <span className="lp-eyebrow">GOOD QUESTIONS</span>
-            <h2>
-              A little clarity
-              <br />
-              goes a long way.
-            </h2>
-          </div>
-          <div>
-            {questions.map(([question, answer]) => (
-              <details key={question}>
-                <summary>
-                  {question}
-                  <ChevronDown size={19} />
-                </summary>
-                <p>{answer}</p>
-              </details>
-            ))}
-          </div>
-        </section>
-        <section className="lp-finale">
-          <div className="lp-finale-orbit" />
-          <span className="lp-eyebrow">YOUR NEXT CHAPTER</span>
-          <h2>
-            Make room for
-            <br />
-            your next move.
-          </h2>
-          <button className="lp-button" onClick={start}>
-            Get started with Roots <ArrowUpRight size={20} />
-          </button>
-          <p>Your account starts here. Money services are on the way.</p>
         </section>
       </main>
+
       <footer className="lp-footer">
-        <div className="lp-footer-top">
-          <div>
-            {brand}
-            <p>
-              Powered by possibility.
-              <br />
-              Built for everyday life.
-            </p>
+        <div className="lp-container">
+          <div className="lp-footer-top">
+            <div className="lp-footer-brand">
+              {brand}
+              <p>Everyday digital money on the QIE network.</p>
+            </div>
+            <nav aria-label="Footer navigation" className="lp-footer-nav">
+              <div>
+                <h3>Roots</h3>
+                <a href="#product" onClick={jump}>
+                  Product
+                </a>
+                <a href="#how-it-works" onClick={jump}>
+                  How it works
+                </a>
+                <a href="#availability" onClick={jump}>
+                  Availability
+                </a>
+              </div>
+              <div>
+                <h3>Help</h3>
+                <a href="#security" onClick={jump}>
+                  Security
+                </a>
+                <a href="#questions" onClick={jump}>
+                  FAQs
+                </a>
+                <button onClick={start}>{authenticated ? 'My account' : 'Sign in'}</button>
+              </div>
+            </nav>
           </div>
-          <nav aria-label="Footer navigation">
-            <a href="#platform">The experience</a>
-            <a href="#how-it-works">Getting started</a>
-            <a href="#availability">Availability</a>
-            <a href="#questions">FAQs</a>
-            <button onClick={start}>
-              Your account <ArrowUpRight size={15} />
-            </button>
-          </nav>
-        </div>
-        <div className="lp-footer-bottom">
-          <span>© {new Date().getFullYear()} Roots</span>
-          <span>Personal finance. A fresh perspective.</span>
-          <a href="#landing-title">Back to top ↑</a>
+          <div className="lp-footer-legal">
+            <p>
+              Roots is not a bank. Money in your wallet is not a bank deposit and is not covered by
+              deposit insurance. QIE network transfers are irreversible. Features marked “Coming soon”
+              are not yet available. Identity verification is provided by Didit.
+            </p>
+            <div className="lp-footer-bottom">
+              <span>© {new Date().getFullYear()} Roots</span>
+              <a href="#main-content" onClick={jump}>
+                Back to top
+              </a>
+            </div>
+          </div>
         </div>
       </footer>
     </div>
