@@ -501,3 +501,27 @@ test('recovery code screen offers resend and a different email with neutral copy
   await expect(page.getByLabel('Email address')).toHaveValue('nobody@example.test');
   await expect(page.getByLabel('Verification code')).toHaveCount(0);
 });
+
+test('incoming wallet transfers show as received in activity, receipts and asset detail', async ({ page }) => {
+  const sender = '0x' + '4'.repeat(40);
+  const incoming = {
+    id: 'rcv_browser_mock', direction: 'received', status: 'confirmed', from: sender, to: linkedAddress,
+    amount_atomic: '2500000', asset: 'QUSDC', decimals: 6, network: 'qie-mainnet',
+    created_at: '2026-10-21T10:00:00.000Z', tx_hash: '0x' + 'c'.repeat(64),
+    explorer_url: 'https://mainnet.qie.digital/tx/0x' + 'c'.repeat(64),
+  };
+  await signedIn(page);
+  await page.route('**/personal/api/overview', (route) => route.fulfill(json({ ...overview, activity: [incoming, ...overview.activity] })));
+  await page.goto('/personal/activity');
+  const row = page.locator('.fin-transaction').first();
+  await expect(row).toContainText('Received QUSDC');
+  await expect(row).toContainText('From 0x4444…4444');
+  await expect(row.locator('.fin-tx-icon-in')).toBeVisible();
+  await row.click();
+  await expect(page.locator('.fin-receipt')).toContainText('2.5 QUSDC');
+  await expect(page.locator('.fin-receipt')).toContainText(sender);
+  await expect(page.locator('.fin-receipt')).not.toContainText('Confirmations');
+  await page.goto('/personal/assets/qusdc');
+  await expect(page.getByRole('region', { name: 'QUSDC activity' })).toContainText('Received QUSDC');
+  await expect(page.getByRole('region', { name: 'QUSDC activity' })).toContainText('+');
+});

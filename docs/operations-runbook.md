@@ -115,3 +115,6 @@ use trusted Kora archives and isolated databases.
   releases its reservation; a checkout with no charge after six hours fails.
 - Applied migrations are checksummed. Editing one fails `pnpm db:migrate`; add a
   new migration instead.
+- Incoming transfers are indexed per address and asset (`chain_incoming_cursors`).
+  A failing explorer or node backs that address off alone; inspect
+  `SELECT address,asset,failures,last_error FROM chain_incoming_cursors WHERE failures>0`.

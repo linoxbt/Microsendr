@@ -508,6 +508,15 @@
   color: var(--fin-blue);
   border-radius: 50%;
 }
+/* Incoming money reads as a gain. */
+.fin-tx-icon-in {
+  background: #e3f1e7;
+  color: #2f7a4a;
+}
+:root[data-theme='dark'] .fin-tx-icon-in {
+  background: #1f3d2c;
+  color: #8fd1a6;
+}
 .fin-app-footer {
   display: flex;
   justify-content: space-between;

@@ -71,7 +71,7 @@ export async function createNativeSettlement(input: CreateNativeSettlement) {
 
 export function publicSettlement(row: Record<string, any>) {
   const adapter = chainAdapters[row.network]?.();
-  return { id: row.id, network: row.network, chain_id: Number(row.chain_id), asset_position_id: row.asset_position_id,
+  return { id: row.id, direction: 'sent' as const, network: row.network, chain_id: Number(row.chain_id), asset_position_id: row.asset_position_id,
     asset: adapter?.nativeAssetCode ?? row.asset_position_id, decimals: adapter?.nativeDecimals ?? null,
     from: row.source_address, to: row.destination_address,
     amount_atomic: String(row.amount_atomic), status: row.status, tx_hash: row.tx_hash,

@@ -11,6 +11,15 @@ const addressPattern = /^0x[a-fA-F0-9]{40}$/;
 const hashPattern = /^0x[a-fA-F0-9]{64}$/;
 
 export class QieRpcError extends Error {}
+export interface IncomingEvidence {
+  from: string;
+  amount_atomic: string;
+  block_number: string;
+  block_hash: string;
+  block_time: string;
+}
+// keccak256("Transfer(address,address,uint256)")
+const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 /** The chain evidence contradicts the instruction; retrying cannot change the outcome. */
 export class QieEvidenceMismatch extends QieRpcError {}
 // eth_chainId is fixed per endpoint; verify once per RPC URL and process.
@@ -92,6 +101,48 @@ export class QieClient implements ChainSettlementAdapter {
     const block = await this.rpc<string>('eth_blockNumber');
     if (!/^0x[0-9a-f]+$/i.test(block)) throw new QieRpcError('Invalid QIE block height');
     return BigInt(block);
+  }
+
+  /**
+   * Verifies an incoming transfer straight from the node: the explorer only suggests
+   * candidates. Native transfers must be a successful top-level transaction to the
+   * address; QUSDC transfers must be the exact Transfer log from the allowlisted
+   * contract. Returns null while the transfer is not final or does not match.
+   */
+  async incomingEvidence(hash: string, to: string, asset: 'QIEV3' | 'QUSDC', logIndex: number,
+    confirmations = this.requiredConfirmations): Promise<IncomingEvidence | null> {
+    if (!hashPattern.test(hash) || !addressPattern.test(to) || !Number.isSafeInteger(logIndex))
+      throw new QieRpcError('Invalid incoming transfer input');
+    await this.assertMainnet();
+    const [tx, receipt, head] = await Promise.all([
+      this.rpc<{ from: string; to: string | null; value: string } | null>('eth_getTransactionByHash', [hash]),
+      this.rpc<{ status: string; blockNumber: string; blockHash?: string; logs?: { address: string; topics: string[]; data: string; logIndex: string }[] } | null>('eth_getTransactionReceipt', [hash]),
+      this.rpc<string>('eth_blockNumber'),
+    ]);
+    if (!tx || !receipt || receipt.status !== '0x1' || !receipt.blockHash || !hashPattern.test(receipt.blockHash)) return null;
+    const block = BigInt(receipt.blockNumber);
+    if (BigInt(head) - block + 1n < confirmations) return null;
+    const canonical = await this.rpc<{ hash: string; timestamp: string } | null>('eth_getBlockByNumber', [receipt.blockNumber, false]);
+    if (!canonical || canonical.hash.toLowerCase() !== receipt.blockHash.toLowerCase()) return null;
+    let from: string, amount: bigint;
+    if (asset === 'QIEV3') {
+      if (logIndex !== -1 || tx.to?.toLowerCase() !== to.toLowerCase()) return null;
+      from = tx.from;
+      amount = BigInt(tx.value);
+    } else {
+      const log = receipt.logs?.find(item => Number(BigInt(item.logIndex)) === logIndex);
+      const padded = `0x${to.slice(2).toLowerCase().padStart(64, '0')}`;
+      if (!log || log.address.toLowerCase() !== QIE_QUSDC_CONTRACT.toLowerCase() || log.topics.length !== 3 ||
+          log.topics[0].toLowerCase() !== TRANSFER_TOPIC || log.topics[2].toLowerCase() !== padded ||
+          !/^0x[0-9a-f]{64}$/i.test(log.data)) return null;
+      from = `0x${log.topics[1].slice(-40)}`;
+      amount = BigInt(log.data);
+    }
+    if (amount <= 0n || !addressPattern.test(from)) return null;
+    return {
+      from: from.toLowerCase(), amount_atomic: amount.toString(), block_number: block.toString(),
+      block_hash: receipt.blockHash.toLowerCase(), block_time: new Date(Number(BigInt(canonical.timestamp)) * 1000).toISOString(),
+    };
   }
 
   // This is settlement evidence only. Financial posting requires a separately

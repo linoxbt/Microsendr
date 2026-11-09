@@ -42,7 +42,9 @@ type Session = { authenticated: boolean; csrf_token?: string; email?: string; ac
 type Capability = { available: boolean; reason: string };
 type Movement = {
   id: string;
+  direction?: 'sent' | 'received';
   status: string;
+  from?: string;
   to: string;
   amount_atomic: string;
   asset: string;
@@ -51,8 +53,8 @@ type Movement = {
   created_at: string;
   tx_hash: string | null;
   explorer_url: string | null;
-  confirmations: number;
-  required_confirmations: number;
+  confirmations?: number;
+  required_confirmations?: number;
 };
 type Overview = {
   balances: unknown[];
@@ -73,8 +75,11 @@ const statusLabel = (status: string) =>
     expired: 'Expired',
   })[status] ?? status;
 const assetLabel = (asset: string) => (asset === 'QIEV3' ? 'QIE' : asset);
-// Personal activity rows are chain settlements: outbound native transfers from a linked wallet.
-const movementTitle = (item: Movement) => `Sent ${assetLabel(item.asset)}`;
+// Activity holds outbound settlements from a linked wallet and verified incoming transfers.
+const received = (item: Movement) => item.direction === 'received';
+const movementTitle = (item: Movement) => `${received(item) ? 'Received' : 'Sent'} ${assetLabel(item.asset)}`;
+const counterparty = (item: Movement) =>
+  received(item) ? `From ${shortAddress(item.from ?? '')}` : `To ${shortAddress(item.to)}`;
 const shortAddress = (value: string) =>
   value.length > 16 ? `${value.slice(0, 6)}…${value.slice(-4)}` : value;
 const formatAmount = (item: Movement) => {
@@ -283,7 +288,7 @@ export function PersonalPage({
         (filter === 'completed'
           ? item.status === 'confirmed'
           : !['confirmed', 'failed', 'expired'].includes(item.status))) &&
-      `${item.id} ${item.to} ${movementTitle(item)} ${statusLabel(item.status)}`
+      `${item.id} ${item.to} ${item.from ?? ''} ${movementTitle(item)} ${statusLabel(item.status)}`
         .toLowerCase()
         .includes(search.toLowerCase()),
   );
@@ -300,8 +305,8 @@ export function PersonalPage({
               if (compact) go('/personal/activity');
             }}
           >
-            <span className="fin-tx-icon">
-              <ArrowUpRight size={19} />
+            <span className={`fin-tx-icon${received(item) ? ' fin-tx-icon-in' : ''}`}>
+              {received(item) ? <ArrowDownLeft size={19} /> : <ArrowUpRight size={19} />}
             </span>
             <span>
               <b>{movementTitle(item)}</b>
@@ -311,7 +316,7 @@ export function PersonalPage({
                   day: 'numeric',
                   year: 'numeric',
                 })}{' '}
-                · To {shortAddress(item.to)}
+                · {counterparty(item)}
               </small>
             </span>
             <span>
@@ -574,14 +579,22 @@ export function PersonalPage({
                     </button>
                   </div>
                   <dl>
-                    {Object.entries({
+                    {Object.entries(received(receipt) ? {
+                      Status: statusLabel(receipt.status),
+                      Amount: `${formatAmount(receipt)} ${assetLabel(receipt.asset)}`,
+                      From: receipt.from ?? '',
+                      'Received at': receipt.to,
+                      Reference: receipt.id,
+                      Network: receipt.network,
+                      'Transaction reference': receipt.tx_hash ?? '',
+                    } : {
                       Status: statusLabel(receipt.status),
                       Amount: `${formatAmount(receipt)} ${assetLabel(receipt.asset)}`,
                       Recipient: receipt.to,
                       Reference: receipt.id,
                       Network: receipt.network,
                       'Transaction reference': receipt.tx_hash ?? 'Not submitted',
-                      Confirmations: `${receipt.confirmations} / ${receipt.required_confirmations}`,
+                      Confirmations: `${receipt.confirmations ?? 0} / ${receipt.required_confirmations ?? 0}`,
                     }).map(([k, v]) => (
                       <div key={k}>
                         <dt>{k}</dt>

@@ -37,6 +37,7 @@ export function AssetIcon({ code, large = false }: { code: PersonalAsset['code']
 
 type AssetMovement = {
   id: string;
+  direction?: 'sent' | 'received';
   asset: string;
   amount_atomic: string;
   decimals: number | null;
@@ -81,7 +82,7 @@ export function AssetDetail({ asset, activity, go, hidden, refresh, refreshing }
           <button onClick={() => go('/personal/deposit')}><span><ArrowDownLeft size={20} /></span>Receive QIE</button>
           <button onClick={() => go('/personal/send')}><span><ArrowUpRight size={20} /></span>Send QIE</button>
         </>}
-        {asset.code === 'QUSDC' && <span className="fin-asset-detail-note">Sending and receiving QUSDC is not available yet.</span>}
+        {asset.code === 'QUSDC' && <span className="fin-asset-detail-note">QUSDC that arrives in your linked wallets shows here. Sending QUSDC from Microsendr is not available yet.</span>}
         {asset.code === 'NGN' && <span className="fin-asset-detail-note">Bank deposits and payouts are not available yet.</span>}
       </div>
     </section>
@@ -90,10 +91,10 @@ export function AssetDetail({ asset, activity, go, hidden, refresh, refreshing }
         <div className="fin-asset-detail-section-title"><h2>Activity</h2>{movements.length > 0 && <button onClick={() => go('/personal/activity')}>View all <ArrowRight size={15} /></button>}</div>
         {movements.length ? <div className="fin-asset-detail-movements">{movements.map(item =>
           <div className="fin-asset-detail-movement" key={item.id}>
-            <span className="fin-asset-detail-movement-icon"><ArrowUpRight size={17} /></span>
-            <span className="fin-asset-detail-movement-copy"><b>Sent {item.asset === 'QIEV3' ? 'QIE' : item.asset}</b><small>{new Date(item.created_at).toLocaleDateString()} · {item.status === 'confirmed' ? 'Completed' : item.status === 'failed' ? 'Failed' : 'Processing'}</small></span>
-            <b>{hidden ? '••••' : `−${assetAmount({ ...asset, amount_atomic: item.amount_atomic, decimals: item.decimals ?? asset.decimals })}`}</b>
-          </div>)}</div> : <div className="fin-asset-detail-empty"><Clock3 size={21} /><strong>No Microsendr transfers yet</strong><span>{asset.code === 'QIE' ? 'Wallet deposits are shown in your balance.' : `${asset.code} activity will appear here when available.`}</span></div>}
+            <span className="fin-asset-detail-movement-icon">{item.direction === 'received' ? <ArrowDownLeft size={17} /> : <ArrowUpRight size={17} />}</span>
+            <span className="fin-asset-detail-movement-copy"><b>{item.direction === 'received' ? 'Received' : 'Sent'} {item.asset === 'QIEV3' ? 'QIE' : item.asset}</b><small>{new Date(item.created_at).toLocaleDateString()} · {item.status === 'confirmed' ? 'Completed' : item.status === 'failed' ? 'Failed' : 'Processing'}</small></span>
+            <b>{hidden ? '••••' : `${item.direction === 'received' ? '+' : '−'}${assetAmount({ ...asset, amount_atomic: item.amount_atomic, decimals: item.decimals ?? asset.decimals })}`}</b>
+          </div>)}</div> : <div className="fin-asset-detail-empty"><Clock3 size={21} /><strong>No activity yet</strong><span>{asset.code === 'NGN' ? 'Naira activity will appear here when available.' : `${asset.code} you send or receive in your wallets appears here.`}</span></div>}
       </section>
       <section className="fin-panel fin-asset-detail-info" aria-label="Asset information">
         <h2>About {asset.code}</h2>

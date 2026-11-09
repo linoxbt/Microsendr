@@ -5,6 +5,7 @@ import { id, pool, transaction } from '../../../packages/database/src/index.js';
 import { hashKey } from '../../../packages/payments/src/auth.js';
 import { PaymentError } from '../../../packages/payments/src/errors.js';
 import { publicSettlement } from '../../../packages/settlement/src/service.js';
+import { personalIncomingTransfers } from '../../../packages/settlement/src/incoming.js';
 import { ensureManagedWallet } from './managed-wallet.js';
 import { personalAssets } from './personal-assets.js';
 import { personalWalletUsdValue } from './personal-valuation.js';
@@ -419,12 +420,16 @@ export function registerConsumer(app: FastifyInstance, deps: Dependencies) {
     // Wallet assets are live chain observations, distinct from custodial ledger balances.
     const assets = await personalAssets(person.user_id, person.account_id);
     const wallet_value_usd = await personalWalletUsdValue(assets);
+    const received = await personalIncomingTransfers(person.user_id, person.account_id);
     return {
       balances: [],
       total: null,
       assets,
       wallet_value_usd,
-      activity: rows.map(publicSettlement),
+      // Sent settlements and verified incoming transfers, newest first.
+      activity: [...rows.map(publicSettlement), ...received]
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 50),
       capabilities: {
         fiat_deposit: { available: false, reason: 'Bank deposits are not available yet.' },
         crypto_deposit: {
