@@ -1,5 +1,5 @@
 import { createHmac, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
-import nodemailer from 'nodemailer';
+import { mailer } from './email.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { id, pool, transaction } from '../../../packages/database/src/index.js';
@@ -27,24 +27,7 @@ export interface PersonalOptions {
   sandboxFixtures?: boolean;
 }
 
-export function mailer(): PersonalOptions['sendCode'] | undefined {
-  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM } = process.env;
-  if (!SMTP_HOST || !SMTP_PORT || !SMTP_FROM) return undefined;
-  const transport = nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: Number(SMTP_PORT),
-    secure: Number(SMTP_PORT) === 465,
-    ...(SMTP_USER && SMTP_PASS ? { auth: { user: SMTP_USER, pass: SMTP_PASS } } : {}),
-  });
-  return async (email, code) => {
-    await transport.sendMail({
-      from: SMTP_FROM,
-      to: email,
-      subject: 'Your Microsendr sign-in code',
-      text: `Your Microsendr sign-in code is ${code}. It expires in 10 minutes. If you did not request it, ignore this email.`,
-    });
-  };
-}
+export { mailer } from './email.js';
 
 function origin(request: FastifyRequest) {
   return requireOrigin(request);

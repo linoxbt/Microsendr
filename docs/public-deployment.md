@@ -29,8 +29,9 @@ Set `PRIVY_APP_ID` and a rotated, server-only `PRIVY_APP_SECRET` to issue each
 Personal account a managed wallet address. Outbound transfers from managed
 wallets are not built, so the client never shows that address for deposits.
 Personal registration and login use email and password with a server-side scrypt
-hash (N=2^17; older N=2^15 hashes upgrade on login). Configure `SMTP_*` and `KORA_AUTH_SECRET` for email verification and
-password recovery. A wallet is optional at signup. Later, a user can link an
+hash (N=2^17; older N=2^15 hashes upgrade on login). Configure `KORA_AUTH_SECRET`,
+`EMAIL_FROM` and either `RESEND_API_KEY` (preferred) or `SMTP_*` for email
+verification and password recovery. A wallet is optional at signup. Later, a user can link an
 existing QIE-compatible EVM wallet by signing an account-specific challenge.
 The wallet provider holds the signing key; the application never receives it.
 Legacy Privy authentication endpoints remain for older accounts but are not used
