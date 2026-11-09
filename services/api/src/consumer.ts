@@ -101,7 +101,7 @@ export async function hashPassword(value: string) {
   return `scrypt2:${CURRENT_N}:${salt}:${(await derive(value, salt)).toString('hex')}`;
 }
 const legacyHash = (stored: string | null) => !!stored?.startsWith('scrypt:');
-async function matches(value: string, stored: string | null) {
+export async function matches(value: string, stored: string | null) {
   const parts = (stored ?? '').split(':');
   // Unknown accounts and unparseable hashes pay the current cost, so response time
   // does not reveal whether an email has an account.

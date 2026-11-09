@@ -1952,3 +1952,20 @@
 .fin-chain-account > svg{color:var(--fin-blue)}
 .fin-chain-account p{margin:4px 0 0;color:var(--fin-muted);font-size:12px;line-height:1.6}
 .fin-chain-account .fin-text{margin-top:6px}
+/* Account wallet (custodial) panel sits above the user's own linked wallets. */
+.fin-chain-managed {
+  display: grid;
+  gap: 14px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--fin-line, #e3dccb);
+}
+.fin-chain-managed .fin-chain-balance span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.fin-chain-subhead {
+  margin: 18px 0 4px;
+  font-size: 15px;
+  font-weight: 650;
+}

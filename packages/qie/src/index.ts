@@ -103,6 +103,32 @@ export class QieClient implements ChainSettlementAdapter {
     return BigInt(block);
   }
 
+  /** Inputs for an EIP-1559 native transfer: pending nonce, fees and gas. */
+  async transferParameters(from: string, to: string, value: bigint) {
+    if (!addressPattern.test(from) || !addressPattern.test(to) || value <= 0n) throw new QieRpcError('Invalid transfer input');
+    await this.assertMainnet();
+    const [nonce, block, priority, gas, balance] = await Promise.all([
+      this.rpc<string>('eth_getTransactionCount', [from, 'pending']),
+      this.rpc<{ baseFeePerGas?: string } | null>('eth_getBlockByNumber', ['latest', false]),
+      this.rpc<string>('eth_maxPriorityFeePerGas'),
+      this.rpc<string>('eth_estimateGas', [{ from, to, value: `0x${value.toString(16)}` }]),
+      this.rpc<string>('eth_getBalance', [from, 'pending']),
+    ]);
+    for (const value of [nonce, priority, gas, balance, block?.baseFeePerGas])
+      if (typeof value !== 'string' || !/^0x[0-9a-f]+$/i.test(value)) throw new QieRpcError('Invalid fee response');
+    const maxPriorityFeePerGas = BigInt(priority);
+    // Twice the base fee absorbs several blocks of increases; unused fee is not charged.
+    const maxFeePerGas = 2n * BigInt(block!.baseFeePerGas!) + maxPriorityFeePerGas;
+    return { nonce: Number(BigInt(nonce)), gas: BigInt(gas), maxFeePerGas, maxPriorityFeePerGas, balance: BigInt(balance) };
+  }
+
+  /** Broadcasts a signed transaction; resending one the node already has is harmless. */
+  async sendRawTransaction(raw: string): Promise<string> {
+    if (!/^0x[0-9a-f]+$/i.test(raw)) throw new QieRpcError('Invalid signed transaction');
+    await this.assertMainnet();
+    return this.rpc<string>('eth_sendRawTransaction', [raw]);
+  }
+
   /**
    * Verifies an incoming transfer straight from the node: the explorer only suggests
    * candidates. Native transfers must be a successful top-level transaction to the

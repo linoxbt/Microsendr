@@ -79,7 +79,7 @@ export function publicSettlement(row: Record<string, any>) {
     confirmations: row.observed_confirmations, required_confirmations: row.required_confirmations,
     created_at: row.created_at, updated_at: row.updated_at,
     explorer_url: row.tx_hash && adapter ? adapter.transactionUrl(row.tx_hash) : null,
-    custody: 'user_wallet', ledger_credited: false };
+    custody: row.custody ?? 'user_wallet', ledger_credited: false };
 }
 
 export async function submitNativeSettlement(userId: string, settlementId: string, hash: string) {
@@ -135,6 +135,10 @@ export async function reconcileChainSettlement(settlementId: string, adapter: Ch
     });
     if (evidence.block_number !== null && BigInt(evidence.block_number) < BigInt(row.minimum_block_number))
       throw new SettlementError(422, 'historical_transaction', 'Transaction predates the settlement instruction');
+    // A transfer Microsendr signed is re-sent byte for byte while unmined, in case
+    // the first broadcast never reached the network. It is never re-signed.
+    if (evidence.state === 'pending' && row.signed_transaction)
+      await adapter.sendRawTransaction?.(row.signed_transaction).catch(() => undefined);
     if (evidence.state === 'pending' && Date.now() - new Date(row.created_at).getTime() > MAX_PENDING_AGE_MS) {
       await terminal('expired', 'not_final_after_7_days');
       return true;

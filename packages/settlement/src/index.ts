@@ -24,6 +24,8 @@ export interface ChainSettlementAdapter {
   headBlock(): Promise<bigint>;
   /** Sender of a broadcast transaction, or null while it is not yet visible. */
   transactionSender?(hash: string): Promise<string | null>;
+  /** Re-sends a transaction this service signed, while it is not yet mined. */
+  sendRawTransaction?(raw: string): Promise<string>;
   nativeTransferEvidence(hash: string, instruction: NativeTransferInstruction): Promise<SettlementEvidence>;
 }
 

@@ -6,6 +6,8 @@ import { id, pool, transaction } from '../../../packages/database/src/index.js';
 import { PaymentError } from '../../../packages/payments/src/errors.js';
 import { QieClient, QIE_CHAIN_ID, QIE_EXPLORER, QIE_NETWORK } from '../../../packages/qie/src/index.js';
 import { ensureManagedWallet, findManagedWallet, managedWalletConfigured } from './managed-wallet.js';
+import { managedTransferLimits, managedTransfersEnabled, sendFromManagedWallet } from './managed-transfer.js';
+import { matches } from './consumer.js';
 
 type Person = { user_id: string; account_id: string };
 const addressSchema = z.string().regex(/^0x[a-fA-F0-9]{40}$/);
@@ -53,12 +55,35 @@ export function registerPersonalWallets(
     );
     return {
       data: [
-        ...(managed ? [{ ...managed, label: 'Your wallet', managed: true }] : []),
+        ...(managed ? [{ ...managed, label: 'Your wallet', managed: true, can_send: managedTransfersEnabled() }] : []),
         ...rows.rows.map(row => ({ ...row, address: getAddress(row.address), managed: false })),
       ],
       provisioning_available: managedWalletConfigured(),
+      managed_transfers: managedTransfersEnabled() ? {
+        per_transfer_wei: managedTransferLimits().per_transfer_wei.toString(),
+        daily_wei: managedTransferLimits().daily_wei.toString(),
+        requires_identity_verification: process.env.KORA_MANAGED_TRANSFERS_REQUIRE_KYC !== 'false',
+      } : null,
     };
   });
+
+  // Custodial send: confirmed with the account password on every transfer.
+  app.post('/personal/api/wallets/managed/transfers',
+    { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async request => {
+      const person = await required(request, true);
+      const input = z.object({
+        to: addressSchema, amount_atomic: z.string().regex(/^[1-9][0-9]{0,40}$/), password: z.string().min(1).max(128),
+      }).strict().parse(request.body);
+      const stored = (await pool.query('SELECT password_hash FROM personal_users WHERE id=$1', [person.user_id])).rows[0];
+      if (!stored?.password_hash) throw new PaymentError(403, 'password_required', 'Set a password in Security before sending');
+      if (!(await matches(input.password, stored.password_hash)))
+        throw new PaymentError(401, 'invalid_password', 'Your password is incorrect');
+      const key = request.headers['idempotency-key'];
+      return sendFromManagedWallet({
+        userId: person.user_id, accountId: person.account_id, to: input.to, amountAtomic: input.amount_atomic,
+        idempotencyKey: typeof key === 'string' ? key : '',
+      });
+    });
 
   app.post('/personal/api/wallets/managed',
     { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async request => {

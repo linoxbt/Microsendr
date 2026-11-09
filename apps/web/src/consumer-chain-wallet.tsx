@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import { formatEther, getAddress, isAddress, parseEther } from 'viem';
 import { ArrowRight, ArrowUpRight, Copy, Link2, RefreshCw, ShieldCheck, Unlink, Wallet } from 'lucide-react';
 import { consumerRequest } from './consumer-api.js';
+import { ManagedWalletPanel, type ManagedLimits } from './managed-wallet-panel.js';
 
 type WalletRecord = {
   id: string;
@@ -11,6 +12,7 @@ type WalletRecord = {
   network: string;
   managed?: boolean;
   custody?: string;
+  can_send?: boolean;
 };
 type Balance = {
   balance_wei: string; block_number: string; explorer_url: string; asset: string;
@@ -20,7 +22,7 @@ type EthereumProvider = {
 };
 const qieChainId = '0x7c6';
 const explorer = 'https://mainnet.qie.digital/';
-/** Managed (custodial) wallets cannot send yet, so they must never be offered as a deposit address. */
+/** A managed (custodial) wallet is offered for deposits only when it can also send. */
 export const isManaged = (wallet: WalletRecord) => wallet.managed === true || wallet.custody === 'managed';
 function previewAmount(wei: string) {
   const [whole, fraction = ''] = formatEther(BigInt(wei)).split('.');
@@ -72,6 +74,7 @@ export function ConsumerChainWallet({
   onChanged?: () => Promise<unknown> | void;
 }) {
   const [wallets, setWallets] = useState<WalletRecord[]>();
+  const [managedLimits, setManagedLimits] = useState<ManagedLimits | null>(null);
   const [selectedId, setSelectedId] = useState('');
   const [balance, setBalance] = useState<Balance>();
   const [qr, setQr] = useState('');
@@ -91,8 +94,9 @@ export function ConsumerChainWallet({
     try { await onChanged?.(); } catch { /* the overview refresh reports its own errors */ }
   }
   async function loadWallets() {
-    const result = await consumerRequest<{ data: WalletRecord[] }>('wallets');
+    const result = await consumerRequest<{ data: WalletRecord[]; managed_transfers?: ManagedLimits | null }>('wallets');
     setWallets(result.data);
+    setManagedLimits(result.managed_transfers ?? null);
     const own = result.data.filter(wallet => !isManaged(wallet));
     setSelectedId(current => own.some(wallet => wallet.id === current) ? current : own[0]?.id ?? '');
     return own;
@@ -227,7 +231,8 @@ export function ConsumerChainWallet({
     finally { setBusy(false); }
   }
 
-  const accountWallet = wallets && <div className="fin-chain-account" aria-label="Microsendr account wallet" role="group">
+  const managedOpen = !!managed?.can_send && !!managedLimits;
+  const accountWallet = wallets && !managedOpen && <div className="fin-chain-account" aria-label="Microsendr account wallet" role="group">
     <ShieldCheck size={19} />
     <div>
       <b>Microsendr account wallet</b>
@@ -246,9 +251,11 @@ export function ConsumerChainWallet({
       </h2></div>
       <Wallet size={23} />
     </div>
+    {managedOpen && managed && <ManagedWalletPanel wallet={managed} limits={managedLimits!} mode={mode} csrf={csrf} onChanged={onChanged} />}
+    {managedOpen && <h3 className="fin-chain-subhead">Your own wallets</h3>}
     {!wallets ? <p className="fin-chain-empty" role="status">Loading your wallets…</p>
       : !linked.length ? <div className="fin-chain-empty">
-        <p>Link a self-custody EVM wallet to {mode === 'receive' ? 'receive' : 'send'} native QIEV3 on QIE Mainnet. Your wallet keeps control of its keys; Microsendr never holds them.</p>
+        <p>{managedOpen ? 'You can also link' : 'Link'} a self-custody EVM wallet to {mode === 'receive' ? 'receive' : 'send'} native QIEV3 on QIE Mainnet. Your wallet keeps control of its keys; Microsendr never holds them.</p>
         <button className="fin-primary" type="button" onClick={() => void linkWallet()} disabled={busy}>
           <Link2 size={17} /> {busy ? 'Connecting…' : 'Link QIE wallet'}
         </button>

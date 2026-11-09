@@ -24,33 +24,43 @@ export async function findManagedWallet(userId: string, accountId: string): Prom
 }
 
 // No database connection or lock is held while Privy is called: a slow provider
-// must not exhaust the pool. Concurrent or retried creates share one Privy
-// idempotency key, and the primary key on personal_user_id keeps one row.
+// must not exhaust the pool. Privy's external_id is unique per app and write-once, so
+// concurrent or retried creates converge on one wallet; after any create failure the
+// wallet is looked up by that id. (Idempotency keys are avoided: Privy caches 5xx
+// replies under a key for 24 hours.) The primary key on personal_user_id keeps one row.
 export async function ensureManagedWallet(userId: string, accountId: string): Promise<Wallet | null> {
   const existing = await findManagedWallet(userId, accountId);
   if (existing) return existing;
   const appId = process.env.PRIVY_APP_ID;
   const secret = process.env.PRIVY_APP_SECRET;
   if (!appId || !secret) return null;
-  let response: Response;
+  const externalId = `microsendr_${userId}`;
+  const call = async (url: string, init: RequestInit = {}) => {
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        ...init,
+        headers: {
+          authorization: `Basic ${Buffer.from(`${appId}:${secret}`).toString('base64')}`,
+          'privy-app-id': appId,
+          'content-type': 'application/json',
+        },
+        redirect: 'error',
+        signal: AbortSignal.timeout(8000),
+      });
+    } catch (cause) {
+      throw new ManagedWalletError(cause instanceof Error ? cause.name : 'network_error');
+    }
+    if (!response.ok) throw new ManagedWalletError(`privy_status_${response.status}`);
+    return (await response.json().catch(() => ({}))) as { id?: unknown; address?: unknown };
+  };
+  let record: { id?: unknown; address?: unknown };
   try {
-    response = await fetch(base, {
-      method: 'POST',
-      headers: {
-        authorization: `Basic ${Buffer.from(`${appId}:${secret}`).toString('base64')}`,
-        'privy-app-id': appId,
-        'privy-idempotency-key': `microsendr_${userId}`,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({ chain_type: 'ethereum' }),
-      redirect: 'error',
-      signal: AbortSignal.timeout(8000),
-    });
-  } catch (cause) {
-    throw new ManagedWalletError(cause instanceof Error ? cause.name : 'network_error');
+    record = await call(base, { method: 'POST', body: JSON.stringify({ chain_type: 'ethereum', external_id: externalId }) });
+  } catch (createError) {
+    // A previous attempt may have created it (Privy succeeded, we did not record it).
+    try { record = await call(`${base}/ext_wal_${externalId}`); } catch { throw createError; }
   }
-  if (!response.ok) throw new ManagedWalletError(`privy_status_${response.status}`);
-  const record = (await response.json().catch(() => ({}))) as { id?: unknown; address?: unknown };
   if (typeof record.id !== 'string' || typeof record.address !== 'string' || !isAddress(record.address))
     throw new ManagedWalletError('invalid_wallet_record');
   const address = getAddress(record.address);
@@ -60,4 +70,24 @@ export async function ensureManagedWallet(userId: string, accountId: string): Pr
     [userId, accountId, record.id, address.toLowerCase()],
   );
   return findManagedWallet(userId, accountId);
+}
+
+/** Privy wallet RPC (app-owned wallets: app credentials, no owner signature). */
+export async function privyWalletRpc(walletId: string, body: unknown, request: typeof fetch = fetch) {
+  const appId = process.env.PRIVY_APP_ID, secret = process.env.PRIVY_APP_SECRET;
+  if (!appId || !secret) throw new ManagedWalletError('unconfigured');
+  if (!/^[A-Za-z0-9_-]{8,100}$/.test(walletId)) throw new ManagedWalletError('invalid_wallet_id');
+  const response = await request(`${base}/${walletId}/rpc`, {
+    method: 'POST',
+    headers: {
+      authorization: `Basic ${Buffer.from(`${appId}:${secret}`).toString('base64')}`,
+      'privy-app-id': appId,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify(body),
+    redirect: 'error',
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!response.ok) throw new ManagedWalletError(`privy_status_${response.status}`);
+  return response.json() as Promise<unknown>;
 }

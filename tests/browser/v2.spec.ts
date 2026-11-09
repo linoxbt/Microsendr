@@ -525,3 +525,28 @@ test('incoming wallet transfers show as received in activity, receipts and asset
   await expect(page.getByRole('region', { name: 'QUSDC activity' })).toContainText('Received QUSDC');
   await expect(page.getByRole('region', { name: 'QUSDC activity' })).toContainText('+');
 });
+
+test('when account wallet sends are enabled it can receive and send with the password', async ({ page }) => {
+  await signedIn(page);
+  const limits = { per_transfer_wei: '1000000000000000000000', daily_wei: '5000000000000000000000', requires_identity_verification: true };
+  await page.route('**/personal/api/wallets', (route) => route.fulfill(json({ data: [{ ...managedRecord, can_send: true }], managed_transfers: limits })));
+  const posts: { body: Record<string, string>; key: string | undefined }[] = [];
+  await page.route('**/personal/api/wallets/managed/transfers', (route) => {
+    posts.push({ body: route.request().postDataJSON(), key: route.request().headers()['idempotency-key'] });
+    return route.fulfill(json({ id: 'stl_' + 'b'.repeat(32), tx_hash: '0x' + 'd'.repeat(64), status: 'submitted', custody: 'managed' }));
+  });
+  await page.goto('/personal/deposit');
+  const panel = page.getByRole('group', { name: 'Microsendr account wallet' });
+  await expect(panel.locator('code')).toHaveText(managedAddress);
+  await expect(panel.getByAltText(/QR code for your account wallet/)).toBeVisible();
+  await page.goto('/personal/send');
+  await panel.getByLabel('Recipient QIE address').fill(recipient);
+  await panel.getByLabel('Amount in QIEV3').fill('1.5');
+  await panel.getByLabel('Password').fill('my-account-password');
+  await expect(panel).toContainText('Up to 1000 QIE per transfer');
+  await panel.getByRole('button', { name: /Confirm and send/ }).click();
+  await expect(panel).toContainText('Broadcast to QIE Mainnet');
+  expect(posts).toHaveLength(1);
+  expect(posts[0].body).toEqual({ to: recipient, amount_atomic: '1500000000000000000', password: 'my-account-password' });
+  expect(posts[0].key).toMatch(/^[0-9a-f-]{36}$/);
+});
