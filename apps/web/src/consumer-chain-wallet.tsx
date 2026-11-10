@@ -68,11 +68,12 @@ async function signature(wallet: EthereumProvider, address: string, message: str
 }
 
 export function ConsumerChainWallet({
-  csrf, mode, onChanged,
+  csrf, mode, onChanged, initialRecipient = '',
 }: {
   csrf: string;
   mode: 'receive' | 'send';
   onChanged?: () => Promise<unknown> | void;
+  initialRecipient?: string;
 }) {
   const [wallets, setWallets] = useState<WalletRecord[]>();
   const [managedLimits, setManagedLimits] = useState<ManagedLimits | null>(null);
@@ -80,7 +81,7 @@ export function ConsumerChainWallet({
   const [balance, setBalance] = useState<Balance>();
   const [qr, setQr] = useState('');
   const [amount, setAmount] = useState('');
-  const [destination, setDestination] = useState('');
+  const [destination, setDestination] = useState(initialRecipient);
   const payee = useRecipient(destination);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -203,6 +204,7 @@ export function ConsumerChainWallet({
       const settlement = await consumerRequest<{ id: string }>('settlements', 'POST', {
         network: authorization.network, from: selected.address, to: target,
         amount_atomic: atomic.toString(), expires_at: authorization.expires_at, signature: signed,
+        ...(payee.recipient?.username ? { recipient_username: payee.recipient.username } : {}),
       }, csrf, { 'Idempotency-Key': authorization.idempotency_key });
       setPending({ id: settlement.id });
       // Only the wallet can broadcast. A rejected or ambiguous provider result is never retried automatically.
@@ -254,7 +256,7 @@ export function ConsumerChainWallet({
       </h2></div>
       <Wallet size={23} />
     </div>
-    {managedOpen && managed && <ManagedWalletPanel wallet={managed} limits={managedLimits!} mode={mode} csrf={csrf} onChanged={onChanged} />}
+    {managedOpen && managed && <ManagedWalletPanel wallet={managed} limits={managedLimits!} mode={mode} csrf={csrf} onChanged={onChanged} initialRecipient={initialRecipient} />}
     {managedOpen && <h3 className="fin-chain-subhead">Your own wallets</h3>}
     {!wallets ? <p className="fin-chain-empty" role="status">Loading your wallets…</p>
       : !linked.length ? <div className="fin-chain-empty">

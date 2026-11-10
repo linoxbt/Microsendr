@@ -22,7 +22,7 @@ import {
   LockKeyhole,
   Download,
   ArrowLeft,
-  Coins,
+  Copy,
 } from 'lucide-react';
 import { PersonalLogin } from './personal-login.js';
 import { PersonalKyc } from './personal-kyc.js';
@@ -47,6 +47,7 @@ type Movement = {
   status: string;
   from?: string;
   to: string;
+  to_username?: string | null;
   amount_atomic: string;
   asset: string;
   decimals: number | null;
@@ -80,7 +81,23 @@ const assetLabel = (asset: string) => (asset === 'QIEV3' ? 'QIE' : asset);
 const received = (item: Movement) => item.direction === 'received';
 const movementTitle = (item: Movement) => `${received(item) ? 'Received' : 'Sent'} ${assetLabel(item.asset)}`;
 const counterparty = (item: Movement) =>
-  received(item) ? `From ${shortAddress(item.from ?? '')}` : `To ${shortAddress(item.to)}`;
+  received(item)
+    ? `From ${shortAddress(item.from ?? '')}`
+    : item.to_username ? `To @${item.to_username}` : `To ${shortAddress(item.to)}`;
+const payeePattern = /^(0x[a-fA-F0-9]{40}|@?[a-zA-Z][a-zA-Z0-9_]{2,23})$/;
+const tone = (name: string) => [...name].reduce((sum, c) => sum + c.charCodeAt(0), 0) % 4;
+const dayLabel = (iso: string) => {
+  const date = new Date(iso);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (date.toDateString() === today.toDateString()) return 'Today';
+  if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+  return date.toLocaleDateString(undefined, {
+    weekday: 'short', month: 'short', day: 'numeric',
+    ...(date.getFullYear() === today.getFullYear() ? {} : { year: 'numeric' }),
+  });
+};
 const shortAddress = (value: string) =>
   value.length > 16 ? `${value.slice(0, 6)}…${value.slice(-4)}` : value;
 const formatAmount = (item: Movement) => {
@@ -102,6 +119,11 @@ function PersonalLoading() {
 const actions = [
   ['deposit', 'Add money', Plus],
   ['send', 'Send', ArrowUpRight],
+  ['convert', 'Convert', ArrowLeftRight],
+  ['withdraw', 'Withdraw', ArrowDownLeft],
+] as const;
+const quickActions = [
+  ['deposit', 'Add money', Plus],
   ['convert', 'Convert', ArrowLeftRight],
   ['withdraw', 'Withdraw', ArrowDownLeft],
 ] as const;
@@ -129,6 +151,8 @@ export function PersonalPage({
   const [selected, setSelected] = useState<string | null>(null),
     [refreshing, setRefreshing] = useState(false),
     [signInNotice, setSignInNotice] = useState('');
+  const [payTo, setPayTo] = useState(''),
+    [copied, setCopied] = useState(false);
   const rawTab = path.split('/')[2]?.split('?')[0] || 'home';
   const tab = rawTab === 'login' ? 'home' : rawTab === 'money' ? 'deposit' : rawTab;
   const assetCode = path.split('/')[3]?.split('?')[0]?.toUpperCase();
@@ -301,6 +325,26 @@ export function PersonalPage({
         .includes(search.toLowerCase()),
   );
   const receipt = selected ? o.activity.find((x) => x.id === selected) : undefined;
+  // Only usernames this account itself paid, recorded when they matched the address sent to.
+  const payees = [...new Set(o.activity
+    .filter((item) => !received(item) && item.to_username && !['failed', 'expired'].includes(item.status))
+    .map((item) => item.to_username!))].slice(0, 5);
+  const recentDays = o.activity.slice(0, 6).reduce<[string, Movement[]][]>((days, item) => {
+    const day = dayLabel(item.created_at);
+    const last = days[days.length - 1];
+    if (last?.[0] === day) last[1].push(item);
+    else days.push([day, [item]]);
+    return days;
+  }, []);
+  async function copyUsername() {
+    try {
+      await navigator.clipboard.writeText(`@${p.username}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {
+      setError('Copy is unavailable on this device.');
+    }
+  }
   const activity = (compact = false) => (
     <div className="fin-activity-list">
       {(compact ? o.activity.slice(0, 4) : movements).length ? (
@@ -456,53 +500,153 @@ export function PersonalPage({
                   <RefreshCw size={18} className={refreshing ? 'fin-spin' : ''} />
                 </button>
               </div>
-              <section className="fin-wallet-overview" aria-label="Your wallet overview">
-                <div className="fin-wallet-overview-top">
-                  <span>
-                    <Coins size={17} /> Wallet overview
-                  </span>
-                  <span className="fin-wallet-username">@{p.username}</span>
-                </div>
-                <div className="fin-wallet-amount">
-                  <span>Estimated wallet value · USD</span>
-                  <div>
-                    <strong className={formattedWalletValue.length > 13 ? 'fin-amount-xlong' : formattedWalletValue.length > 10 ? 'fin-amount-long' : undefined}>{hidden ? '••••' : formattedWalletValue}</strong>
-                    <button
-                      aria-label={hidden ? 'Show balance' : 'Hide balance'}
-                      onClick={() => setHidden(!hidden)}
-                    >
-                      {hidden ? <EyeOff size={17} /> : <Eye size={17} />}
-                    </button>
+              <div className="fin-home-grid">
+                <section className="fin-wallet-overview" aria-label="Your wallet overview">
+                  <div className="fin-wallet-overview-top">
+                    <span>Your balance</span>
+                    {p.username && (
+                      <button
+                        className="fin-wallet-username"
+                        onClick={() => void copyUsername()}
+                        aria-label={`Copy your username @${p.username}`}
+                      >
+                        @{p.username} {copied ? <Check size={14} /> : <Copy size={14} />}
+                      </button>
+                    )}
                   </div>
-                  <p>{hidden ? 'Your balances are hidden' : walletValue === null
-                    ? 'Wallet value temporarily unavailable' : o.wallet_value_usd?.checked_at
-                      ? `Approximate value · Price checked ${new Date(o.wallet_value_usd.checked_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
-                      : 'Approximate value · See each balance below'}</p>
-                </div>
-              </section>
-              <div className="fin-wallet-actions" aria-label="Money actions">
-                {actions.map(([key, label, Icon]) => (
-                  <button key={key} onClick={() => go('/personal/' + key)}>
-                    <span>
-                      <Icon size={23} />
-                    </span>
-                    <b>{label}</b>
+                  <div className="fin-wallet-amount">
+                    <div>
+                      <strong className={formattedWalletValue.length > 13 ? 'fin-amount-xlong' : formattedWalletValue.length > 10 ? 'fin-amount-long' : undefined}>{hidden ? '••••' : formattedWalletValue}</strong>
+                      <button
+                        aria-label={hidden ? 'Show balance' : 'Hide balance'}
+                        onClick={() => setHidden(!hidden)}
+                      >
+                        {hidden ? <EyeOff size={17} /> : <Eye size={17} />}
+                      </button>
+                    </div>
+                    <p>{hidden ? 'Your balances are hidden' : walletValue === null
+                      ? 'Wallet value temporarily unavailable' : o.wallet_value_usd?.checked_at
+                        ? `Estimated in USD · Price checked ${new Date(o.wallet_value_usd.checked_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+                        : 'Estimated in USD · See each balance below'}</p>
+                  </div>
+                  <button
+                    className="fin-assets-pill"
+                    onClick={() => document.getElementById('home-assets')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                  >
+                    {assets.length} assets <ChevronRight size={14} />
                   </button>
-                ))}
+                </section>
+                <section className="fin-pay-card" aria-labelledby="pay-card-title">
+                  <h2 id="pay-card-title">Pay anyone on Roots</h2>
+                  <p>By @username or QIE address. You confirm before anything is sent.</p>
+                  <form
+                    className="fin-pay-search"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      const value = payTo.trim();
+                      go(value && payeePattern.test(value) ? `/personal/send?to=${encodeURIComponent(value)}` : '/personal/send');
+                    }}
+                  >
+                    <Search size={18} aria-hidden="true" />
+                    <input
+                      value={payTo}
+                      onChange={(e) => setPayTo(e.target.value)}
+                      placeholder="@username or 0x…"
+                      aria-label="Pay a Roots @username or QIE address"
+                      autoComplete="off"
+                      autoCapitalize="none"
+                      spellCheck={false}
+                    />
+                    <button aria-label="Continue to payment">
+                      <ArrowRight size={18} />
+                    </button>
+                  </form>
+                  {payees.length ? (
+                    <ul className="fin-payees" aria-label="People you paid recently">
+                      {payees.map((name) => (
+                        <li key={name}>
+                          <button onClick={() => go(`/personal/send?to=${encodeURIComponent('@' + name)}`)} aria-label={`Pay @${name} again`}>
+                            <span className={`fin-payee-avatar fin-payee-tone-${tone(name)}`} aria-hidden="true">
+                              {name.slice(0, 2).toUpperCase()}
+                            </span>
+                            <small>@{name}</small>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="fin-payees-empty">People you pay by @username show up here, ready to pay again.</p>
+                  )}
+                </section>
+                <div className="fin-quick-actions" aria-label="Money actions" role="group">
+                  {quickActions.map(([key, label, Icon]) => (
+                    <button key={key} onClick={() => go('/personal/' + key)}>
+                      <Icon size={18} />
+                      <b>{label}</b>
+                    </button>
+                  ))}
+                </div>
+                <section className="fin-home-activity" aria-labelledby="home-activity-title">
+                  <div className="fin-section-head">
+                    <h2 id="home-activity-title">Activity</h2>
+                    {o.activity.length > 0 && (
+                      <button className="fin-text" onClick={() => go('/personal/activity')}>
+                        See all <ChevronRight size={14} />
+                      </button>
+                    )}
+                  </div>
+                  {recentDays.length ? recentDays.map(([day, items]) => (
+                    <div className="fin-day" key={day}>
+                      <h3>{day}</h3>
+                      {items.map((item) => (
+                        <button
+                          className="fin-feed-row"
+                          key={item.id}
+                          onClick={() => {
+                            setSelected(item.id);
+                            go('/personal/activity');
+                          }}
+                        >
+                          <span className={`fin-tx-icon${received(item) ? ' fin-tx-icon-in' : ''}`}>
+                            {received(item) ? <ArrowDownLeft size={17} /> : <ArrowUpRight size={17} />}
+                          </span>
+                          <span className="fin-feed-text">
+                            <b>{counterparty(item)}</b>
+                            <small>
+                              {assetLabel(item.asset)} ·{' '}
+                              {new Date(item.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                              {item.status !== 'confirmed' && ` · ${statusLabel(item.status)}`}
+                            </small>
+                          </span>
+                          <span className={`fin-feed-amount${received(item) ? ' fin-feed-in' : ''}`}>
+                            {hidden ? '••••' : item.decimals === null || item.decimals === undefined
+                              ? statusLabel(item.status)
+                              : `${received(item) ? '+' : '−'}${formatAmount(item)}`}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )) : (
+                    <div className="fin-feed-empty">
+                      <ReceiptText size={22} />
+                      <p>Payments you send and receive will show up here.</p>
+                    </div>
+                  )}
+                </section>
+                <section className="fin-panel fin-home-assets" id="home-assets">
+                  <div className="fin-section-head">
+                    <h2>Assets</h2>
+                  </div>
+                  <div className="fin-assets-list">
+                    {assets.map(asset => <button className="fin-asset-row" key={asset.code} onClick={() => go(`/personal/assets/${asset.code.toLowerCase()}`)} aria-label={`View ${asset.code} details, ${asset.name}, balance ${hidden ? 'hidden' : asset.amount_atomic === null ? 'unavailable' : `${assetAmount(asset)} ${asset.code}`}`}>
+                      <AssetIcon code={asset.code} />
+                      <span className="fin-asset-name"><b>{asset.code}</b><small>{asset.name}</small></span>
+                      <span className="fin-asset-value"><b>{hidden ? '••••' : assetAmount(asset)}</b><small>{asset.status === 'ready' ? 'Onchain' : 'Unavailable'}</small></span>
+                      <ChevronRight className="fin-asset-chevron" size={17} />
+                    </button>)}
+                  </div>
+                </section>
               </div>
-              <section className="fin-panel fin-home-assets">
-                <div className="fin-section-head">
-                  <h2>Assets</h2>
-                </div>
-                <div className="fin-assets-list">
-                  {assets.map(asset => <button className="fin-asset-row" key={asset.code} onClick={() => go(`/personal/assets/${asset.code.toLowerCase()}`)} aria-label={`View ${asset.code} details, ${asset.name}, balance ${hidden ? 'hidden' : asset.amount_atomic === null ? 'unavailable' : `${assetAmount(asset)} ${asset.code}`}`}>
-                    <AssetIcon code={asset.code} />
-                    <span className="fin-asset-name"><b>{asset.code}</b><small>{asset.name}</small></span>
-                    <span className="fin-asset-value"><b>{hidden ? '••••' : assetAmount(asset)}</b><small>{asset.status === 'ready' ? 'Onchain' : 'Unavailable'}</small></span>
-                    <ChevronRight className="fin-asset-chevron" size={17} />
-                  </button>)}
-                </div>
-              </section>
             </>
           )}
           {tab === 'assets' && (detailAsset
@@ -761,6 +905,11 @@ function MoneyFlow({
 }) {
   // "Crypto transfer" shows only wallets the user links and controls; never the managed account wallet.
   const [method, setMethod] = useState<'crypto' | 'bank'>('crypto');
+  // A recipient chosen on Home (?to=@name or ?to=0x…) prefills the send form.
+  const [initialRecipient] = useState(() => {
+    const to = new URLSearchParams(window.location.search).get('to')?.trim() ?? '';
+    return payeePattern.test(to) ? to : '';
+  });
   const capability =
     capabilities?.[
       kind === 'deposit'
@@ -826,6 +975,7 @@ function MoneyFlow({
               csrf={csrf}
               mode={kind === 'send' ? 'send' : 'receive'}
               onChanged={onChanged}
+              initialRecipient={kind === 'send' ? initialRecipient : ''}
             />
           ) : (
             <div className="fin-method-detail">

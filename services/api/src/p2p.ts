@@ -24,24 +24,43 @@ export async function receivingAddress(userId: string, accountId: string) {
   return managed ? { address: getAddress(managed.address), custody: 'managed' as const } : null;
 }
 
+/** The Roots user payable at this username, or null. Never the requester themselves. */
+export async function payableUser(username: unknown, requesterId: string) {
+  const parsed = usernameSchema.safeParse(username);
+  if (!parsed.success) return null;
+  const row = (await pool.query(`SELECT u.id,u.username,u.first_name,u.last_name,a.id AS account_id FROM personal_users u
+    JOIN kora_accounts a ON a.personal_user_id=u.id WHERE u.username=$1 AND u.payable_by_username AND a.status='active'`,
+    [parsed.data])).rows[0];
+  if (!row || row.id === requesterId) return null;
+  const receiving = await receivingAddress(row.id, row.account_id);
+  if (!receiving) return null;
+  const initial = typeof row.last_name === 'string' && row.last_name ? ` ${row.last_name[0].toUpperCase()}.` : '';
+  return {
+    username: row.username as string, display_name: `${row.first_name ?? ''}${initial}`.trim() || `@${row.username}`,
+    address: receiving.address,
+  };
+}
+
+/**
+ * Records the @username a send was addressed to, only if that username still
+ * resolves to the address the money went to. Returns the stored username or null.
+ */
+export async function rememberPayee(userId: string, settlementId: string, username: string | undefined, to: string) {
+  if (!username) return null;
+  const found = await payableUser(username, userId);
+  if (!found || found.address.toLowerCase() !== to.toLowerCase()) return null;
+  await pool.query('UPDATE chain_settlements SET recipient_username=$3 WHERE id=$1 AND personal_user_id=$2',
+    [settlementId, userId, found.username]);
+  return found.username;
+}
+
 export function registerP2P(app: FastifyInstance, required: (request: FastifyRequest, write?: boolean) => Promise<Person>) {
   // Lookups are rate limited: a username search must not become a way to list users.
   app.get('/personal/api/recipients/:username', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request) => {
     const person = await required(request);
-    const parsed = usernameSchema.safeParse((request.params as { username: string }).username);
-    const unavailable = new PaymentError(404, 'recipient_unavailable', 'No Roots user can be paid at that username');
-    if (!parsed.success) throw unavailable;
-    const row = (await pool.query(`SELECT u.id,u.username,u.first_name,u.last_name,a.id AS account_id FROM personal_users u
-      JOIN kora_accounts a ON a.personal_user_id=u.id WHERE u.username=$1 AND u.payable_by_username AND a.status='active'`,
-      [parsed.data])).rows[0];
-    if (!row || row.id === person.user_id) throw unavailable;
-    const receiving = await receivingAddress(row.id, row.account_id);
-    if (!receiving) throw unavailable;
-    const initial = typeof row.last_name === 'string' && row.last_name ? ` ${row.last_name[0].toUpperCase()}.` : '';
-    return {
-      username: row.username, display_name: `${row.first_name ?? ''}${initial}`.trim() || `@${row.username}`,
-      address: receiving.address, network: QIE_NETWORK, asset: 'QIEV3',
-    };
+    const found = await payableUser((request.params as { username: string }).username, person.user_id);
+    if (!found) throw new PaymentError(404, 'recipient_unavailable', 'No Roots user can be paid at that username');
+    return { ...found, network: QIE_NETWORK, asset: 'QIEV3' };
   });
 
   app.get('/personal/api/payment-settings', async (request) => {

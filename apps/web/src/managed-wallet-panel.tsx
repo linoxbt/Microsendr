@@ -14,16 +14,17 @@ const qie = (wei: string) => formatEther(BigInt(wei)).replace(/(\.\d{0,6})\d*$/,
  * The Roots account wallet: Roots holds its key (through Privy) and signs
  * sends server-side after the account password confirms each one.
  */
-export function ManagedWalletPanel({ wallet, limits, mode, csrf, onChanged }: {
+export function ManagedWalletPanel({ wallet, limits, mode, csrf, onChanged, initialRecipient = '' }: {
   wallet: { id: string; address: string };
   limits: ManagedLimits;
   mode: 'receive' | 'send';
   csrf: string;
   onChanged?: () => Promise<unknown> | void;
+  initialRecipient?: string;
 }) {
   const [balance, setBalance] = useState<Balance>();
   const [qr, setQr] = useState('');
-  const [to, setTo] = useState('');
+  const [to, setTo] = useState(initialRecipient);
   const payee = useRecipient(to);
   const [amount, setAmount] = useState('');
   const [password, setPassword] = useState('');
@@ -58,7 +59,8 @@ export function ManagedWalletPanel({ wallet, limits, mode, csrf, onChanged }: {
       if (!target || getAddress(target) === getAddress(wallet.address)) throw new Error(payee.error ?? 'Enter a QIE address or the @username of a Roots user.');
       if (!/^\d+(?:\.\d{1,18})?$/.test(amount) || parseEther(amount) <= 0n) throw new Error('Enter a QIE amount above zero.');
       const result = await consumerRequest<{ id: string; tx_hash: string | null }>('wallets/managed/transfers', 'POST',
-        { to: target, amount_atomic: parseEther(amount).toString(), password }, csrf, { 'Idempotency-Key': requestKey });
+        { to: target, amount_atomic: parseEther(amount).toString(), password,
+          ...(payee.recipient?.username ? { recipient_username: payee.recipient.username } : {}) }, csrf, { 'Idempotency-Key': requestKey });
       setSent(result);
       setPassword('');
       setRequestKey(crypto.randomUUID());

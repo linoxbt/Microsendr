@@ -64,7 +64,7 @@ test('paying @username resolves the recipient and sends to their address', async
   await panel.getByLabel('Password').fill('my-account-password');
   await panel.getByRole('button', { name: /Confirm and send/ }).click();
   await expect(panel).toContainText('Broadcast to QIE Mainnet');
-  expect(posts).toEqual([{ to: payeeAddress, amount_atomic: '2000000000000000000', password: 'my-account-password' }]);
+  expect(posts).toEqual([{ to: payeeAddress, amount_atomic: '2000000000000000000', password: 'my-account-password', recipient_username: 'ada_okafor' }]);
 });
 
 test('being payable by username is an explicit opt-in on the Security page', async ({ page }) => {
@@ -88,4 +88,44 @@ test('being payable by username is an explicit opt-in on the Security page', asy
   await expect(toggle).toBeChecked();
   await expect(panel).toContainText(`Payments go to ${payeeAddress.slice(0, 8)}`);
   expect(posts).toEqual([{ payable_by_username: true }]);
+});
+
+test('home leads with paying people: recent payees come from real sends and prefill the send form', async ({ page }) => {
+  const now = new Date().toISOString();
+  const sent = (id: string, to_username: string | null, status = 'confirmed') => ({
+    id: 'stl_' + id.repeat(32), direction: 'sent', status, from: accountAddress, to: payeeAddress, to_username,
+    amount_atomic: '1500000000000000000', asset: 'QIEV3', decimals: 18, network: 'qie-mainnet',
+    created_at: now, tx_hash: null, explorer_url: null,
+  });
+  await signedIn(page);
+  await page.route('**/personal/api/overview', (route) => route.fulfill(json({
+    ...overview,
+    wallet_value_usd: { amount_usd: '12.50', checked_at: now },
+    activity: [sent('a', 'ada_okafor'), sent('b', 'ada_okafor'), sent('c', null), sent('d', 'kemi_b', 'failed')],
+  })));
+  await page.route('**/personal/api/wallets', (route) => route.fulfill(json({ data: [], managed_transfers: null })));
+  await page.route('**/personal/api/recipients/*', (route) =>
+    route.fulfill(json({ username: 'ada_okafor', display_name: 'Ada O.', address: payeeAddress, network: 'qie-mainnet', asset: 'QIEV3' })));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/personal/home');
+  const card = page.getByRole('region', { name: 'Pay anyone on Roots' });
+  await expect(card).toBeVisible();
+  // One entry per username; failed sends and address-only sends add nobody.
+  await expect(page.getByRole('list', { name: 'People you paid recently' }).getByRole('listitem')).toHaveCount(1);
+  const feed = page.getByRole('region', { name: 'Activity' });
+  await expect(feed.getByRole('heading', { name: 'Today' })).toBeVisible();
+  await expect(feed).toContainText('To @ada_okafor');
+  await expect(feed).toContainText('−1.5');
+  await expect(page.getByRole('region', { name: 'Your wallet overview' })).toContainText('$12.50');
+  await page.screenshot({ path: '/tmp/roots-home-phone.png', fullPage: true });
+  await page.getByRole('button', { name: 'Pay @ada_okafor again' }).click();
+  await expect(page).toHaveURL(/\/personal\/send\?to=%40ada_okafor$/);
+  await page.goto('/personal/home');
+  await card.getByLabel('Pay a Roots @username or QIE address').fill('not a name!');
+  await card.getByRole('button', { name: 'Continue to payment' }).click();
+  await expect(page).toHaveURL(/\/personal\/send$/);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('/personal/home');
+  await expect(card).toBeVisible();
+  await page.screenshot({ path: '/tmp/roots-home-desktop.png', fullPage: true });
 });

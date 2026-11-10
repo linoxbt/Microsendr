@@ -74,3 +74,35 @@ test('opting in needs CSRF and a username, and can be turned off', async () => {
   assert.deepEqual([refused.statusCode, refused.json().error.code], [409, 'username_required']);
   assert.deepEqual((await app.inject({ url, headers: user.headers })).json().payable_by_username, false);
 });
+
+test('a send keeps the @username only when it resolved to the address paid', async () => {
+  const { rememberPayee } = await import('../services/api/src/p2p.js');
+  const payer = await member(name());
+  const handle = name();
+  const payee = await member(handle, { payable: true, linked: true });
+  const accountId = (await pool.query('SELECT id FROM kora_accounts WHERE personal_user_id=$1', [payer.userId])).rows[0].id;
+  const settlement = async (to: string) => {
+    const settlementId = id('stl');
+    await pool.query(`INSERT INTO chain_settlements(id,personal_user_id,account_id,asset_position_id,network,chain_id,direction,
+      source_address,destination_address,amount_atomic,required_confirmations,minimum_block_number,idempotency_key,authorization_expires_at)
+      VALUES($1,$2,$3,'pos_qiev3_mainnet','qie-mainnet','1990','outbound',$4,$5,1,3,1,$6,now())`,
+      [settlementId, payer.userId, accountId, `0x${hex(20)}`, to, hex(8)]);
+    return settlementId;
+  };
+  const stored = async (settlementId: string) =>
+    (await pool.query('SELECT recipient_username FROM chain_settlements WHERE id=$1', [settlementId])).rows[0].recipient_username;
+  const paid = await settlement(payee.linked);
+  assert.equal(await rememberPayee(payer.userId, paid, `@${handle.toUpperCase()}`, payee.linked), handle);
+  assert.equal(await stored(paid), handle);
+  // A username that points elsewhere, an unknown name, or another user's settlement records nothing.
+  const elsewhere = await settlement(`0x${hex(20)}`);
+  assert.equal(await rememberPayee(payer.userId, elsewhere, handle, `0x${hex(20)}`), null);
+  assert.equal(await rememberPayee(payer.userId, elsewhere, 'nobody_here', payee.linked), null);
+  assert.equal(await stored(elsewhere), null);
+  const stranger = await member(name());
+  await rememberPayee(stranger.userId, paid, handle, payee.linked);
+  assert.equal(await stored(paid), handle);
+  const overview = await app.inject({ url: '/personal/api/overview', headers: payer.headers });
+  assert.equal(overview.statusCode, 200, overview.body);
+  assert.equal(overview.json().activity.find((item: { id: string }) => item.id === paid).to_username, handle);
+});

@@ -73,7 +73,7 @@ export function publicSettlement(row: Record<string, any>) {
   const adapter = chainAdapters[row.network]?.();
   return { id: row.id, direction: 'sent' as const, network: row.network, chain_id: Number(row.chain_id), asset_position_id: row.asset_position_id,
     asset: adapter?.nativeAssetCode ?? row.asset_position_id, decimals: adapter?.nativeDecimals ?? null,
-    from: row.source_address, to: row.destination_address,
+    from: row.source_address, to: row.destination_address, to_username: (row.recipient_username as string | null) ?? null,
     amount_atomic: String(row.amount_atomic), status: row.status, tx_hash: row.tx_hash,
     block_number: row.block_number === null ? null : String(row.block_number), block_hash: row.block_hash,
     confirmations: row.observed_confirmations, required_confirmations: row.required_confirmations,

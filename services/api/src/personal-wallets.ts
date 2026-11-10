@@ -8,6 +8,7 @@ import { QieClient, QIE_CHAIN_ID, QIE_EXPLORER, QIE_NETWORK } from '../../../pac
 import { ensureManagedWallet, findManagedWallet, managedWalletConfigured } from './managed-wallet.js';
 import { managedTransferLimits, managedTransfersEnabled, sendFromManagedWallet } from './managed-transfer.js';
 import { matches } from './consumer.js';
+import { rememberPayee } from './p2p.js';
 
 type Person = { user_id: string; account_id: string };
 const addressSchema = z.string().regex(/^0x[a-fA-F0-9]{40}$/);
@@ -73,16 +74,19 @@ export function registerPersonalWallets(
       const person = await required(request, true);
       const input = z.object({
         to: addressSchema, amount_atomic: z.string().regex(/^[1-9][0-9]{0,40}$/), password: z.string().min(1).max(128),
+        recipient_username: z.string().max(25).optional(),
       }).strict().parse(request.body);
       const stored = (await pool.query('SELECT password_hash FROM personal_users WHERE id=$1', [person.user_id])).rows[0];
       if (!stored?.password_hash) throw new PaymentError(403, 'password_required', 'Set a password in Security before sending');
       if (!(await matches(input.password, stored.password_hash)))
         throw new PaymentError(401, 'invalid_password', 'Your password is incorrect');
       const key = request.headers['idempotency-key'];
-      return sendFromManagedWallet({
+      const sent = await sendFromManagedWallet({
         userId: person.user_id, accountId: person.account_id, to: input.to, amountAtomic: input.amount_atomic,
         idempotencyKey: typeof key === 'string' ? key : '',
       });
+      const username = await rememberPayee(person.user_id, sent.id, input.recipient_username, sent.to);
+      return username ? { ...sent, to_username: username } : sent;
     });
 
   app.post('/personal/api/wallets/managed',

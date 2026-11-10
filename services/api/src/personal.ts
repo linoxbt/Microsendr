@@ -14,7 +14,7 @@ import type { PaystackClient } from '../../../connectors/paystack/src/index.js';
 import { registerPersonalPaystack } from './personal-paystack.js';
 import { registerConsumer } from './consumer.js';
 import { registerPersonalWallets, requireLinkedWallet } from './personal-wallets.js';
-import { registerP2P } from './p2p.js';
+import { registerP2P, rememberPayee } from './p2p.js';
 import { registerConversion } from './conversion.js';
 import type { FonbnkClient } from '../../../connectors/fonbnk/src/index.js';
 import { authSecret, requireOrigin, sandboxFixturesEnabled, secureCookie } from './config.js';
@@ -243,11 +243,14 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
     const row = await required(request, true);
     const key = request.headers['idempotency-key'];
     const body = z.object({ network: z.string().regex(/^[a-z0-9-]{3,48}$/), from: z.string(), to: z.string(),
-      amount_atomic: z.string(), expires_at: z.iso.datetime(), signature: z.string().regex(/^0x[a-fA-F0-9]{130}$/) }).strict().parse(request.body);
+      amount_atomic: z.string(), expires_at: z.iso.datetime(), signature: z.string().regex(/^0x[a-fA-F0-9]{130}$/),
+      recipient_username: z.string().max(25).optional() }).strict().parse(request.body);
     await requireLinkedWallet(row, body.from);
-    return createNativeSettlement({ userId: row.user_id, accountId: row.account_id, network: body.network,
+    const settlement = await createNativeSettlement({ userId: row.user_id, accountId: row.account_id, network: body.network,
       from: body.from, to: body.to, amountAtomic: body.amount_atomic, expiresAt: body.expires_at,
       signature: body.signature as `0x${string}`, idempotencyKey: typeof key === 'string' ? key : '' });
+    const username = await rememberPayee(row.user_id, settlement.id, body.recipient_username, settlement.to);
+    return username ? { ...settlement, to_username: username } : settlement;
   });
   app.post('/personal/api/settlements/:id/submit', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async request => {
     const row = await required(request, true);
