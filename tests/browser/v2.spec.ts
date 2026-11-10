@@ -186,7 +186,7 @@ test('custom registration, optional identity, profile editing and mobile money n
   await page.screenshot({ path: '/tmp/roots-asset-qie-desktop.png', fullPage: true });
   await page.getByRole('button', { name: 'All assets' }).click();
   await page.getByRole('button', { name: 'View QUSDC details' }).click();
-  await expect(page.getByRole('region', { name: 'QUSDC details' })).toContainText('2.5 QUSDC');
+  await expect(page.getByRole('region', { name: 'QUSDC details' })).toContainText('2.50 QUSDC');
   await expect(page.getByRole('link', { name: 'View token contract' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Send QIE' })).toHaveCount(0);
   await page.getByRole('button', { name: 'All assets' }).click();
@@ -342,7 +342,7 @@ test('Personal activity labels sends from data and the landing uses the Personal
   await page.locator('.fin-transaction').first().click();
   await expect(page.locator('.fin-receipt')).toContainText('250000000000000000 base units of QIE');
   await page.goto('/personal/home');
-  await expect(page.getByRole('button', { name: 'View QIE details, QIE, balance 1.5 QIE' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'View QIE details, QIE, balance 1.50 QIE' })).toBeVisible();
   await page.getByRole('button', { name: /View QIE details/ }).click();
   await expect(page.getByRole('region', { name: 'QIE activity' })).toContainText('Sent QIE');
   await expect(page.getByRole('region', { name: 'QIE activity' })).toContainText('0.25');

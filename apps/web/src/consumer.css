@@ -1851,17 +1851,16 @@
   object-fit: contain;
 }
 .fin-asset-qusdc { background: #e7e8fb; }
-.fin-asset-qusdc img {
-  width: 80px;
-  height: 80px;
-  max-width: none;
+.fin-asset-qusdc img,
+.fin-asset-icon-large.fin-asset-qusdc img {
+  width: 100%;
+  height: 100%;
   object-fit: cover;
-  transform: translate(-20px, -13px);
+  transform: none;
 }
 .fin-asset-ngn { color: #fff; background: #248457; font-size: 24px; }
 .fin-asset-icon-large { width: 72px; height: 72px; flex-basis: 72px; }
 .fin-asset-icon-large img { width: 59px; height: 59px; }
-.fin-asset-icon-large.fin-asset-qusdc img { width: 148px; height: 148px; transform: translate(-38px, -24px); }
 .fin-asset-icon-large.fin-asset-ngn { font-size: 40px; }
 .fin-asset-name, .fin-asset-value { display: grid; gap: 2px; }
 .fin-asset-name b, .fin-asset-value b { font-size: 13px; font-weight: 600; }
@@ -1919,7 +1918,6 @@
   .fin-asset-detail-card { min-height: 330px; padding: 23px 22px 0; border-radius: 20px; }
   .fin-asset-detail-title .fin-asset-icon { width: 56px; height: 56px; flex-basis: 56px; }
   .fin-asset-detail-title .fin-asset-qie img { width: 47px; height: 47px; }
-  .fin-asset-detail-title .fin-asset-qusdc img { width: 118px; height: 118px; transform: translate(-30px, -20px); }
   .fin-asset-detail-title .fin-asset-ngn { font-size: 32px; }
   .fin-asset-detail-status { font-size: 12px; padding: 6px 8px; }
   .fin-asset-detail-status i { width: 7px; height: 7px; }
@@ -3041,4 +3039,210 @@
   justify-items: center;
   gap: 8px;
   padding: 28px 0;
+}
+
+/* ---- Density: tighter fields and spacing across the app ---------------- */
+.fin-app input,
+.fin-app select {
+  min-height: 42px;
+  padding: 9px 12px;
+}
+.fin-app label {
+  gap: 5px;
+  margin-bottom: 12px;
+}
+.fin-app .fin-fields {
+  column-gap: 14px;
+}
+.fin-app .fin-error,
+.fin-app .fin-success,
+.fin-app .fin-notice {
+  margin: 10px 0;
+  padding: 10px 14px;
+}
+.fin-app .fin-form-actions {
+  margin-top: 14px;
+}
+.fin-content,
+.fin-content.fin-home-content {
+  padding: 26px 32px 20px;
+}
+.fin-app .fin-heading {
+  margin-bottom: 16px;
+}
+.fin-app .fin-panel {
+  padding: 18px;
+}
+.fin-app .fin-section-head {
+  margin-bottom: 10px;
+}
+.fin-stack,
+.fin-settings {
+  gap: 12px;
+}
+/* Home */
+.fin-home-heading {
+  margin-bottom: 14px;
+}
+.fin-home-grid {
+  gap: 12px;
+}
+@media (min-width: 1180px) {
+  .fin-home-grid {
+    column-gap: 20px;
+  }
+}
+.fin-wallet-amount strong {
+  font-size: clamp(34px, 4.4vw, 48px);
+}
+.fin-pay-card {
+  padding: 18px 20px;
+}
+.fin-pay-card > p {
+  margin: 2px 0 12px;
+}
+.fin-app .fin-pay-card h2 {
+  margin-bottom: 10px;
+}
+.fin-pay-search {
+  padding: 4px 4px 4px 14px;
+}
+.fin-app .fin-pay-search input {
+  min-height: 40px;
+  padding: 6px 0;
+}
+.fin-pay-search button {
+  width: 40px;
+  height: 40px;
+}
+.fin-payees {
+  gap: 12px;
+  margin-top: 12px;
+}
+.fin-payee-avatar {
+  width: 44px;
+  height: 44px;
+  font-size: 14px;
+}
+.fin-payees-empty {
+  margin-top: 10px;
+}
+.fin-quick-actions {
+  gap: 8px;
+}
+.fin-quick-actions button {
+  min-height: 46px;
+  border-radius: 14px;
+}
+.fin-home-activity {
+  padding: 14px 16px 8px;
+}
+.fin-day h3 {
+  margin: 8px 0 2px;
+}
+.fin-feed-row {
+  min-height: 50px;
+  padding: 6px 4px;
+}
+.fin-asset-row {
+  padding: 10px 0;
+}
+.fin-get-started button {
+  min-height: 44px;
+}
+/* Send, receive, add money */
+.fin-flow-title {
+  margin: 2px 0 12px;
+}
+.fin-chain-wallet {
+  gap: 14px;
+}
+.fin-flow-send .fin-chain-wallet {
+  padding: 16px;
+}
+.fin-chain-send,
+.fin-send-review {
+  gap: 12px;
+}
+.fin-chain-send label,
+.fin-send-review label {
+  gap: 5px;
+  margin: 0;
+}
+.fin-app .fin-amount-field input {
+  font-size: 20px;
+}
+.fin-send-summary {
+  padding: 4px 0 2px;
+}
+.fin-send-summary strong {
+  font-size: 34px;
+}
+.fin-send-facts > div {
+  padding: 9px 0;
+}
+.fin-add-method {
+  margin-bottom: 12px;
+}
+.fin-receive > p {
+  margin: 6px 0 16px;
+}
+.fin-receive-actions {
+  margin-top: 16px;
+}
+.fin-receive-copy,
+.fin-receive-share {
+  height: 46px;
+}
+.fin-receive-share {
+  width: 46px;
+}
+/* Settings and security */
+.fin-settings-head {
+  margin-bottom: 2px;
+}
+.fin-settings-rows > div {
+  padding: 9px 0;
+}
+.fin-settings-link {
+  min-height: 52px;
+  padding: 6px 0;
+}
+.fin-security-row {
+  padding: 9px 0;
+}
+.fin-payment-security {
+  gap: 8px;
+}
+.fin-security-form {
+  gap: 4px;
+}
+@media (max-width: 1150px) {
+  .fin-content,
+  .fin-content.fin-home-content {
+    padding: 22px 22px 18px;
+  }
+}
+@media (max-width: 650px) {
+  .fin-content,
+  .fin-content.fin-home-content {
+    padding: 18px 16px 18px;
+  }
+  .fin-app .fin-panel {
+    padding: 16px;
+  }
+  .fin-app .fin-heading {
+    margin-bottom: 12px;
+  }
+  .fin-pay-card {
+    padding: 16px;
+  }
+  .fin-home-activity {
+    padding: 12px 12px 6px;
+  }
+}
+@media (max-width: 420px) {
+  .fin-quick-actions button {
+    min-height: 56px;
+  }
 }

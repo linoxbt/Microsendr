@@ -29,12 +29,12 @@ export function assetAmount(asset: PersonalAsset): string {
 }
 
 /** Money amounts in lists always show at least two decimal places: 120 → 120.00, 1.5 → 1.50. */
-const twoPlaces = (value: string) => /^[\d,]+$/.test(value) ? `${value}.00` : /^[\d,]+\.\d$/.test(value) ? `${value}0` : value;
+export const twoPlaces = (value: string) => /^[\d,]+$/.test(value) ? `${value}.00` : /^[\d,]+\.\d$/.test(value) ? `${value}0` : value;
 
 export function AssetIcon({ code, large = false }: { code: PersonalAsset['code']; large?: boolean }) {
   return <span className={`fin-asset-icon fin-asset-${code.toLowerCase()}${large ? ' fin-asset-icon-large' : ''}`} aria-hidden="true">
     {code === 'QIE' ? <img src="/images/qie-asset.png" alt="" />
-      : code === 'QUSDC' ? <img src="/images/qusdc-asset.png" alt="" />
+      : code === 'QUSDC' ? <img src="/images/qusdc-icon.jpg" alt="" />
       : <span>₦</span>}
   </span>;
 }
@@ -78,7 +78,7 @@ export function AssetDetail({ asset, activity, go, hidden, refresh, refreshing }
       </div>
       <div className="fin-asset-detail-balance">
         <span>Your balance</span>
-        <strong>{hidden ? '••••' : assetAmount(asset)} <small>{asset.amount_atomic === null ? '' : asset.code}</small></strong>
+        <strong>{hidden ? '••••' : twoPlaces(assetAmount(asset))} <small>{asset.amount_atomic === null ? '' : asset.code}</small></strong>
         <p>{asset.status === 'ready' ? 'Across your Roots wallets' : asset.code === 'NGN'
           ? 'Naira accounts are not available yet' : 'Balance could not be loaded'}</p>
       </div>

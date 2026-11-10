@@ -37,7 +37,7 @@ import {
 import { logoutPrivyIfMounted } from './auth-shell.js';
 import { RootsMark, RootsWatermark } from './roots-logo.js';
 import { ConsumerChainWallet } from './consumer-chain-wallet.js';
-import { AssetDetail, AssetIcon, assetAmount, assetDefaults, type PersonalAsset } from './personal-assets.js';
+import { AssetDetail, AssetIcon, assetAmount, assetDefaults, twoPlaces, type PersonalAsset } from './personal-assets.js';
 import { ConversionPanel } from './conversion-panel.js';
 import { ToastProvider, useToast } from './toast.js';
 import { type PaymentAuthStatus } from './payment-security.js';
@@ -673,10 +673,10 @@ export function PersonalPage({
                     <h2>Assets</h2>
                   </div>
                   <div className="fin-assets-list">
-                    {assets.map(asset => <button className="fin-asset-row" key={asset.code} onClick={() => go(`/personal/assets/${asset.code.toLowerCase()}`)} aria-label={`View ${asset.code} details, ${asset.name}, balance ${hidden ? 'hidden' : asset.amount_atomic === null ? 'unavailable' : `${assetAmount(asset)} ${asset.code}`}`}>
+                    {assets.map(asset => <button className="fin-asset-row" key={asset.code} onClick={() => go(`/personal/assets/${asset.code.toLowerCase()}`)} aria-label={`View ${asset.code} details, ${asset.name}, balance ${hidden ? 'hidden' : asset.amount_atomic === null ? 'unavailable' : `${twoPlaces(assetAmount(asset))} ${asset.code}`}`}>
                       <AssetIcon code={asset.code} />
                       <span className="fin-asset-name"><b>{asset.code}</b><small>{asset.name}</small></span>
-                      <span className="fin-asset-value"><b>{hidden ? '••••' : assetAmount(asset)}</b><small>{asset.status === 'ready' ? 'Onchain' : 'Unavailable'}</small></span>
+                      <span className="fin-asset-value"><b>{hidden ? '••••' : twoPlaces(assetAmount(asset))}</b><small>{asset.status === 'ready' ? 'Onchain' : 'Unavailable'}</small></span>
                       <ChevronRight className="fin-asset-chevron" size={17} />
                     </button>)}
                   </div>
