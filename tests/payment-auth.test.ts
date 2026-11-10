@@ -119,6 +119,11 @@ test('a passkey approves only the payment it was asked for, once', async () => {
   // An approval for 1000 cannot send 2000.
   const other = (await who.post('/personal/api/payment-auth/passkeys/challenge', { to, amount_atomic: '1000' })).json();
   assert.equal((await send(who, { passkey: { challenge_id: other.challenge_id, response: key.assert(other.options.challenge) } }, '2000')).json().error.code, 'passkey_mismatch');
+  // An approval for QIE cannot send the same amount of QUSDC, and a QUSDC approval works for QUSDC.
+  const qieOnly = (await who.post('/personal/api/payment-auth/passkeys/challenge', { to, amount_atomic: '1000' })).json();
+  assert.equal((await send(who, { asset: 'QUSDC', passkey: { challenge_id: qieOnly.challenge_id, response: key.assert(qieOnly.options.challenge) } })).json().error.code, 'passkey_mismatch');
+  const token = (await who.post('/personal/api/payment-auth/passkeys/challenge', { to, amount_atomic: '1000', asset: 'QUSDC' })).json();
+  assert.equal((await send(who, { asset: 'QUSDC', passkey: { challenge_id: token.challenge_id, response: key.assert(token.options.challenge) } })).json().error.code, 'managed_transfers_unavailable');
   // A signature over a different challenge is rejected.
   const third = (await who.post('/personal/api/payment-auth/passkeys/challenge', { to, amount_atomic: '1000' })).json();
   assert.equal((await send(who, { passkey: { challenge_id: third.challenge_id, response: key.assert(b64url(randomBytes(32))) } })).json().error.code, 'passkey_rejected');

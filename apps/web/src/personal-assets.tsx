@@ -83,12 +83,10 @@ export function AssetDetail({ asset, activity, go, hidden, refresh, refreshing }
           ? 'Naira accounts are not available yet' : 'Balance could not be loaded'}</p>
       </div>
       <div className="fin-asset-detail-actions">
-        {asset.code === 'QIE' && <>
-          <button onClick={() => go('/personal/deposit')}><span><ArrowDownLeft size={20} /></span>Receive QIE</button>
-          <button onClick={() => go('/personal/send')}><span><ArrowUpRight size={20} /></span>Send QIE</button>
-        </>}
-        {asset.code === 'QUSDC' && <span className="fin-asset-detail-note">QUSDC that arrives in your linked wallets shows here. Sending QUSDC from Roots is not available yet.</span>}
-        {asset.code === 'NGN' && <span className="fin-asset-detail-note">Bank deposits and payouts are not available yet.</span>}
+        {asset.code !== 'NGN' ? <>
+          <button onClick={() => go(`/personal/deposit?asset=${asset.code.toLowerCase()}`)}><span><ArrowDownLeft size={20} /></span>Receive {asset.code}</button>
+          <button onClick={() => go(`/personal/send?asset=${asset.code.toLowerCase()}`)}><span><ArrowUpRight size={20} /></span>Send {asset.code}</button>
+        </> : <button onClick={() => go('/personal/deposit?method=bank')}><span><ArrowDownLeft size={20} /></span>Add naira</button>}
       </div>
     </section>
     <div className="fin-asset-detail-grid">

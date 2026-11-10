@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import { formatEther, getAddress, isAddress, parseEther } from 'viem';
+import { formatUnits, getAddress, isAddress, parseUnits } from 'viem';
 import { ArrowLeft, ArrowRight, ArrowUpRight, Check, Copy, Fingerprint, Link2, RefreshCw, Share2, Unlink } from 'lucide-react';
 import { consumerRequest } from './consumer-api.js';
 import { RecipientStatus, recipientPattern, useRecipient } from './recipient.js';
@@ -8,7 +8,17 @@ import { RootsMark } from './roots-logo.js';
 import { startAuthentication } from '@simplewebauthn/browser';
 import { passkeysSupported, type PaymentAuthStatus } from './payment-security.js';
 
-type ManagedLimits = { per_transfer_wei: string; daily_wei: string; requires_identity_verification: boolean };
+type ManagedLimits = {
+  per_transfer_wei: string; daily_wei: string; requires_identity_verification: boolean;
+  qusdc_per_transfer_atomic?: string; qusdc_daily_atomic?: string;
+};
+export type Token = 'QIE' | 'QUSDC';
+// Both tokens live on QIE Mainnet at the same wallet address.
+const TOKENS: Record<Token, { decimals: number; label: string }> = { QIE: { decimals: 18, label: 'QIE' }, QUSDC: { decimals: 6, label: 'QUSDC' } };
+const QUSDC_CONTRACT = '0x3F43DA82eC9A4f5285F10FaF1F26EcA7319E5DA5';
+const word = (hex: string) => hex.toLowerCase().replace(/^0x/, '').padStart(64, '0');
+/** transfer(to, amount) on the QUSDC contract. */
+const qusdcTransferData = (to: string, amount: bigint) => `0xa9059cbb${word(to)}${word(amount.toString(16))}`;
 
 type WalletRecord = {
   id: string;
@@ -76,13 +86,15 @@ const short = (address: string) => `${address.slice(0, 6)}…${address.slice(-4)
  * address at a time; send goes form → review → done.
  */
 export function ConsumerChainWallet({
-  csrf, mode, onChanged, initialRecipient = '',
+  csrf, mode, onChanged, initialRecipient = '', initialToken = 'QIE',
 }: {
   csrf: string;
   mode: 'receive' | 'send';
   onChanged?: () => Promise<unknown> | void;
   initialRecipient?: string;
+  initialToken?: Token;
 }) {
+  const [token, setToken] = useState<Token>(initialToken);
   const [wallets, setWallets] = useState<WalletRecord[]>();
   const [limits, setLimits] = useState<ManagedLimits | null>(null);
   const [sourceKey, setSourceKey] = useState('');
@@ -155,6 +167,12 @@ export function ConsumerChainWallet({
     finally { setBusy(false); }
   }
 
+  const tokenSwitch = !locked && (
+    <div className="fin-token-switch" role="group" aria-label="Token">
+      {(Object.keys(TOKENS) as Token[]).map((code) => <button key={code} type="button" aria-pressed={code === token}
+        className={code === token ? 'active' : ''} onClick={() => setToken(code)}>{TOKENS[code].label}</button>)}
+    </div>
+  );
   const switcher = sources.length > 1 && !locked && (
     <div className="fin-source-switch" role="group" aria-label={mode === 'receive' ? 'Receive to' : 'Send from'}>
       {sources.map(s => <button key={s.key} type="button" aria-pressed={s.key === source?.key}
@@ -179,6 +197,7 @@ export function ConsumerChainWallet({
   </div>;
 
   return <section className={`fin-chain-wallet fin-chain-wallet-${mode}`} aria-label="QIE wallet">
+    {tokenSwitch}
     {switcher}
     {!wallets ? <div className={`fin-wallet-skeleton fin-wallet-skeleton-${mode}`} role="status" aria-label="Loading wallets">
         {mode === 'receive' ? <><i className="fin-sk fin-sk-line" /><i className="fin-sk fin-sk-qr" /></>
@@ -192,15 +211,15 @@ export function ConsumerChainWallet({
         </button>
         {accountWallet}
       </div>
-      : mode === 'receive' ? <ReceiveCard key={source.key} source={source} />
-        : <SendFlow key={source.key} source={source} limits={limits} csrf={csrf} initialRecipient={initialRecipient} onChanged={notifyChanged} onLock={setLocked} />}
+      : mode === 'receive' ? <ReceiveCard key={source.key} source={source} token={token} />
+        : <SendFlow key={`${source.key}-${token}`} source={source} token={token} limits={limits} csrf={csrf} initialRecipient={initialRecipient} onChanged={notifyChanged} onLock={setLocked} />}
     {manage}
     {notice && <p className="fin-chain-notice" role="status">{notice}</p>}
     {error && <p className="fin-error" role="alert">{error}</p>}
   </section>;
 }
 
-function ReceiveCard({ source }: { source: Source }) {
+function ReceiveCard({ source, token }: { source: Source; token: Token }) {
   const [qr, setQr] = useState('');
   const [copied, setCopied] = useState(false);
   const [problem, setProblem] = useState('');
@@ -217,12 +236,12 @@ function ReceiveCard({ source }: { source: Source }) {
   const canShare = typeof navigator !== 'undefined' && 'share' in navigator;
   return <div className="fin-receive" role="group" aria-label={source.managed ? 'Roots account wallet' : 'Linked wallet'}>
     <h1>Your address</h1>
-    <p>Send only QIE on QIE Mainnet to this address, or you might lose your funds.</p>
+    <p>Send only {token} on QIE Mainnet to this address, or you might lose your funds.</p>
     <div className="fin-chain-receive">
       <div className="fin-qr">
         {qr && <img src={qr} width="240" height="240"
           alt={source.managed ? 'QR code for your account wallet address' : 'QR code for the QIE wallet address shown below'} />}
-        <span className="fin-qr-mark" aria-hidden="true"><RootsMark /></span>
+        <span className="fin-qr-mark" aria-hidden="true">{token === 'QUSDC' ? <img src="/images/qusdc-icon.jpg" alt="" /> : <RootsMark />}</span>
       </div>
       <code>{address}</code>
     </div>
@@ -237,8 +256,8 @@ function ReceiveCard({ source }: { source: Source }) {
   </div>;
 }
 
-function SendFlow({ source, limits, csrf, initialRecipient, onChanged, onLock }: {
-  source: Source; limits: ManagedLimits | null; csrf: string; initialRecipient: string; onChanged: () => Promise<void>;
+function SendFlow({ source, token, limits, csrf, initialRecipient, onChanged, onLock }: {
+  source: Source; token: Token; limits: ManagedLimits | null; csrf: string; initialRecipient: string; onChanged: () => Promise<void>;
   onLock: (locked: boolean) => void;
 }) {
   const [to, setTo] = useState(initialRecipient);
@@ -255,6 +274,8 @@ function SendFlow({ source, limits, csrf, initialRecipient, onChanged, onLock }:
   // One key per intended transfer: a retry after a timeout cannot send twice.
   const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
   const fresh = () => setRequestKey(crypto.randomUUID());
+  const { decimals } = TOKENS[token];
+  const atomicAmount = () => parseUnits(amount, decimals);
   useEffect(() => { onLock(step !== 'form' || !!sent); return () => onLock(false); }, [step, sent]);
   // The account wallet is approved by passkey, else PIN, else password.
   useEffect(() => {
@@ -271,15 +292,17 @@ function SendFlow({ source, limits, csrf, initialRecipient, onChanged, onLock }:
     const target = payee.recipient?.address;
     if (!target || getAddress(target) === getAddress(source.wallet.address))
       return setError(payee.error ?? 'Enter a QIE address or the @username of a Roots user.');
-    if (!/^\d+(?:\.\d{1,18})?$/.test(amount) || parseEther(amount) <= 0n) return setError('Enter an amount above zero.');
-    if (source.managed && limits && parseEther(amount) > BigInt(limits.per_transfer_wei))
-      return setError(`The most you can send at once is ${formatEther(BigInt(limits.per_transfer_wei))} QIE.`);
+    if (!new RegExp(`^\\d+(?:\\.\\d{1,${decimals}})?$`).test(amount) || atomicAmount() <= 0n)
+      return setError(`Enter an amount above zero, with up to ${decimals} decimal places.`);
+    const max = token === 'QUSDC' ? limits?.qusdc_per_transfer_atomic : limits?.per_transfer_wei;
+    if (source.managed && max && atomicAmount() > BigInt(max))
+      return setError(`The most you can send at once is ${formatUnits(BigInt(max), decimals)} ${token}.`);
     setStep('review');
   }
   const extra = payee.recipient?.username ? { recipient_username: payee.recipient.username } : {};
 
   async function approval() {
-    const transfer = { to: payee.recipient!.address, amount_atomic: parseEther(amount).toString() };
+    const transfer = { to: payee.recipient!.address, amount_atomic: atomicAmount().toString(), asset: token };
     if (method === 'pin') return { pin };
     if (method === 'password') return { password };
     const { challenge_id, options } = await consumerRequest<{ challenge_id: string; options: Parameters<typeof startAuthentication>[0]['optionsJSON'] }>(
@@ -291,34 +314,38 @@ function SendFlow({ source, limits, csrf, initialRecipient, onChanged, onLock }:
   }
   async function sendManaged() {
     const result = await consumerRequest<{ id: string; tx_hash: string | null }>('wallets/managed/transfers', 'POST',
-      { to: payee.recipient!.address, amount_atomic: parseEther(amount).toString(), ...(await approval()), ...extra }, csrf, { 'Idempotency-Key': requestKey });
+      { to: payee.recipient!.address, amount_atomic: atomicAmount().toString(), asset: token, ...(await approval()), ...extra }, csrf, { 'Idempotency-Key': requestKey });
     setPassword(''); setPin('');
     setSent({ id: result.id, hash: result.tx_hash, confirmed: true });
   }
   async function sendLinked() {
     const target = payee.recipient!.address;
-    const atomic = parseEther(amount);
+    const atomic = atomicAmount();
     const injected = provider();
     await mainnet(injected);
     const connected = await selectedAccount(injected);
     if (connected.toLowerCase() !== source.wallet.address.toLowerCase())
       throw new Error(`Select ${short(source.wallet.address)} in your wallet.`);
-    const current = await consumerRequest<{ balance_wei: string }>(`wallets/${source.wallet.id}/balance`);
-    if (atomic >= BigInt(current.balance_wei)) throw new Error('Leave enough QIE in this wallet to pay the network fee.');
+    const current = await consumerRequest<{ balance_wei: string; qusdc_balance_atomic?: string }>(`wallets/${source.wallet.id}/balance`);
+    if (token === 'QIE' ? atomic >= BigInt(current.balance_wei) : BigInt(current.balance_wei) === 0n)
+      throw new Error('Leave enough QIE in this wallet to pay the network fee.');
+    if (token === 'QUSDC' && atomic > BigInt(current.qusdc_balance_atomic ?? '0'))
+      throw new Error('This wallet does not have enough QUSDC.');
     const authorization = await consumerRequest<{ message: string; idempotency_key: string; expires_at: string; network: string }>(
-      'settlements/authorization', 'POST', { from: source.wallet.address, to: target, amount_atomic: atomic.toString() }, csrf);
+      'settlements/authorization', 'POST', { from: source.wallet.address, to: target, amount_atomic: atomic.toString(), asset: token }, csrf);
     const signed = await signature(injected, source.wallet.address, authorization.message);
     const settlement = await consumerRequest<{ id: string }>('settlements', 'POST', {
       network: authorization.network, from: source.wallet.address, to: target,
-      amount_atomic: atomic.toString(), expires_at: authorization.expires_at, signature: signed, ...extra,
+      amount_atomic: atomic.toString(), expires_at: authorization.expires_at, signature: signed, asset: token, ...extra,
     }, csrf, { 'Idempotency-Key': authorization.idempotency_key });
     setSent({ id: settlement.id, confirmed: false });
     // Only the wallet can broadcast. A rejected or ambiguous provider result is never retried automatically.
     if (await injected.request({ method: 'eth_chainId' }) !== qieChainId)
       throw new Error('Network changed. No transfer was requested. Switch back to QIE Mainnet.');
-    const hash = await injected.request({ method: 'eth_sendTransaction', params: [{
-      from: source.wallet.address, to: target, value: `0x${atomic.toString(16)}`, chainId: qieChainId,
-    }] });
+    // QUSDC is a call to the token contract; QIE is a plain value transfer.
+    const hash = await injected.request({ method: 'eth_sendTransaction', params: [token === 'QUSDC'
+      ? { from: source.wallet.address, to: QUSDC_CONTRACT, value: '0x0', data: qusdcTransferData(target, atomic), chainId: qieChainId }
+      : { from: source.wallet.address, to: target, value: `0x${atomic.toString(16)}`, chainId: qieChainId }] });
     if (typeof hash !== 'string' || !/^0x[a-fA-F0-9]{64}$/.test(hash))
       throw new Error('Check your wallet history before attempting another transfer.');
     setSent({ id: settlement.id, hash, confirmed: true });
@@ -340,7 +367,7 @@ function SendFlow({ source, limits, csrf, initialRecipient, onChanged, onLock }:
   if (sent?.confirmed) return <div className="fin-send-done" role="status">
     <span className="fin-send-done-icon"><Check size={28} /></span>
     <h2>Sent</h2>
-    <p>{amount} QIE to {who}</p>
+    <p>{amount} {token} to {who}</p>
     {sent.hash && <a href={`${explorer}tx/${sent.hash}`} target="_blank" rel="noreferrer">View transaction <ArrowUpRight size={14} /></a>}
     <button className="fin-secondary" type="button" onClick={() => { setSent(undefined); setStep('form'); setTo(''); setAmount(''); }}>Done</button>
   </div>;
@@ -351,7 +378,7 @@ function SendFlow({ source, limits, csrf, initialRecipient, onChanged, onLock }:
     </button>
     <div className="fin-send-summary">
       <span>You send</span>
-      <strong>{amount} <small>QIE</small></strong>
+      <strong>{amount} <small>{token}</small></strong>
       <span>to <b>{payee.recipient?.label ?? who}</b></span>
     </div>
     <dl className="fin-send-facts">
@@ -383,7 +410,7 @@ function SendFlow({ source, limits, csrf, initialRecipient, onChanged, onLock }:
     <RecipientStatus state={payee} />
     <label className="fin-amount-field">Amount
       <span><input value={amount} onChange={e => { setAmount(e.target.value); fresh(); }} placeholder="0.00" inputMode="decimal" required
-        pattern="[0-9]+(\.[0-9]{1,18})?" title="A QIE amount, up to 18 decimal places" /><b>QIE</b></span>
+        pattern={`[0-9]+(\\.[0-9]{1,${decimals}})?`} title={`A ${token} amount, up to ${decimals} decimal places`} /><b>{token}</b></span>
     </label>
     <button className="fin-primary" disabled={payee.loading}>Continue <ArrowRight size={17} /></button>
     {error && <p className="fin-error" role="alert">{error}</p>}

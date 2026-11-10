@@ -27,17 +27,23 @@ export interface ChainSettlementAdapter {
   /** Re-sends a transaction this service signed, while it is not yet mined. */
   sendRawTransaction?(raw: string): Promise<string>;
   nativeTransferEvidence(hash: string, instruction: NativeTransferInstruction): Promise<SettlementEvidence>;
+  /** Allowlisted tokens on this network, by asset position id. */
+  readonly tokens?: Record<string, { code: string; decimals: number; contract: string }>;
+  tokenTransferEvidence?(hash: string, positionId: string, instruction: NativeTransferInstruction): Promise<SettlementEvidence>;
 }
 
 export function nativeTransferAuthorization(input: {
   accountId: string; network: string; chainId: bigint; from: string; to: string;
   amountAtomic: bigint; idempotencyKey: string; expiresAt: string;
+  /** Present for a token transfer; the native message is unchanged without it. */
+  token?: { code: string; contract: string };
 }): string {
   return [
     'Roots settlement authorization',
     `Account: ${input.accountId}`,
     `Network: ${input.network}`,
     `Chain ID: ${input.chainId}`,
+    ...(input.token ? [`Asset: ${input.token.code} (${input.token.contract.toLowerCase()})`] : []),
     `From: ${input.from.toLowerCase()}`,
     `To: ${input.to.toLowerCase()}`,
     `Amount (atomic units): ${input.amountAtomic}`,

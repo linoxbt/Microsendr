@@ -23,6 +23,8 @@ export interface CreateNativeSettlement {
   idempotencyKey: string;
   expiresAt: string;
   signature: `0x${string}`;
+  /** Native asset when omitted; otherwise an allowlisted token position of the network. */
+  assetPositionId?: string;
 }
 
 export async function createNativeSettlement(input: CreateNativeSettlement) {
@@ -39,9 +41,13 @@ export async function createNativeSettlement(input: CreateNativeSettlement) {
   if (!Number.isFinite(expiry) || expiry <= Date.now() || expiry > Date.now() + 5 * 60_000)
     throw new SettlementError(400, 'authorization_expired', 'Sign a fresh transfer authorization');
   const amountAtomic = BigInt(input.amountAtomic);
+  const position = input.assetPositionId ?? adapter.nativeAssetPositionId;
+  const token = position === adapter.nativeAssetPositionId ? undefined : adapter.tokens?.[position];
+  if (position !== adapter.nativeAssetPositionId && !token)
+    throw new SettlementError(422, 'asset_unavailable', 'This asset cannot be sent here');
   const message = nativeTransferAuthorization({ accountId: input.accountId, network: input.network,
     chainId: adapter.chainId, from: input.from, to: input.to, amountAtomic,
-    idempotencyKey: input.idempotencyKey, expiresAt: input.expiresAt });
+    idempotencyKey: input.idempotencyKey, expiresAt: input.expiresAt, token });
   const valid = await verifyMessage({ address: input.from as `0x${string}`, message, signature: input.signature }).catch(() => false);
   if (!valid) throw new SettlementError(401, 'wallet_signature_invalid', 'The sending wallet did not authorize this transfer');
   return transaction(async c => {
@@ -55,7 +61,7 @@ export async function createNativeSettlement(input: CreateNativeSettlement) {
     if (existing) {
       if (existing.account_id !== input.accountId || existing.network !== input.network ||
           existing.source_address !== input.from.toLowerCase() || existing.destination_address !== input.to.toLowerCase() ||
-          existing.amount_atomic !== input.amountAtomic)
+          existing.amount_atomic !== input.amountAtomic || existing.asset_position_id !== position)
         throw new SettlementError(409, 'idempotency_conflict', 'This request key was used for another transfer');
       return publicSettlement(existing);
     }
@@ -64,15 +70,17 @@ export async function createNativeSettlement(input: CreateNativeSettlement) {
     const result = (await c.query(`INSERT INTO chain_settlements
       (id,personal_user_id,account_id,asset_position_id,network,chain_id,direction,source_address,destination_address,amount_atomic,required_confirmations,minimum_block_number,idempotency_key,authorization_expires_at)
       VALUES($1,$2,$3,$4,$5,$6,'outbound',$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
-      [settlementId,input.userId,input.accountId,adapter.nativeAssetPositionId,adapter.network,String(adapter.chainId),input.from.toLowerCase(),input.to.toLowerCase(),input.amountAtomic,Number(adapter.requiredConfirmations),String(minimumBlock),input.idempotencyKey,input.expiresAt])).rows[0];
+      [settlementId,input.userId,input.accountId,position,adapter.network,String(adapter.chainId),input.from.toLowerCase(),input.to.toLowerCase(),input.amountAtomic,Number(adapter.requiredConfirmations),String(minimumBlock),input.idempotencyKey,input.expiresAt])).rows[0];
     return publicSettlement(result);
   });
 }
 
 export function publicSettlement(row: Record<string, any>) {
   const adapter = chainAdapters[row.network]?.();
+  const token = adapter?.tokens?.[row.asset_position_id];
   return { id: row.id, direction: 'sent' as const, network: row.network, chain_id: Number(row.chain_id), asset_position_id: row.asset_position_id,
-    asset: adapter?.nativeAssetCode ?? row.asset_position_id, decimals: adapter?.nativeDecimals ?? null,
+    asset: token?.code ?? (row.asset_position_id === adapter?.nativeAssetPositionId ? adapter.nativeAssetCode : row.asset_position_id),
+    decimals: token?.decimals ?? (row.asset_position_id === adapter?.nativeAssetPositionId ? adapter.nativeDecimals : null),
     from: row.source_address, to: row.destination_address, to_username: (row.recipient_username as string | null) ?? null,
     amount_atomic: String(row.amount_atomic), status: row.status, tx_hash: row.tx_hash,
     block_number: row.block_number === null ? null : String(row.block_number), block_hash: row.block_hash,
@@ -124,15 +132,20 @@ export async function reconcileChainSettlement(settlementId: string, adapter: Ch
   const terminal = (status: 'mismatched' | 'expired', error: string) => pool.query(
     `UPDATE chain_settlements SET status=$2,last_error=$3,last_checked_at=now(),updated_at=now()
      WHERE id=$1 AND status IN ('submitted','pending','unknown')`, [settlementId, status, error]);
-  if (row.network !== adapter.network || BigInt(row.chain_id) !== adapter.chainId || row.asset_position_id !== adapter.nativeAssetPositionId) {
+  const isToken = row.asset_position_id !== adapter.nativeAssetPositionId;
+  if (row.network !== adapter.network || BigInt(row.chain_id) !== adapter.chainId ||
+      (isToken && (!adapter.tokens?.[row.asset_position_id] || !adapter.tokenTransferEvidence))) {
     await terminal('mismatched', 'adapter_mismatch');
     return true;
   }
   try {
-    const evidence = await adapter.nativeTransferEvidence(row.tx_hash, {
+    const instruction = {
       from: row.source_address, to: row.destination_address,
       amountAtomic: BigInt(row.amount_atomic), confirmations: BigInt(row.required_confirmations),
-    });
+    };
+    const evidence = isToken
+      ? await adapter.tokenTransferEvidence!(row.tx_hash, row.asset_position_id, instruction)
+      : await adapter.nativeTransferEvidence(row.tx_hash, instruction);
     if (evidence.block_number !== null && BigInt(evidence.block_number) < BigInt(row.minimum_block_number))
       throw new SettlementError(422, 'historical_transaction', 'Transaction predates the settlement instruction');
     // A transfer Roots signed is re-sent byte for byte while unmined, in case

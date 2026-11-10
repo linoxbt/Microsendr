@@ -949,6 +949,9 @@ function MoneyFlow({
     const to = new URLSearchParams(window.location.search).get('to')?.trim() ?? '';
     return payeePattern.test(to) ? to : '';
   });
+  // ?asset=qusdc opens Send or Receive on that token.
+  const [initialToken] = useState<'QIE' | 'QUSDC'>(() =>
+    new URLSearchParams(window.location.search).get('asset')?.toUpperCase() === 'QUSDC' ? 'QUSDC' : 'QIE');
   const capability = capabilities?.[kind === 'convert' ? 'conversion' : 'withdrawal'];
   // Add money: crypto to a wallet address, or naira by bank (and card where the provider offers it).
   const [method, setMethod] = useState<'crypto' | 'bank'>(() =>
@@ -993,6 +996,7 @@ function MoneyFlow({
             mode={kind === 'send' ? 'send' : 'receive'}
             onChanged={onChanged}
             initialRecipient={kind === 'send' ? initialRecipient : ''}
+            initialToken={initialToken}
           />
         )}
       </div>

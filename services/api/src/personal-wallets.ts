@@ -63,6 +63,8 @@ export function registerPersonalWallets(
       managed_transfers: managedTransfersEnabled() ? {
         per_transfer_wei: managedTransferLimits().per_transfer_wei.toString(),
         daily_wei: managedTransferLimits().daily_wei.toString(),
+        qusdc_per_transfer_atomic: managedTransferLimits().qusdc_per_transfer_atomic.toString(),
+        qusdc_daily_atomic: managedTransferLimits().qusdc_daily_atomic.toString(),
         requires_identity_verification: process.env.KORA_MANAGED_TRANSFERS_REQUIRE_KYC !== 'false',
       } : null,
     };
@@ -74,15 +76,16 @@ export function registerPersonalWallets(
       const person = await required(request, true);
       const body = z.object({
         to: addressSchema, amount_atomic: z.string().regex(/^[1-9][0-9]{0,40}$/),
+        asset: z.enum(['QIE', 'QUSDC']).default('QIE'),
         recipient_username: z.string().max(25).optional(),
       }).passthrough().parse(request.body);
-      const { to, amount_atomic, recipient_username, ...approvalFields } = body;
+      const { to, amount_atomic, asset, recipient_username, ...approvalFields } = body;
       const input = { to, amount_atomic, recipient_username };
-      // Approved by the password, the payment PIN, or a passkey bound to this recipient and amount.
-      await approveSend(request, person, sendApprovalSchema.parse(approvalFields), { to, amountAtomic: amount_atomic });
+      // Approved by the password, the payment PIN, or a passkey bound to this recipient, asset and amount.
+      await approveSend(request, person, sendApprovalSchema.parse(approvalFields), { to, amountAtomic: amount_atomic, asset });
       const key = request.headers['idempotency-key'];
       const sent = await sendFromManagedWallet({
-        userId: person.user_id, accountId: person.account_id, to: input.to, amountAtomic: input.amount_atomic,
+        userId: person.user_id, accountId: person.account_id, to: input.to, amountAtomic: input.amount_atomic, asset,
         idempotencyKey: typeof key === 'string' ? key : '',
       });
       const username = await rememberPayee(person.user_id, sent.id, input.recipient_username, sent.to);
@@ -180,11 +183,12 @@ export function registerPersonalWallets(
       )).rows[0];
       if (!wallet) throw new PaymentError(404, 'wallet_not_found', 'Wallet not found');
       try {
-        const observed = await new QieClient().nativeBalance(wallet.address);
+        const client = new QieClient();
+        const [observed, qusdc] = await Promise.all([client.nativeBalance(wallet.address), client.qusdcBalance(wallet.address)]);
         return {
           address: getAddress(wallet.address), network: QIE_NETWORK,
           chain_id: Number(QIE_CHAIN_ID), asset: 'QIEV3', decimals: 18,
-          ...observed, explorer_url: `${QIE_EXPLORER}address/${wallet.address}`,
+          ...observed, qusdc_balance_atomic: qusdc.balance_atomic, explorer_url: `${QIE_EXPLORER}address/${wallet.address}`,
           source: 'onchain', ledger_credited: false,
         };
       } catch {

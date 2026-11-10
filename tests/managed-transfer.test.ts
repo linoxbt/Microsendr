@@ -4,7 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { keccak256, parseTransaction, type Hex } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { id, pool } from '../packages/database/src/index.js';
-import { QieClient } from '../packages/qie/src/index.js';
+import { QieClient, QIE_QUSDC_CONTRACT, qusdcTransferData } from '../packages/qie/src/index.js';
 import { chainAdapters, reconcileChainSettlement } from '../packages/settlement/src/service.js';
 import { sendFromManagedWallet } from '../services/api/src/managed-transfer.js';
 import { hashPassword } from '../services/api/src/consumer.js';
@@ -36,7 +36,7 @@ async function person({ kyc = 'Approved', verified = true } = {}) {
 }
 
 // A QIE node with 1 gwei base fee; records broadcasts.
-function node(balance = 100n * QIE) {
+function node(balance = 100n * QIE, qusdc = 0n) {
   const broadcasts: string[] = [];
   const request = (async (_url: string | URL | Request, init?: RequestInit) => {
     const { method, params } = JSON.parse(String(init?.body));
@@ -44,6 +44,7 @@ function node(balance = 100n * QIE) {
     const result = ({
       eth_chainId: '0x7c6', eth_blockNumber: '0x100', eth_getTransactionCount: '0x7', eth_maxPriorityFeePerGas: '0x77359400',
       eth_estimateGas: '0x5208', eth_getBalance: `0x${balance.toString(16)}`, eth_getBlockByNumber: { baseFeePerGas: '0x3b9aca00' },
+      eth_call: `0x${qusdc.toString(16).padStart(64, '0')}`,
     } as Record<string, unknown>)[method] ?? (method === 'eth_sendRawTransaction' ? keccak256(params[0]) : null);
     return Response.json({ jsonrpc: '2.0', id: 1, result });
   }) as typeof fetch;
@@ -59,7 +60,7 @@ function privy(account: ReturnType<typeof privateKeyToAccount>, tamper?: (tx: Re
     const t = { ...body.params.transaction };
     tamper?.(t);
     const signed = await account.signTransaction({
-      type: 'eip1559', chainId: t.chain_id, to: t.to, value: BigInt(t.value), nonce: t.nonce, gas: BigInt(t.gas_limit),
+      type: 'eip1559', chainId: t.chain_id, to: t.to, value: BigInt(t.value), nonce: t.nonce, gas: BigInt(t.gas_limit), data: t.data,
       maxFeePerGas: BigInt(t.max_fee_per_gas), maxPriorityFeePerGas: BigInt(t.max_priority_fee_per_gas),
     });
     return Response.json({ method: 'eth_signTransaction', data: { signed_transaction: signed, encoding: 'rlp' } });
@@ -157,4 +158,32 @@ test('the transfer route requires CSRF, the account password and an idempotency 
     chainAdapters['qie-mainnet'] = previous;
     await app.close();
   }
+});
+
+test('the account wallet sends QUSDC as an exact transfer call, with its own limits and balance checks', async () => {
+  const p = await person();
+  const USDC = 1_000_000n;
+  const qie = node(100n * QIE, 50n * USDC), signer = privy(p.account), key = id('key');
+  const sendToken = (amount: bigint, k = id('key'), chain = qie) => sendFromManagedWallet({ userId: p.userId, accountId: p.accountId, to: recipient,
+    amountAtomic: amount.toString(), idempotencyKey: k, asset: 'QUSDC' }, chain.client, signer.request);
+  const sent = await sendToken(25n * USDC, key);
+  assert.deepEqual([sent.asset, sent.decimals, sent.status], ['QUSDC', 6, 'submitted']);
+  const tx = parseTransaction(qie.broadcasts[0] as Hex);
+  assert.equal(tx.to?.toLowerCase(), QIE_QUSDC_CONTRACT.toLowerCase());
+  assert.equal(tx.value ?? 0n, 0n);
+  assert.equal(tx.data, qusdcTransferData(recipient, 25n * USDC));
+  // The same key for QIE is a different transfer.
+  await assert.rejects(send(p, 25n * USDC, key, qie, signer), { code: 'idempotency_conflict' });
+  // QUSDC limits (default 1000 per send) and balance are separate from QIE's.
+  await assert.rejects(sendToken(1001n * USDC), { code: 'transfer_limit' });
+  await assert.rejects(sendToken(60n * USDC), { code: 'insufficient_funds' });
+  // Gas is paid in QIE even for a token send.
+  await assert.rejects(sendToken(5n * USDC, id('key'), node(0n, 50n * USDC)), { code: 'insufficient_funds' });
+  // A signature that swaps the calldata recipient is never broadcast.
+  const attacker = `0x${randomBytes(20).toString('hex')}`;
+  const tampered = privy(p.account, (t) => { t.data = qusdcTransferData(attacker, 5n * USDC); });
+  const fresh = node(100n * QIE, 50n * USDC);
+  await assert.rejects(sendFromManagedWallet({ userId: p.userId, accountId: p.accountId, to: recipient, amountAtomic: (5n * USDC).toString(),
+    idempotencyKey: id('key'), asset: 'QUSDC' }, fresh.client, tampered.request), { code: 'signature_mismatch' });
+  assert.equal(fresh.broadcasts.length, 0);
 });

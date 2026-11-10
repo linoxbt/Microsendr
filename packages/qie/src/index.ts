@@ -7,6 +7,14 @@ export const QIE_NETWORK = 'qie-mainnet';
 export const QIE_NATIVE_POSITION = 'pos_qiev3_mainnet';
 // Exact mainnet contract. A ticker match is never sufficient to credit QUSDC.
 export const QIE_QUSDC_CONTRACT = '0x3F43DA82eC9A4f5285F10FaF1F26EcA7319E5DA5';
+export const QIE_QUSDC_POSITION = 'pos_qusdc_mainnet';
+export const QUSDC_DECIMALS = 6;
+const word = (hex: string) => hex.toLowerCase().replace(/^0x/, '').padStart(64, '0');
+/** Calldata for QUSDC transfer(to, amount). */
+export function qusdcTransferData(to: string, amountAtomic: bigint) {
+  if (!/^0x[a-fA-F0-9]{40}$/.test(to) || amountAtomic <= 0n) throw new QieRpcError('Invalid token transfer input');
+  return `0xa9059cbb${word(to)}${word(amountAtomic.toString(16))}`;
+}
 const addressPattern = /^0x[a-fA-F0-9]{40}$/;
 const hashPattern = /^0x[a-fA-F0-9]{64}$/;
 
@@ -32,6 +40,7 @@ export class QieClient implements ChainSettlementAdapter {
   readonly nativeAssetCode = 'QIEV3';
   readonly nativeDecimals = 18;
   readonly requiredConfirmations = 12n;
+  readonly tokens = { [QIE_QUSDC_POSITION]: { code: 'QUSDC', decimals: QUSDC_DECIMALS, contract: QIE_QUSDC_CONTRACT } };
   transactionUrl(hash: string) { return `${QIE_EXPLORER}tx/${hash}`; }
   constructor(
     private readonly request: typeof fetch = fetch,
@@ -103,15 +112,16 @@ export class QieClient implements ChainSettlementAdapter {
     return BigInt(block);
   }
 
-  /** Inputs for an EIP-1559 native transfer: pending nonce, fees and gas. */
-  async transferParameters(from: string, to: string, value: bigint) {
-    if (!addressPattern.test(from) || !addressPattern.test(to) || value <= 0n) throw new QieRpcError('Invalid transfer input');
+  /** Inputs for an EIP-1559 transfer: pending nonce, fees and gas. With data, a contract call of value 0. */
+  async transferParameters(from: string, to: string, value: bigint, data?: string) {
+    if (!addressPattern.test(from) || !addressPattern.test(to)) throw new QieRpcError('Invalid transfer input');
+    if (data === undefined ? value <= 0n : value !== 0n || !/^0x[0-9a-f]+$/i.test(data)) throw new QieRpcError('Invalid transfer input');
     await this.assertMainnet();
     const [nonce, block, priority, gas, balance] = await Promise.all([
       this.rpc<string>('eth_getTransactionCount', [from, 'pending']),
       this.rpc<{ baseFeePerGas?: string } | null>('eth_getBlockByNumber', ['latest', false]),
       this.rpc<string>('eth_maxPriorityFeePerGas'),
-      this.rpc<string>('eth_estimateGas', [{ from, to, value: `0x${value.toString(16)}` }]),
+      this.rpc<string>('eth_estimateGas', [{ from, to, value: `0x${value.toString(16)}`, ...(data ? { data } : {}) }]),
       this.rpc<string>('eth_getBalance', [from, 'pending']),
     ]);
     for (const value of [nonce, priority, gas, balance, block?.baseFeePerGas])
@@ -169,6 +179,46 @@ export class QieClient implements ChainSettlementAdapter {
       from: from.toLowerCase(), amount_atomic: amount.toString(), block_number: block.toString(),
       block_hash: receipt.blockHash.toLowerCase(), block_time: new Date(Number(BigInt(canonical.timestamp)) * 1000).toISOString(),
     };
+  }
+
+  /**
+   * Evidence for a QUSDC transfer this account sent: the transaction calls the
+   * allowlisted contract with exactly transfer(to, amount), and once mined the
+   * receipt holds the matching Transfer log.
+   */
+  async tokenTransferEvidence(hash: string, positionId: string, expected: NativeTransferInstruction): Promise<SettlementEvidence> {
+    const token = this.tokens[positionId as keyof typeof this.tokens];
+    if (!token || !hashPattern.test(hash) || !addressPattern.test(expected.from) || !addressPattern.test(expected.to) ||
+        expected.amountAtomic <= 0n || expected.confirmations < 1n)
+      throw new QieRpcError('Invalid settlement input');
+    await this.assertMainnet();
+    const [tx, receipt, head] = await Promise.all([
+      this.rpc<{ from: string; to: string | null; value: string; input?: string; blockHash?: string } | null>('eth_getTransactionByHash', [hash]),
+      this.rpc<{ transactionHash: string; status: string; blockNumber: string; blockHash?: string; logs?: { address: string; topics: string[]; data: string }[] } | null>('eth_getTransactionReceipt', [hash]),
+      this.rpc<string>('eth_blockNumber'),
+    ]);
+    if (!tx) return { state: 'pending', confirmations: '0', block_number: null, block_hash: null };
+    if (tx.from.toLowerCase() !== expected.from.toLowerCase() || tx.to?.toLowerCase() !== token.contract.toLowerCase() ||
+        BigInt(tx.value) !== 0n || tx.input?.toLowerCase() !== qusdcTransferData(expected.to, expected.amountAtomic))
+      throw new QieEvidenceMismatch('Token transfer does not match instruction');
+    if (!receipt) return { state: 'pending', confirmations: '0', block_number: null, block_hash: null };
+    if (receipt.transactionHash.toLowerCase() !== hash.toLowerCase()) throw new QieEvidenceMismatch('Receipt does not match');
+    if (!receipt.blockHash || !hashPattern.test(receipt.blockHash) ||
+        (tx.blockHash && tx.blockHash.toLowerCase() !== receipt.blockHash.toLowerCase()))
+      throw new QieRpcError('Invalid settlement block evidence');
+    if (!['0x0', '0x1'].includes(receipt.status)) throw new QieRpcError('Invalid receipt status');
+    if (receipt.status === '0x1' && !receipt.logs?.some((log) => log.address.toLowerCase() === token.contract.toLowerCase() &&
+        log.topics.length === 3 && log.topics[0].toLowerCase() === TRANSFER_TOPIC &&
+        log.topics[1].toLowerCase() === `0x${word(expected.from)}` && log.topics[2].toLowerCase() === `0x${word(expected.to)}` &&
+        /^0x[0-9a-f]+$/i.test(log.data) && BigInt(log.data) === expected.amountAtomic))
+      throw new QieEvidenceMismatch('Token transfer log does not match instruction');
+    const block = BigInt(receipt.blockNumber);
+    const canonical = await this.rpc<{ hash: string } | null>('eth_getBlockByNumber', [receipt.blockNumber, false]);
+    if (!canonical || canonical.hash.toLowerCase() !== receipt.blockHash.toLowerCase())
+      return { state: 'pending', confirmations: '0', block_number: null, block_hash: null };
+    const confirmations = BigInt(head) >= block ? BigInt(head) - block + 1n : 0n;
+    const state = confirmations < expected.confirmations ? 'pending' : receipt.status === '0x0' ? 'failed' : 'confirmed';
+    return { state, confirmations: confirmations.toString(), block_number: block.toString(), block_hash: receipt.blockHash.toLowerCase() };
   }
 
   // This is settlement evidence only. Financial posting requires a separately

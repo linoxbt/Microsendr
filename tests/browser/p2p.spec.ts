@@ -68,7 +68,7 @@ test('paying @username resolves the recipient and sends to their address', async
   await panel.getByRole('button', { name: /Confirm and send/ }).click();
   await expect(panel.getByRole('heading', { name: 'Sent' })).toBeVisible();
   await expect(panel).toContainText('2 QIE to @ada_okafor');
-  expect(posts).toEqual([{ to: payeeAddress, amount_atomic: '2000000000000000000', password: 'my-account-password', recipient_username: 'ada_okafor' }]);
+  expect(posts).toEqual([{ to: payeeAddress, amount_atomic: '2000000000000000000', asset: 'QIE', password: 'my-account-password', recipient_username: 'ada_okafor' }]);
 });
 
 test('being payable by username is an explicit opt-in on the Security page', async ({ page }) => {
@@ -158,7 +158,7 @@ test('with a payment PIN set, the review step asks for the PIN instead of the pa
   await expect(pin).toHaveValue('402913');
   await panel.getByRole('button', { name: /Confirm and send/ }).click();
   await expect(panel.getByRole('heading', { name: 'Sent' })).toBeVisible();
-  expect(posts).toEqual([{ to: payeeAddress, amount_atomic: '3000000000000000000', pin: '402913' }]);
+  expect(posts).toEqual([{ to: payeeAddress, amount_atomic: '3000000000000000000', asset: 'QIE', pin: '402913' }]);
 });
 
 test('Security sets a payment PIN with the password', async ({ page }) => {
@@ -198,4 +198,44 @@ test('a new account sees a get-started checklist instead of an empty activity li
   await expect(feed.getByRole('button', { name: 'Verify your email' })).toBeDisabled();
   await feed.getByRole('button', { name: 'Set up a passkey or PIN' }).click();
   await expect(page).toHaveURL(/\/personal\/security$/);
+});
+
+test('each token has its own receive screen, and QUSDC sends from the Roots wallet as QUSDC', async ({ page }) => {
+  await signedIn(page);
+  await page.route('**/personal/api/payment-auth', (route) => route.fulfill(json({ pin_set: true, pin_locked_until: null, passkeys: [] })));
+  await page.route('**/personal/api/overview', (route) => route.fulfill(json({ ...overview, assets: [
+    { code: 'QIE', name: 'QIE', amount_atomic: '1000000000000000000', decimals: 18, status: 'ready', source: 'wallet' },
+    { code: 'QUSDC', name: 'Digital dollars', amount_atomic: '5000000', decimals: 6, status: 'ready', source: 'wallet' }] })));
+  const limits = { per_transfer_wei: '1000000000000000000000', daily_wei: '5000000000000000000000', qusdc_per_transfer_atomic: '1000000000', qusdc_daily_atomic: '5000000000', requires_identity_verification: false };
+  await page.route('**/personal/api/wallets', (route) => route.fulfill(json({
+    data: [{ id: 'privy_wallet_mock', address: accountAddress, network: 'qie-mainnet', managed: true, custody: 'managed', can_send: true }],
+    managed_transfers: limits,
+  })));
+  const posts: Record<string, unknown>[] = [];
+  await page.route('**/personal/api/wallets/managed/transfers', (route) => {
+    posts.push(route.request().postDataJSON());
+    return route.fulfill(json({ id: 'stl_' + 'e'.repeat(32), tx_hash: '0x' + 'f'.repeat(64), status: 'submitted', custody: 'managed' }));
+  });
+  // From the QUSDC page, Receive opens the address screen on QUSDC.
+  await page.goto('/personal/assets/qusdc');
+  await page.getByRole('button', { name: 'Receive QUSDC' }).click();
+  const tokens = page.getByRole('group', { name: 'Token' });
+  await expect(tokens.getByRole('button', { name: 'QUSDC' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByText('Send only QUSDC on QIE Mainnet to this address')).toBeVisible();
+  await expect(page.locator('.fin-chain-receive code')).toHaveText(accountAddress);
+  await tokens.getByRole('button', { name: 'QIE' }).click();
+  await expect(page.getByText('Send only QIE on QIE Mainnet to this address')).toBeVisible();
+  await expect(page.locator('.fin-chain-receive code')).toHaveText(accountAddress);
+  // Sending QUSDC uses six decimals and names the asset.
+  await page.goto('/personal/assets/qusdc');
+  await page.getByRole('button', { name: 'Send QUSDC' }).click();
+  const panel = page.getByRole('region', { name: 'QIE wallet' });
+  await panel.getByLabel('Recipient').fill(payeeAddress);
+  await panel.getByLabel('Amount').fill('2.5');
+  await panel.getByRole('button', { name: 'Continue' }).click();
+  await expect(panel.getByRole('form', { name: 'Review payment' })).toContainText('2.5 QUSDC');
+  await panel.getByLabel('Payment PIN').fill('402913');
+  await panel.getByRole('button', { name: /Confirm and send/ }).click();
+  await expect(panel).toContainText('2.5 QUSDC to');
+  expect(posts).toEqual([{ to: payeeAddress, amount_atomic: '2500000', asset: 'QUSDC', pin: '402913' }]);
 });

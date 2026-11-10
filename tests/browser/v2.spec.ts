@@ -558,6 +558,6 @@ test('when account wallet sends are enabled it can receive and send with the pas
   await review.getByRole('button', { name: /Confirm and send/ }).click();
   await expect(send.getByRole('heading', { name: 'Sent' })).toBeVisible();
   expect(posts).toHaveLength(1);
-  expect(posts[0].body).toEqual({ to: recipient, amount_atomic: '1500000000000000000', password: 'my-account-password' });
+  expect(posts[0].body).toEqual({ to: recipient, amount_atomic: '1500000000000000000', asset: 'QIE', password: 'my-account-password' });
   expect(posts[0].key).toMatch(/^[0-9a-f-]{36}$/);
 });

@@ -10,6 +10,9 @@ import { id, pool } from '../../../packages/database/src/index.js';
 import { hashKey } from '../../../packages/payments/src/auth.js';
 import { PaymentError } from '../../../packages/payments/src/errors.js';
 import { authSecret, requireOrigin } from './config.js';
+import { QIE_NATIVE_POSITION, QIE_QUSDC_POSITION } from '../../../packages/qie/src/index.js';
+
+const positionOf = (asset: 'QIE' | 'QUSDC' | undefined) => (asset === 'QUSDC' ? QIE_QUSDC_POSITION : QIE_NATIVE_POSITION);
 import { hashPassword, matches } from './consumer.js';
 
 type Person = { user_id: string; account_id: string };
@@ -82,15 +85,16 @@ async function checkPin(userId: string, pin: string) {
 }
 
 async function checkPasskey(request: FastifyRequest, person: Person, approval: { challenge_id: string; response: Record<string, unknown> },
-  transfer: { to: string; amountAtomic: string }) {
+  transfer: { to: string; amountAtomic: string; asset?: 'QIE' | 'QUSDC' }) {
   const { origin, rpID } = relyingParty(request);
   // Single use whatever the outcome: a captured assertion can never be replayed.
   const challenge = (await pool.query(`UPDATE personal_webauthn_challenges SET used_at=now()
     WHERE id=$1 AND personal_user_id=$2 AND purpose='send' AND used_at IS NULL AND expires_at>now()
-    RETURNING challenge,origin,destination_address,amount_atomic::text`, [approval.challenge_id, person.user_id])).rows[0];
+    RETURNING challenge,origin,destination_address,amount_atomic::text,asset_position_id`, [approval.challenge_id, person.user_id])).rows[0];
   const rejected = new PaymentError(401, 'passkey_rejected', 'Your passkey did not approve this payment. Try again.');
   if (!challenge || challenge.origin !== origin) throw rejected;
-  if (challenge.destination_address !== transfer.to.toLowerCase() || challenge.amount_atomic !== transfer.amountAtomic)
+  if (challenge.destination_address !== transfer.to.toLowerCase() || challenge.amount_atomic !== transfer.amountAtomic ||
+      challenge.asset_position_id !== positionOf(transfer.asset))
     throw new PaymentError(409, 'passkey_mismatch', 'The payment changed after you approved it. Review it again.');
   const response = approval.response as unknown as AuthenticationResponseJSON;
   if (typeof response.id !== 'string') throw rejected;
@@ -106,7 +110,8 @@ async function checkPasskey(request: FastifyRequest, person: Person, approval: {
 }
 
 /** Approves one send from the account wallet. Throws unless the approval is valid. */
-export async function approveSend(request: FastifyRequest, person: Person, approval: SendApproval, transfer: { to: string; amountAtomic: string }) {
+export async function approveSend(request: FastifyRequest, person: Person, approval: SendApproval,
+  transfer: { to: string; amountAtomic: string; asset?: 'QIE' | 'QUSDC' }) {
   if ('pin' in approval) return checkPin(person.user_id, approval.pin);
   if ('passkey' in approval) return checkPasskey(request, person, approval.passkey, transfer);
   const stored = (await pool.query('SELECT password_hash FROM personal_users WHERE id=$1', [person.user_id])).rows[0];
@@ -193,7 +198,7 @@ export function registerPaymentAuth(app: FastifyInstance, required: Required) {
   // A send challenge names the recipient and amount it may approve.
   app.post('/personal/api/payment-auth/passkeys/challenge', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request) => {
     const person = await required(request, true);
-    const input = z.object({ to: addressSchema, amount_atomic: amountSchema }).strict().parse(request.body);
+    const input = z.object({ to: addressSchema, amount_atomic: amountSchema, asset: z.enum(['QIE', 'QUSDC']).default('QIE') }).strict().parse(request.body);
     const { origin, rpID } = relyingParty(request);
     const keys = (await pool.query('SELECT credential_id,transports FROM personal_passkeys WHERE personal_user_id=$1', [person.user_id])).rows;
     if (!keys.length) throw new PaymentError(409, 'passkey_not_set', 'Add a passkey in Security first');
@@ -202,9 +207,9 @@ export function registerPaymentAuth(app: FastifyInstance, required: Required) {
       allowCredentials: keys.map((key) => ({ id: key.credential_id, transports: key.transports })),
     });
     const challengeId = id('wac');
-    await pool.query(`INSERT INTO personal_webauthn_challenges(id,personal_user_id,purpose,challenge,origin,destination_address,amount_atomic,expires_at)
-      VALUES($1,$2,'send',$3,$4,$5,$6,now()+interval '5 minutes')`,
-      [challengeId, person.user_id, options.challenge, origin, input.to.toLowerCase(), input.amount_atomic]);
+    await pool.query(`INSERT INTO personal_webauthn_challenges(id,personal_user_id,purpose,challenge,origin,destination_address,amount_atomic,asset_position_id,expires_at)
+      VALUES($1,$2,'send',$3,$4,$5,$6,$7,now()+interval '5 minutes')`,
+      [challengeId, person.user_id, options.challenge, origin, input.to.toLowerCase(), input.amount_atomic, positionOf(input.asset)]);
     return { challenge_id: challengeId, options };
   });
 }

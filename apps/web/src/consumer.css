@@ -3246,3 +3246,53 @@
     min-height: 56px;
   }
 }
+
+/* Token switch: which asset to receive or send, as on a wallet's receive screen. */
+.fin-token-switch {
+  justify-self: center;
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--fin-soft);
+}
+.fin-token-switch button {
+  min-height: 40px;
+  min-width: 84px;
+  padding: 6px 18px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--fin-ink);
+  font-weight: 700;
+  font-size: 15px;
+}
+.fin-token-switch button.active {
+  background: #3d8bd6;
+  color: #fff;
+}
+/* With the token switch above it, the wallet switch is the quieter of the two. */
+.fin-token-switch + .fin-source-switch {
+  background: none;
+  padding: 0;
+  margin-top: -6px;
+}
+.fin-token-switch + .fin-source-switch button {
+  min-height: 40px;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--fin-muted);
+}
+.fin-token-switch + .fin-source-switch button.active {
+  background: none;
+  color: var(--fin-ink);
+  box-shadow: inset 0 -2px 0 #4f93c8;
+  border-radius: 0;
+}
+.fin-qr-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
