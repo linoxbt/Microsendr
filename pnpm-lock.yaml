@@ -132,6 +132,8 @@ importers:
 
   connectors/fake: {}
 
+  connectors/fonbnk: {}
+
   connectors/paystack: {}
 
   connectors/stellar: {}

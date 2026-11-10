@@ -263,17 +263,10 @@ test('payment availability cannot fabricate a quote or expose simulated money', 
   ).json();
   assert.equal(overview.total, null);
   assert.deepEqual(overview.balances, []);
-  for (const [source, destination] of [
-    ['USD', 'NGN'],
-    ['NGN', 'USD'],
-  ]) {
-    const quote = await write(auth, '/personal/api/conversion/quotes', {
-      source,
-      destination,
-      amount: '100.00',
-    });
-    assert.equal(quote.statusCode, 503);
-    assert.equal(quote.json().error.code, 'route_unavailable');
-  }
+  // Without provider credentials there is no route, so no quote can be fabricated.
+  assert.equal(overview.capabilities.conversion.available, false);
+  const quote = await write(auth, '/personal/api/conversion/quote', { direction: 'buy', asset: 'POLYGON_USDC', amount: 10000 });
+  assert.equal(quote.statusCode, 503);
+  assert.equal(quote.json().error.code, 'conversion_unavailable');
   assert.equal((await app.inject({ url: '/personal/api/profile' })).statusCode, 401);
 });

@@ -2084,3 +2084,18 @@
     justify-content: center;
   }
 }
+/* Conversion: quote breakdown, order instructions and history. */
+.fin-convert { display: grid; gap: 18px; }
+.fin-convert-form { display: grid; gap: 14px; }
+.fin-convert-quote dl, .fin-convert-instructions { display: grid; gap: 10px; margin: 0; }
+.fin-convert-quote dl > div, .fin-convert-instructions > div { display: flex; justify-content: space-between; gap: 12px; }
+.fin-convert-quote dt, .fin-convert-instructions dt { color: var(--fin-muted, #4d6170); }
+.fin-convert-quote dd, .fin-convert-instructions dd { margin: 0; font-weight: 600; text-align: right; overflow-wrap: anywhere; display: inline-flex; align-items: center; gap: 6px; }
+.fin-convert-total { padding-top: 10px; border-top: 1px solid var(--fin-line, #e3dccb); font-size: 17px; }
+.fin-convert-warning { padding: 12px 14px; border-radius: 12px; background: #fff4e5; color: #7a4b00; }
+:root[data-theme='dark'] .fin-convert-warning { background: #3a2a10; color: #ffd591; }
+.fin-convert-orders { display: grid; gap: 8px; }
+.fin-convert-orders h3 { margin: 0 0 4px; font-size: 15px; }
+.fin-convert-order { display: flex; justify-content: space-between; gap: 12px; align-items: center; min-height: 52px; padding: 10px 12px;
+  border: 1px solid var(--fin-line, #e3dccb); border-radius: 12px; background: none; color: inherit; text-align: left; }
+.fin-convert-order small { display: block; color: var(--fin-muted, #4d6170); }

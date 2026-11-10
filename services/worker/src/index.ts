@@ -6,6 +6,7 @@ import { runOnce } from './worker.js';
 import { deliverOne } from '../../../packages/payments/src/webhooks.js';
 import { reconcileOneChainSettlement } from '../../../packages/settlement/src/service.js';
 import { indexOneIncomingWallet } from '../../../packages/settlement/src/incoming.js';
+import { reconcileOneConversionOrder } from '../../api/src/conversion.js';
 import { reconcileOneDiditSession } from '../../api/src/didit.js';
 import { reconcileOnePersonalPaystack } from '../../api/src/personal-paystack.js';
 let running = true;
@@ -36,8 +37,9 @@ try {
     await reconcileOneDiditSession();
     await reconcileOnePersonalPaystack();
     await indexOneIncomingWallet();
+    await reconcileOneConversionOrder();
   } else {
-    const queues = { dispatch, rail, webhooks, chain: reconcileOneChainSettlement, kyc: () => reconcileOneDiditSession(), paystack: () => reconcileOnePersonalPaystack(), incoming: () => indexOneIncomingWallet() };
+    const queues = { dispatch, rail, webhooks, chain: reconcileOneChainSettlement, kyc: () => reconcileOneDiditSession(), paystack: () => reconcileOnePersonalPaystack(), incoming: () => indexOneIncomingWallet(), conversion: () => reconcileOneConversionOrder() };
     const names = Object.keys(queues);
     // A heartbeat file, touched as queue iterations complete, backs the container healthcheck.
     let beat = 0;

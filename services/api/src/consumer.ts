@@ -9,6 +9,7 @@ import { personalIncomingTransfers } from '../../../packages/settlement/src/inco
 import { ensureManagedWallet } from './managed-wallet.js';
 import { personalAssets } from './personal-assets.js';
 import { personalWalletUsdValue } from './personal-valuation.js';
+import { FonbnkClient } from '../../../connectors/fonbnk/src/index.js';
 
 type Person = { user_id: string; account_id: string; csrf_token: string };
 type Dependencies = {
@@ -442,27 +443,11 @@ export function registerConsumer(app: FastifyInstance, deps: Dependencies) {
           available: false,
           reason: 'Transfers from your Roots balance are not available yet.',
         },
-        conversion: {
-          available: false,
-          reason: 'No exchange route is available for these currencies yet.',
-        },
+        // Buying stablecoins with naira through Fonbnk, when its credentials are set.
+        conversion: FonbnkClient.configured()
+          ? { available: true, reason: 'Buy digital dollars with naira through Fonbnk.' }
+          : { available: false, reason: 'Currency conversion is not available yet.' },
       },
     };
-  });
-  app.post('/personal/api/conversion/quotes', async (request) => {
-    await deps.required(request, true);
-    z.object({
-      source: z.enum(['USD', 'NGN']),
-      destination: z.enum(['USD', 'NGN']),
-      amount: z.string().regex(/^[1-9][0-9]{0,11}(?:\.[0-9]{1,2})?$/),
-    })
-      .strict()
-      .refine((v) => v.source !== v.destination)
-      .parse(request.body);
-    throw new PaymentError(
-      503,
-      'route_unavailable',
-      'An executable exchange quote is not available. No funds have been moved.',
-    );
   });
 }

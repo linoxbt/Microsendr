@@ -37,6 +37,7 @@ import { logoutPrivyIfMounted } from './auth-shell.js';
 import { RootsMark } from './roots-logo.js';
 import { ConsumerChainWallet } from './consumer-chain-wallet.js';
 import { AssetDetail, AssetIcon, assetAmount, assetDefaults, type PersonalAsset } from './personal-assets.js';
+import { ConversionPanel } from './conversion-panel.js';
 
 type Session = { authenticated: boolean; csrf_token?: string; email?: string; account_id?: string };
 type Capability = { available: boolean; reason: string };
@@ -772,7 +773,7 @@ function MoneyFlow({
     kind === 'deposit'
       ? 'Add money.'
       : kind === 'convert'
-        ? 'Convert currencies.'
+        ? 'Convert naira and digital dollars.'
         : kind === 'send'
           ? 'Who are you paying?'
           : 'Withdraw to your bank.';
@@ -786,7 +787,9 @@ function MoneyFlow({
         title={title}
         text={
           kind === 'convert'
-            ? 'Currency exchange is not available yet.'
+            ? capability?.available
+              ? 'Buy digital dollars with naira through Fonbnk. Every fee is shown before you pay.'
+              : 'Currency exchange is not available yet.'
             : kind === 'deposit'
               ? 'Receive QIE to a wallet you link, or check local funding.'
               : kind === 'send'
@@ -816,7 +819,9 @@ function MoneyFlow({
               </button>
             </div>
           )}
-          {kind === 'send' || (kind === 'deposit' && method === 'crypto') ? (
+          {kind === 'convert' && capability?.available ? (
+            <ConversionPanel csrf={csrf} />
+          ) : kind === 'send' || (kind === 'deposit' && method === 'crypto') ? (
             <ConsumerChainWallet
               csrf={csrf}
               mode={kind === 'send' ? 'send' : 'receive'}

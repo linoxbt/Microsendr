@@ -15,6 +15,8 @@ import { registerPersonalPaystack } from './personal-paystack.js';
 import { registerConsumer } from './consumer.js';
 import { registerPersonalWallets, requireLinkedWallet } from './personal-wallets.js';
 import { registerP2P } from './p2p.js';
+import { registerConversion } from './conversion.js';
+import type { FonbnkClient } from '../../../connectors/fonbnk/src/index.js';
 import { authSecret, requireOrigin, sandboxFixturesEnabled, secureCookie } from './config.js';
 
 const emailSchema = z.string().trim().toLowerCase().email().max(254);
@@ -26,6 +28,7 @@ export interface PersonalOptions {
   sendCode?: (email: string, code: string) => Promise<void>;
   codeSecret?: string;
   sandboxFixtures?: boolean;
+  fonbnkClient?: FonbnkClient;
 }
 
 export { mailer } from './email.js';
@@ -78,6 +81,7 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
   registerConsumer(app, { required, origin, setCookie, emailEnabled: !!secret && !!sendCode });
   registerPersonalWallets(app, required);
   registerP2P(app, required);
+  registerConversion(app, required, options.fonbnkClient);
   app.get('/personal/api/auth/config', async () => ({ enabled: true, method: 'password', email_verification_available: !!secret && !!sendCode }));
   app.get('/personal/api/auth/legacy-config', async () => ({ enabled: await verifier.ready(), app_id: privyConfig.appId, client_id: privyConfig.clientId ?? null }));
   app.post('/personal/api/auth/privy', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
