@@ -15,6 +15,7 @@ import { registerPersonalPaystack } from './personal-paystack.js';
 import { registerConsumer } from './consumer.js';
 import { registerPersonalWallets, requireLinkedWallet } from './personal-wallets.js';
 import { registerP2P, rememberPayee } from './p2p.js';
+import { registerPaymentAuth } from './payment-auth.js';
 import { registerConversion } from './conversion.js';
 import type { FonbnkClient } from '../../../connectors/fonbnk/src/index.js';
 import { authSecret, requireOrigin, sandboxFixturesEnabled, secureCookie } from './config.js';
@@ -81,6 +82,7 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
   registerConsumer(app, { required, origin, setCookie, emailEnabled: !!secret && !!sendCode });
   registerPersonalWallets(app, required);
   registerP2P(app, required);
+  registerPaymentAuth(app, required);
   registerConversion(app, required, options.fonbnkClient);
   app.get('/personal/api/auth/config', async () => ({ enabled: true, method: 'password', email_verification_available: !!secret && !!sendCode }));
   app.get('/personal/api/auth/legacy-config', async () => ({ enabled: await verifier.ready(), app_id: privyConfig.appId, client_id: privyConfig.clientId ?? null }));

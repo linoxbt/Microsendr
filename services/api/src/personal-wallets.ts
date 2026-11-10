@@ -7,8 +7,8 @@ import { PaymentError } from '../../../packages/payments/src/errors.js';
 import { QieClient, QIE_CHAIN_ID, QIE_EXPLORER, QIE_NETWORK } from '../../../packages/qie/src/index.js';
 import { ensureManagedWallet, findManagedWallet, managedWalletConfigured } from './managed-wallet.js';
 import { managedTransferLimits, managedTransfersEnabled, sendFromManagedWallet } from './managed-transfer.js';
-import { matches } from './consumer.js';
 import { rememberPayee } from './p2p.js';
+import { approveSend, sendApprovalSchema } from './payment-auth.js';
 
 type Person = { user_id: string; account_id: string };
 const addressSchema = z.string().regex(/^0x[a-fA-F0-9]{40}$/);
@@ -72,14 +72,14 @@ export function registerPersonalWallets(
   app.post('/personal/api/wallets/managed/transfers',
     { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async request => {
       const person = await required(request, true);
-      const input = z.object({
-        to: addressSchema, amount_atomic: z.string().regex(/^[1-9][0-9]{0,40}$/), password: z.string().min(1).max(128),
+      const body = z.object({
+        to: addressSchema, amount_atomic: z.string().regex(/^[1-9][0-9]{0,40}$/),
         recipient_username: z.string().max(25).optional(),
-      }).strict().parse(request.body);
-      const stored = (await pool.query('SELECT password_hash FROM personal_users WHERE id=$1', [person.user_id])).rows[0];
-      if (!stored?.password_hash) throw new PaymentError(403, 'password_required', 'Set a password in Security before sending');
-      if (!(await matches(input.password, stored.password_hash)))
-        throw new PaymentError(401, 'invalid_password', 'Your password is incorrect');
+      }).passthrough().parse(request.body);
+      const { to, amount_atomic, recipient_username, ...approvalFields } = body;
+      const input = { to, amount_atomic, recipient_username };
+      // Approved by the password, the payment PIN, or a passkey bound to this recipient and amount.
+      await approveSend(request, person, sendApprovalSchema.parse(approvalFields), { to, amountAtomic: amount_atomic });
       const key = request.headers['idempotency-key'];
       const sent = await sendFromManagedWallet({
         userId: person.user_id, accountId: person.account_id, to: input.to, amountAtomic: input.amount_atomic,

@@ -312,6 +312,7 @@ async function signedIn(page: Page) {
   });
   await page.route('**/personal/api/session', (route) => route.fulfill(json({ authenticated: true, csrf_token: csrf, email: profile.email })));
   await page.route('**/personal/api/profile', (route) => route.fulfill(json(profile)));
+  await page.route('**/personal/api/payment-auth', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ pin_set: false, pin_locked_until: null, passkeys: [] }) }));
   await page.route('**/personal/api/overview', (route) => route.fulfill(json(overview)));
   await page.route('**/personal/api/kyc', (route) => route.fulfill(json({ email_verified: false, status: 'Not Started', url: null, updated_at: null, configured: false })));
   await page.route('**/personal/api/wallets/*/balance', (route) => route.fulfill(json({

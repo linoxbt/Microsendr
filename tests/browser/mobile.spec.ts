@@ -24,6 +24,7 @@ const overview = {
 async function signedIn(page: Page) {
   await page.route('**/personal/api/session', (r) => r.fulfill(json({ authenticated: true, csrf_token: csrf, email: profile.email })));
   await page.route('**/personal/api/profile', (r) => r.fulfill(json(profile)));
+  await page.route('**/personal/api/payment-auth', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ pin_set: false, pin_locked_until: null, passkeys: [] }) }));
   await page.route('**/personal/api/overview', (r) => r.fulfill(json(overview)));
   await page.route('**/personal/api/kyc', (r) => r.fulfill(json({ email_verified: true, status: 'Approved', url: null, updated_at: null, configured: true })));
   await page.route('**/personal/api/wallets', (r) => r.fulfill(json({ data: [] })));

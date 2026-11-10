@@ -27,6 +27,7 @@ const overview = {
 async function signedIn(page: Page) {
   await page.route('**/personal/api/session', (route) => route.fulfill(json({ authenticated: true, csrf_token: csrf, email: profile.email })));
   await page.route('**/personal/api/profile', (route) => route.fulfill(json(profile)));
+  await page.route('**/personal/api/payment-auth', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ pin_set: false, pin_locked_until: null, passkeys: [] }) }));
   await page.route('**/personal/api/overview', (route) => route.fulfill(json(overview)));
   await page.route('**/personal/api/kyc', (route) => route.fulfill(json({ email_verified: true, status: 'Approved', url: null, updated_at: null, configured: true })));
 }
@@ -131,4 +132,58 @@ test('home leads with paying people: recent payees come from real sends and pref
   await page.goto('/personal/home');
   await expect(card).toBeVisible();
   await page.screenshot({ path: '/tmp/roots-home-desktop.png', fullPage: true });
+});
+
+test('with a payment PIN set, the review step asks for the PIN instead of the password', async ({ page }) => {
+  await signedIn(page);
+  await page.route('**/personal/api/payment-auth', (route) => route.fulfill(json({ pin_set: true, pin_locked_until: null, passkeys: [] })));
+  const limits = { per_transfer_wei: '1000000000000000000000', daily_wei: '5000000000000000000000', requires_identity_verification: false };
+  await page.route('**/personal/api/wallets', (route) => route.fulfill(json({
+    data: [{ id: 'privy_wallet_mock', address: accountAddress, network: 'qie-mainnet', managed: true, custody: 'managed', can_send: true }],
+    managed_transfers: limits,
+  })));
+  const posts: Record<string, unknown>[] = [];
+  await page.route('**/personal/api/wallets/managed/transfers', (route) => {
+    posts.push(route.request().postDataJSON());
+    return route.fulfill(json({ id: 'stl_' + 'e'.repeat(32), tx_hash: '0x' + 'f'.repeat(64), status: 'submitted', custody: 'managed' }));
+  });
+  await page.goto('/personal/send');
+  const panel = page.getByRole('region', { name: 'QIE wallet' });
+  await panel.getByLabel('Recipient').fill(payeeAddress);
+  await panel.getByLabel('Amount').fill('3');
+  await panel.getByRole('button', { name: 'Continue' }).click();
+  await expect(panel.getByLabel('Password')).toHaveCount(0);
+  const pin = panel.getByLabel('Payment PIN');
+  await pin.fill('402913');
+  await expect(pin).toHaveValue('402913');
+  await panel.getByRole('button', { name: /Confirm and send/ }).click();
+  await expect(panel.getByRole('heading', { name: 'Sent' })).toBeVisible();
+  expect(posts).toEqual([{ to: payeeAddress, amount_atomic: '3000000000000000000', pin: '402913' }]);
+});
+
+test('Security sets a payment PIN with the password', async ({ page }) => {
+  await signedIn(page);
+  await page.route('**/personal/api/payment-settings', (route) => route.fulfill(json({ username: 'tobi_mock', payable_by_username: false, receiving_address: null })));
+  let pinSet = false;
+  const bodies: unknown[] = [];
+  await page.route('**/personal/api/payment-auth', (route) => route.fulfill(json({ pin_set: pinSet, pin_locked_until: null, passkeys: [] })));
+  await page.route('**/personal/api/payment-auth/pin', (route) => {
+    bodies.push(route.request().postDataJSON());
+    pinSet = true;
+    return route.fulfill(json({ pin_set: true }));
+  });
+  await page.goto('/personal/security');
+  const section = page.getByRole('region', { name: 'Payment approval' });
+  await expect(section).toContainText('Not set');
+  await section.getByRole('button', { name: 'Set PIN' }).click();
+  await section.getByLabel('New PIN').fill('402913');
+  await section.getByLabel('Confirm PIN').fill('402914');
+  await section.getByLabel('Password').fill('my-account-password');
+  await section.getByRole('button', { name: 'Save PIN' }).click();
+  await expect(section.getByRole('alert')).toContainText('The PINs do not match.');
+  await section.getByLabel('Confirm PIN').fill('402913');
+  await section.getByRole('button', { name: 'Save PIN' }).click();
+  await expect(section.getByRole('status')).toContainText('Payment PIN saved.');
+  await expect(section).toContainText('On');
+  expect(bodies).toEqual([{ pin: '402913', password: 'my-account-password' }]);
 });

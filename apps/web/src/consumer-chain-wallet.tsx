@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { formatEther, getAddress, isAddress, parseEther } from 'viem';
-import { ArrowLeft, ArrowRight, ArrowUpRight, Check, Copy, Link2, RefreshCw, Share2, Unlink } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUpRight, Check, Copy, Fingerprint, Link2, RefreshCw, Share2, Unlink } from 'lucide-react';
 import { consumerRequest } from './consumer-api.js';
 import { RecipientStatus, recipientPattern, useRecipient } from './recipient.js';
 import { RootsMark } from './roots-logo.js';
+import { startAuthentication } from '@simplewebauthn/browser';
+import { passkeysSupported, type PaymentAuthStatus } from './payment-security.js';
 
 type ManagedLimits = { per_transfer_wei: string; daily_wei: string; requires_identity_verification: boolean };
 
@@ -241,6 +243,9 @@ function SendFlow({ source, limits, csrf, initialRecipient, onChanged, onLock }:
   const [amount, setAmount] = useState('');
   const [step, setStep] = useState<'form' | 'review'>('form');
   const [password, setPassword] = useState('');
+  const [pin, setPin] = useState('');
+  const [auth, setAuth] = useState<PaymentAuthStatus>();
+  const [method, setMethod] = useState<'passkey' | 'pin' | 'password'>('password');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [sent, setSent] = useState<Sent>();
@@ -248,6 +253,14 @@ function SendFlow({ source, limits, csrf, initialRecipient, onChanged, onLock }:
   const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
   const fresh = () => setRequestKey(crypto.randomUUID());
   useEffect(() => { onLock(step !== 'form' || !!sent); return () => onLock(false); }, [step, sent]);
+  // The account wallet is approved by passkey, else PIN, else password.
+  useEffect(() => {
+    if (!source.managed || step !== 'review' || auth) return;
+    void consumerRequest<PaymentAuthStatus>('payment-auth').then((status) => {
+      setAuth(status);
+      setMethod(status.passkeys.length && passkeysSupported() ? 'passkey' : status.pin_set ? 'pin' : 'password');
+    }).catch(() => setAuth({ pin_set: false, pin_locked_until: null, passkeys: [] }));
+  }, [source.managed, step, auth]);
 
   function review(event: React.FormEvent) {
     event.preventDefault();
@@ -262,10 +275,21 @@ function SendFlow({ source, limits, csrf, initialRecipient, onChanged, onLock }:
   }
   const extra = payee.recipient?.username ? { recipient_username: payee.recipient.username } : {};
 
+  async function approval() {
+    const transfer = { to: payee.recipient!.address, amount_atomic: parseEther(amount).toString() };
+    if (method === 'pin') return { pin };
+    if (method === 'password') return { password };
+    const { challenge_id, options } = await consumerRequest<{ challenge_id: string; options: Parameters<typeof startAuthentication>[0]['optionsJSON'] }>(
+      'payment-auth/passkeys/challenge', 'POST', transfer, csrf);
+    const response = await startAuthentication({ optionsJSON: options }).catch(() => {
+      throw new Error('The passkey did not approve this payment. Try again or use your PIN.');
+    });
+    return { passkey: { challenge_id, response } };
+  }
   async function sendManaged() {
     const result = await consumerRequest<{ id: string; tx_hash: string | null }>('wallets/managed/transfers', 'POST',
-      { to: payee.recipient!.address, amount_atomic: parseEther(amount).toString(), password, ...extra }, csrf, { 'Idempotency-Key': requestKey });
-    setPassword('');
+      { to: payee.recipient!.address, amount_atomic: parseEther(amount).toString(), ...(await approval()), ...extra }, csrf, { 'Idempotency-Key': requestKey });
+    setPassword(''); setPin('');
     setSent({ id: result.id, hash: result.tx_hash, confirmed: true });
   }
   async function sendLinked() {
@@ -331,11 +355,20 @@ function SendFlow({ source, limits, csrf, initialRecipient, onChanged, onLock }:
       <div><dt>From</dt><dd>{source.label}</dd></div>
       <div><dt>Network fee</dt><dd>Paid from this wallet</dd></div>
     </dl>
-    {source.managed && <label>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)}
+    {source.managed && method === 'pin' && <label>Payment PIN<input className="fin-pin-input" type="password" inputMode="numeric"
+      autoComplete="off" value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))} pattern="[0-9]{6}"
+      maxLength={6} required autoFocus /></label>}
+    {source.managed && method === 'password' && <label>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)}
       autoComplete="current-password" required autoFocus /></label>}
-    <button className="fin-primary" disabled={busy}>
-      {busy ? 'Sending…' : source.managed ? 'Confirm and send' : 'Confirm in wallet'} <ArrowRight size={17} />
+    <button className="fin-primary" disabled={busy || (source.managed && !auth) || (method === 'pin' && pin.length !== 6)}>
+      {busy ? 'Sending…' : !source.managed ? 'Confirm in wallet' : method === 'passkey'
+        ? <><Fingerprint size={18} /> Confirm with passkey</> : <>Confirm and send <ArrowRight size={17} /></>}
     </button>
+    {source.managed && auth && <div className="fin-approval-switch">
+      {method !== 'passkey' && !!auth.passkeys.length && passkeysSupported() && <button type="button" className="fin-text" onClick={() => setMethod('passkey')}>Use passkey</button>}
+      {method !== 'pin' && auth.pin_set && <button type="button" className="fin-text" onClick={() => setMethod('pin')}>Use PIN</button>}
+      {!auth.pin_set && !auth.passkeys.length && <a className="fin-text" href="/personal/security">Set up a PIN or passkey</a>}
+    </div>}
     {sent && !sent.confirmed && <p className="fin-small" role="status">Reference {sent.id}. Check your wallet history before trying again.</p>}
     {error && <p className="fin-error" role="alert">{error}</p>}
   </form>;

@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { CheckCircle2, ShieldCheck, ArrowRight, Mail, LockKeyhole, AtSign } from 'lucide-react';
 import { ConsumerFields } from './consumer-fields.js';
+import { PaymentSecurity } from './payment-security.js';
 import { consumerRequest, profileDraft, profilePayload, type ConsumerProfile } from './consumer-api.js';
 
 export function ConsumerProfileForm({
@@ -206,6 +207,7 @@ export function ConsumerSecurity({
   }
   return (
     <div className="fin-security">
+      <PaymentSecurity csrf={csrf} hasPassword={!!profile.has_password} />
       <PaymentSettings csrf={csrf} />
       <section className="fin-panel">
         <Mail size={24} />

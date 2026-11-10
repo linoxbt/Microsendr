@@ -2550,3 +2550,77 @@
 .fin-convert-order { display: flex; justify-content: space-between; gap: 12px; align-items: center; min-height: 52px; padding: 10px 12px;
   border: 1px solid var(--fin-line, #e3dccb); border-radius: 12px; background: none; color: inherit; text-align: left; }
 .fin-convert-order small { display: block; color: var(--fin-muted, #4d6170); }
+
+/* Payment approval: PIN entry, passkeys and their setup in Security. */
+.fin-app .fin-pin-input {
+  font-size: 26px;
+  letter-spacing: 0.6em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  padding-left: calc(14px + 0.6em);
+}
+.fin-approval-switch {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+}
+.fin-send-review .fin-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.fin-payment-security {
+  display: grid;
+  gap: 14px;
+}
+.fin-app .fin-payment-security h2 {
+  margin: 0 0 2px;
+}
+.fin-security-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  border-top: 1px solid var(--fin-line);
+}
+.fin-security-row > svg {
+  flex: none;
+  color: var(--fin-blue);
+}
+.fin-security-row > div {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+}
+.fin-security-row small {
+  color: var(--fin-muted);
+}
+.fin-security-row .fin-secondary {
+  min-height: 40px;
+  padding: 8px 16px;
+}
+.fin-security-form {
+  display: grid;
+  gap: 12px;
+}
+.fin-passkeys {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+.fin-passkeys li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0 8px 34px;
+}
+.fin-passkeys li span {
+  display: grid;
+}
+.fin-passkeys small {
+  color: var(--fin-muted);
+}
