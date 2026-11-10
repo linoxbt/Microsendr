@@ -142,7 +142,7 @@ test('custom registration, optional identity, profile editing and mobile money n
   await page.getByRole('button', { name: 'Create account', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'You’re in, Ada.' })).toBeVisible();
   await page.getByRole('button', { name: 'Do this later' }).click();
-  await expect(page.getByRole('heading', { name: 'Hello, Ada.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Good (morning|afternoon|evening), Ada$/ })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Your wallet overview' })).toContainText(`@ada_${unique}`);
   await expect(page.getByRole('heading', { name: 'Assets' })).toBeVisible();
   await expect(page.locator('.fin-asset-row')).toHaveCount(3);
@@ -217,7 +217,7 @@ test('custom registration, optional identity, profile editing and mobile money n
   await page.getByLabel('Email address').fill(email);
   await page.getByLabel('Password', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Hello, Amara.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Good (morning|afternoon|evening), Amara$/ })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: '/tmp/roots-dashboard-phone.png', fullPage: true });
   for (const path of [
@@ -447,13 +447,13 @@ test('a 401 during the overview poll clears the dashboard and routes to sign-in'
   await page.clock.install();
   await signedIn(page);
   await page.goto('/personal/home');
-  await expect(page.getByRole('heading', { name: 'Hello, Ada.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Good (morning|afternoon|evening), Ada$/ })).toBeVisible();
   await page.route('**/personal/api/overview', (route) => route.fulfill(expired));
   await page.clock.fastForward(16_000);
   await expect(page).toHaveURL(/\/personal\/login$/);
   await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
   await expect(page.getByText('Your session has ended. Sign in again to continue.')).toBeVisible();
-  await expect(page.getByText('Hello, Ada.')).toHaveCount(0);
+  await expect(page.getByText(/Good (morning|afternoon|evening), Ada/)).toHaveCount(0);
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 });
 
@@ -518,7 +518,7 @@ test('incoming wallet transfers show as received in activity, receipts and asset
   await expect(row).toContainText('From 0x4444…4444');
   await expect(row.locator('.fin-tx-icon-in')).toBeVisible();
   await row.click();
-  await expect(page.locator('.fin-receipt')).toContainText('2.5 QUSDC');
+  await expect(page.locator('.fin-receipt')).toContainText('2.50 QUSDC');
   await expect(page.locator('.fin-receipt')).toContainText(sender);
   await expect(page.locator('.fin-receipt')).not.toContainText('Confirmations');
   await page.goto('/personal/assets/qusdc');

@@ -1589,27 +1589,6 @@
   overflow: hidden;
   isolation: isolate;
 }
-/* The brand's layered bars, as a quiet watermark. */
-.fin-pay-card:before,
-.fin-pay-card:after {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  width: 120px;
-  height: 260px;
-  border-radius: 22px;
-  transform: skewX(-18deg);
-  top: -60px;
-  pointer-events: none;
-}
-.fin-pay-card:before {
-  right: 34px;
-  background: #4f93c81c;
-}
-.fin-pay-card:after {
-  right: -64px;
-  background: #7fb3dd14;
-}
 :root[data-theme='dark'] .fin-pay-card {
   background: #16283a;
   border: 1px solid #27445c;
@@ -1895,7 +1874,6 @@
 .fin-asset-refresh { color: var(--fin-muted); }
 .fin-asset-back:hover, .fin-asset-refresh:hover { color: var(--fin-blue); }
 .fin-asset-detail-card { position: relative; isolation: isolate; overflow: hidden; min-height: 365px; padding: 31px 34px 0; border-radius: 25px; color: #fff; background: linear-gradient(118deg, #1a3448 0%, #275674 58%, #3b80a9 100%); box-shadow: 0 20px 45px #1839531a; }
-.fin-asset-detail-card::before { content: ''; position: absolute; z-index: -1; width: 420px; height: 420px; right: -95px; top: -240px; border: 1px solid #ffffff2c; border-radius: 50%; box-shadow: 0 0 0 55px #ffffff0a, 0 0 0 130px #ffffff07; pointer-events: none; }
 .fin-asset-detail-qusdc .fin-asset-detail-card { background: linear-gradient(118deg, #25394c 0%, #3b5781 60%, #677db3 100%); }
 .fin-asset-detail-ngn .fin-asset-detail-card { background: linear-gradient(118deg, #193b3b 0%, #28645e 65%, #398777 100%); }
 .fin-asset-detail-card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
@@ -2216,16 +2194,113 @@
 .fin-recipient-error {
   color: #b42318;
 }
-.fin-switch {
+.fin-app .fin-switch {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   font-weight: 600;
+  cursor: pointer;
+  min-height: 44px;
 }
-.fin-switch input {
+/* A real checkbox, drawn as a switch: same semantics, keyboard and screen-reader behaviour. */
+.fin-app .fin-switch input {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex: none;
+  width: 44px !important;
+  min-width: 44px;
+  height: 26px;
+  min-height: 26px;
+  padding: 0;
+  margin: 0;
+  border-radius: 999px;
+  border: 0 !important;
+  background: #c9d2d6 !important;
+  cursor: pointer;
+  transition: background 0.18s;
+}
+.fin-app .fin-switch input::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
   width: 20px;
   height: 20px;
-  accent-color: #2f6e9f;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px #0f1f2b40;
+  transition: transform 0.18s;
+}
+.fin-app .fin-switch input:checked {
+  background: #2f6e9f !important;
+}
+.fin-app .fin-switch input:checked::after {
+  transform: translateX(18px);
+}
+.fin-app .fin-switch input:focus-visible {
+  box-shadow: 0 0 0 3px #4682b440;
+}
+.fin-app .fin-switch input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+:root[data-theme='dark'] .fin-app .fin-switch input:not(:checked) {
+  background: #3a4247 !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fin-app .fin-switch input,
+  .fin-app .fin-switch input::after {
+    transition: none;
+  }
+}
+
+/* The Roots mark as a watermark on brand cards. */
+.roots-watermark {
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  height: 128%;
+  width: auto;
+  right: -5%;
+  bottom: -30%;
+}
+.fin-pay-card .roots-watermark {
+  height: 150%;
+  right: -12%;
+  bottom: -38%;
+}
+.fin-asset-watermark {
+  height: 115%;
+  right: -6%;
+  bottom: -26%;
+}
+/* Wide screens: the theme switch is an icon, like the other header controls. */
+.fin-topbar .theme-toggle {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 12px;
+}
+.fin-topbar .theme-toggle-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.fin-tx-amount {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.fin-home-heading h1 {
+  margin: 0 0 2px;
+  letter-spacing: -0.03em;
+}
+.fin-home-heading p {
+  color: var(--fin-muted);
 }
 
 /* ---- Mobile polish ---------------------------------------------------- */

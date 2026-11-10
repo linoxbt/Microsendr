@@ -19,7 +19,6 @@ import {
   Globe2,
   Search,
   RefreshCw,
-  LockKeyhole,
   Download,
   ArrowLeft,
   Copy,
@@ -34,7 +33,7 @@ import {
   type ConsumerProfile,
 } from './consumer-api.js';
 import { logoutPrivyIfMounted } from './auth-shell.js';
-import { RootsMark } from './roots-logo.js';
+import { RootsMark, RootsWatermark } from './roots-logo.js';
 import { ConsumerChainWallet } from './consumer-chain-wallet.js';
 import { AssetDetail, AssetIcon, assetAmount, assetDefaults, type PersonalAsset } from './personal-assets.js';
 import { ConversionPanel } from './conversion-panel.js';
@@ -84,6 +83,10 @@ const counterparty = (item: Movement) =>
   received(item)
     ? `From ${shortAddress(item.from ?? '')}`
     : item.to_username ? `To @${item.to_username}` : `To ${shortAddress(item.to)}`;
+const greeting = () => {
+  const hour = new Date().getHours();
+  return hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+};
 const payeePattern = /^(0x[a-fA-F0-9]{40}|@?[a-zA-Z][a-zA-Z0-9_]{2,23})$/;
 const tone = (name: string) => [...name].reduce((sum, c) => sum + c.charCodeAt(0), 0) % 4;
 const dayLabel = (iso: string) => {
@@ -105,7 +108,8 @@ const formatAmount = (item: Movement) => {
     return `${item.amount_atomic} base units of`;
   const unit = 10n ** BigInt(item.decimals);
   const n = BigInt(item.amount_atomic);
-  return `${n / unit}.${(n % unit).toString().padStart(item.decimals, '0').slice(0, 6).replace(/0+$/, '') || '00'}`;
+  const fraction = (n % unit).toString().padStart(item.decimals, '0').slice(0, 6).replace(/0+$/, '');
+  return `${(n / unit).toLocaleString('en-US')}.${fraction.padEnd(2, '0')}`;
 };
 function PersonalLoading() {
   return (
@@ -372,9 +376,13 @@ export function PersonalPage({
               </small>
             </span>
             <span>
-              <b>{statusLabel(item.status)}</b>
+              <b className={`fin-tx-amount${received(item) ? ' fin-feed-in' : ''}`}>
+                {hidden ? '••••' : item.decimals === null || item.decimals === undefined
+                  ? statusLabel(item.status)
+                  : `${received(item) ? '+' : '−'}${formatAmount(item)} ${assetLabel(item.asset)}`}
+              </b>
               <small>
-                <span className="fin-tx-cta">View details</span> <ChevronRight size={12} />
+                {statusLabel(item.status)} <ChevronRight size={12} />
               </small>
             </span>
           </button>
@@ -485,11 +493,8 @@ export function PersonalPage({
             <>
               <div className="fin-home-heading">
                 <div>
-                  <span className="fin-kicker">YOUR ROOTS SPACE</span>
-                  <h1>
-                    Hello{p.first_name ? `, ${p.first_name}` : ''}
-                    <span className="fin-greeting-dot">.</span>
-                  </h1>
+                  <h1>{greeting()}{p.first_name ? `, ${p.first_name}` : ''}</h1>
+                  <p>{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</p>
                 </div>
                 <button
                   className="fin-icon-button"
@@ -537,6 +542,7 @@ export function PersonalPage({
                   </button>
                 </section>
                 <section className="fin-pay-card" aria-labelledby="pay-card-title">
+                  <RootsWatermark />
                   <h2 id="pay-card-title">Pay anyone on Roots</h2>
                   <p>By @username or QIE address. You confirm before anything is sent.</p>
                   <form
@@ -655,9 +661,8 @@ export function PersonalPage({
           {tab === 'payments' && (
             <>
               <PageHeading
-                kicker="MOVE MONEY"
-                title="Your next move."
-                text="Send QIE from a linked wallet. More money services are on the way."
+                title="Payments"
+                text="Pay people, add money and convert, all from one place."
               />
               <div className="fin-payment-tiles">
                 {actions.map(([key, label, Icon], i) => (
@@ -669,9 +674,11 @@ export function PersonalPage({
                     <p>
                       {
                         [
-                          'Receive QIE to a wallet you link.',
-                          'Send native QIE from a linked wallet.',
-                          'Currency exchange is not available yet.',
+                          'Receive QIE on QIE Mainnet.',
+                          'Pay anyone by @username or wallet address.',
+                          o.capabilities?.conversion?.available
+                            ? 'Buy digital dollars with naira. Every fee shown first.'
+                            : 'Currency exchange is not available yet.',
                           'Bank withdrawals are not available yet.',
                         ][i]
                       }
@@ -695,8 +702,7 @@ export function PersonalPage({
           {tab === 'activity' && (
             <>
               <PageHeading
-                kicker="YOUR RECORDS"
-                title="Every move, in one place."
+                title="Activity"
                 text="Track your payments and open a receipt for the details."
               />
               <section className="fin-panel">
@@ -790,8 +796,7 @@ export function PersonalPage({
           {tab === 'profile' && (
             <>
               <PageHeading
-                kicker="MY ACCOUNT"
-                title="Made personal."
+                title="Account"
                 text="Your details, preferences and account security."
               />
               <ConsumerProfileForm profile={p} csrf={csrf} onSaved={refresh} go={go} />
@@ -803,9 +808,8 @@ export function PersonalPage({
           {tab === 'security' && (
             <>
               <PageHeading
-                kicker="ACCOUNT SECURITY"
-                title="Stay in control."
-                text="Manage your email and password."
+                title="Security"
+                text="Sign-in, email verification and how people pay you."
               />
               <ConsumerSecurity profile={p} csrf={csrf} onSaved={refresh} />
             </>
@@ -868,22 +872,16 @@ export function PersonalPage({
               </button>
             </section>
           )}
-          <footer className="fin-app-footer">
-            <span>© {new Date().getFullYear()} Roots</span>
-            <button onClick={() => go('/personal/security')}>
-              <LockKeyhole size={12} /> Account security
-            </button>
-          </footer>
         </main>
       </div>
     </div>
   );
 }
-function PageHeading({ kicker, title, text }: { kicker: string; title: string; text: string }) {
+function PageHeading({ kicker, title, text }: { kicker?: string; title: string; text: string }) {
   return (
     <div className="fin-heading">
       <div>
-        <span className="fin-kicker">{kicker}</span>
+        {kicker && <span className="fin-kicker">{kicker}</span>}
         <h1>{title}</h1>
         <p>{text}</p>
       </div>
@@ -919,20 +917,13 @@ function MoneyFlow({
           : 'withdrawal'
     ];
   const title =
-    kind === 'deposit'
-      ? 'Add money.'
-      : kind === 'convert'
-        ? 'Convert naira and digital dollars.'
-        : kind === 'send'
-          ? 'Who are you paying?'
-          : 'Withdraw to your bank.';
+    kind === 'deposit' ? 'Add money' : kind === 'convert' ? 'Convert' : kind === 'send' ? 'Send' : 'Withdraw';
   return (
     <>
       <button className="fin-text fin-back" onClick={() => go('/personal/payments')}>
         <ArrowLeft size={16} /> Payments
       </button>
       <PageHeading
-        kicker="MOVE MONEY"
         title={title}
         text={
           kind === 'convert'

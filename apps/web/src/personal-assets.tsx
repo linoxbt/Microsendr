@@ -1,3 +1,4 @@
+import { RootsWatermark } from './roots-logo.js';
 import React from 'react';
 import { ArrowDownLeft, ArrowLeft, ArrowRight, ArrowUpRight, Clock3, RefreshCw } from 'lucide-react';
 
@@ -26,6 +27,9 @@ export function assetAmount(asset: PersonalAsset): string {
   if (amount > 0n && amount < unit / 100000000n) return '<0.00000001';
   return visible ? `${whole}.${visible}` : whole;
 }
+
+/** Money amounts in lists always show at least two decimal places: 120 → 120.00, 1.5 → 1.50. */
+const twoPlaces = (value: string) => /^[\d,]+$/.test(value) ? `${value}.00` : /^[\d,]+\.\d$/.test(value) ? `${value}0` : value;
 
 export function AssetIcon({ code, large = false }: { code: PersonalAsset['code']; large?: boolean }) {
   return <span className={`fin-asset-icon fin-asset-${code.toLowerCase()}${large ? ' fin-asset-icon-large' : ''}`} aria-hidden="true">
@@ -65,6 +69,7 @@ export function AssetDetail({ asset, activity, go, hidden, refresh, refreshing }
       </button>
     </div>
     <section className="fin-asset-detail-card" aria-label={`${asset.code} details`}>
+      <RootsWatermark className="fin-asset-watermark" />
       <div className="fin-asset-detail-card-top">
         <div className="fin-asset-detail-title"><AssetIcon code={asset.code} large />
           <div><span>{asset.code === 'QIE' ? 'QIE Mainnet' : asset.name}</span><h1>{asset.code}</h1></div>
@@ -92,8 +97,8 @@ export function AssetDetail({ asset, activity, go, hidden, refresh, refreshing }
         {movements.length ? <div className="fin-asset-detail-movements">{movements.map(item =>
           <div className="fin-asset-detail-movement" key={item.id}>
             <span className="fin-asset-detail-movement-icon">{item.direction === 'received' ? <ArrowDownLeft size={17} /> : <ArrowUpRight size={17} />}</span>
-            <span className="fin-asset-detail-movement-copy"><b>{item.direction === 'received' ? 'Received' : 'Sent'} {item.asset === 'QIEV3' ? 'QIE' : item.asset}</b><small>{new Date(item.created_at).toLocaleDateString()} · {item.status === 'confirmed' ? 'Completed' : item.status === 'failed' ? 'Failed' : 'Processing'}</small></span>
-            <b>{hidden ? '••••' : `${item.direction === 'received' ? '+' : '−'}${assetAmount({ ...asset, amount_atomic: item.amount_atomic, decimals: item.decimals ?? asset.decimals })}`}</b>
+            <span className="fin-asset-detail-movement-copy"><b>{item.direction === 'received' ? 'Received' : 'Sent'} {item.asset === 'QIEV3' ? 'QIE' : item.asset}</b><small>{new Date(item.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} · {item.status === 'confirmed' ? 'Completed' : item.status === 'failed' ? 'Failed' : 'Processing'}</small></span>
+            <b>{hidden ? '••••' : `${item.direction === 'received' ? '+' : '−'}${twoPlaces(assetAmount({ ...asset, amount_atomic: item.amount_atomic, decimals: item.decimals ?? asset.decimals }))}`}</b>
           </div>)}</div> : <div className="fin-asset-detail-empty"><Clock3 size={21} /><strong>No activity yet</strong><span>{asset.code === 'NGN' ? 'Naira activity will appear here when available.' : `${asset.code} you send or receive in your wallets appears here.`}</span></div>}
       </section>
       <section className="fin-panel fin-asset-detail-info" aria-label="Asset information">
