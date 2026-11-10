@@ -53,17 +53,20 @@ test('paying @username resolves the recipient and sends to their address', async
     return route.fulfill(json({ id: 'stl_' + 'e'.repeat(32), tx_hash: '0x' + 'f'.repeat(64), status: 'submitted', custody: 'managed' }));
   });
   await page.goto('/personal/send');
-  const panel = page.getByRole('group', { name: 'Roots account wallet' });
+  const panel = page.getByRole('region', { name: 'QIE wallet' });
   const recipient = panel.getByLabel('Recipient');
   await recipient.fill('@nobody_here');
-  await expect(panel.getByRole('alert')).toContainText('No Roots user can be paid at that username');
+  await expect(panel.getByRole('alert')).toContainText("@nobody_here can't receive by username yet.");
   await recipient.fill('@Ada_Okafor');
   await expect(panel.getByRole('status').filter({ hasText: 'Paying' })).toContainText('Ada O. (@ada_okafor)');
   expect(lookups).toContain('ada_okafor');
-  await panel.getByLabel('Amount in QIEV3').fill('2');
+  await panel.getByLabel('Amount').fill('2');
+  await panel.getByRole('button', { name: 'Continue' }).click();
+  await expect(panel.getByRole('form', { name: 'Review payment' })).toContainText('Ada O. (@ada_okafor)');
   await panel.getByLabel('Password').fill('my-account-password');
   await panel.getByRole('button', { name: /Confirm and send/ }).click();
-  await expect(panel).toContainText('Broadcast to QIE Mainnet');
+  await expect(panel.getByRole('heading', { name: 'Sent' })).toBeVisible();
+  await expect(panel).toContainText('2 QIE to @ada_okafor');
   expect(posts).toEqual([{ to: payeeAddress, amount_atomic: '2000000000000000000', password: 'my-account-password', recipient_username: 'ada_okafor' }]);
 });
 

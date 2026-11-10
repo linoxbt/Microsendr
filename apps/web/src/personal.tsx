@@ -15,8 +15,6 @@ import {
   Eye,
   EyeOff,
   Check,
-  CreditCard,
-  Globe2,
   Search,
   RefreshCw,
   Download,
@@ -544,7 +542,6 @@ export function PersonalPage({
                 <section className="fin-pay-card" aria-labelledby="pay-card-title">
                   <RootsWatermark />
                   <h2 id="pay-card-title">Pay anyone on Roots</h2>
-                  <p>By @username or QIE address. You confirm before anything is sent.</p>
                   <form
                     className="fin-pay-search"
                     onSubmit={(event) => {
@@ -581,7 +578,7 @@ export function PersonalPage({
                       ))}
                     </ul>
                   ) : (
-                    <p className="fin-payees-empty">People you pay by @username show up here, ready to pay again.</p>
+                    <p className="fin-payees-empty">People you pay appear here.</p>
                   )}
                 </section>
                 <div className="fin-quick-actions" aria-label="Money actions" role="group">
@@ -662,27 +659,14 @@ export function PersonalPage({
             <>
               <PageHeading
                 title="Payments"
-                text="Pay people, add money and convert, all from one place."
               />
               <div className="fin-payment-tiles">
-                {actions.map(([key, label, Icon], i) => (
+                {actions.map(([key, label, Icon]) => (
                   <button key={key} onClick={() => go('/personal/' + key)}>
                     <span>
                       <Icon size={25} />
                     </span>
                     <h2>{label}</h2>
-                    <p>
-                      {
-                        [
-                          'Receive QIE on QIE Mainnet.',
-                          'Pay anyone by @username or wallet address.',
-                          o.capabilities?.conversion?.available
-                            ? 'Buy digital dollars with naira. Every fee shown first.'
-                            : 'Currency exchange is not available yet.',
-                          'Bank withdrawals are not available yet.',
-                        ][i]
-                      }
-                    </p>
                     <ArrowRight size={19} />
                   </button>
                 ))}
@@ -703,7 +687,6 @@ export function PersonalPage({
             <>
               <PageHeading
                 title="Activity"
-                text="Track your payments and open a receipt for the details."
               />
               <section className="fin-panel">
                 <div className="fin-activity-tools">
@@ -797,7 +780,6 @@ export function PersonalPage({
             <>
               <PageHeading
                 title="Account"
-                text="Your details, preferences and account security."
               />
               <ConsumerProfileForm profile={p} csrf={csrf} onSaved={refresh} go={go} />
               <button className="fin-secondary fin-profile-logout" onClick={logout}>
@@ -809,7 +791,6 @@ export function PersonalPage({
             <>
               <PageHeading
                 title="Security"
-                text="Sign-in, email verification and how people pay you."
               />
               <ConsumerSecurity profile={p} csrf={csrf} onSaved={refresh} />
             </>
@@ -877,13 +858,13 @@ export function PersonalPage({
     </div>
   );
 }
-function PageHeading({ kicker, title, text }: { kicker?: string; title: string; text: string }) {
+function PageHeading({ kicker, title, text }: { kicker?: string; title: string; text?: string }) {
   return (
     <div className="fin-heading">
       <div>
         {kicker && <span className="fin-kicker">{kicker}</span>}
         <h1>{title}</h1>
-        <p>{text}</p>
+        {text && <p>{text}</p>}
       </div>
     </div>
   );
@@ -901,99 +882,51 @@ function MoneyFlow({
   go: (path: string) => void;
   onChanged: () => Promise<void>;
 }) {
-  // "Crypto transfer" shows only wallets the user links and controls; never the managed account wallet.
-  const [method, setMethod] = useState<'crypto' | 'bank'>('crypto');
   // A recipient chosen on Home (?to=@name or ?to=0x…) prefills the send form.
   const [initialRecipient] = useState(() => {
     const to = new URLSearchParams(window.location.search).get('to')?.trim() ?? '';
     return payeePattern.test(to) ? to : '';
   });
-  const capability =
-    capabilities?.[
-      kind === 'deposit'
-        ? 'fiat_deposit'
-        : kind === 'convert'
-          ? 'conversion'
-          : 'withdrawal'
-    ];
-  const title =
-    kind === 'deposit' ? 'Add money' : kind === 'convert' ? 'Convert' : kind === 'send' ? 'Send' : 'Withdraw';
+  const capability = capabilities?.[kind === 'convert' ? 'conversion' : 'withdrawal'];
+  const back = (
+    <button className="fin-text fin-back" onClick={() => go('/personal/payments')}>
+      <ArrowLeft size={16} /> Payments
+    </button>
+  );
+  if (kind === 'deposit' || kind === 'send')
+    return (
+      <div className={`fin-flow-narrow fin-flow-${kind}`}>
+        {back}
+        {kind === 'send' && <h1 className="fin-flow-title">Send</h1>}
+        <ConsumerChainWallet
+          csrf={csrf}
+          mode={kind === 'send' ? 'send' : 'receive'}
+          onChanged={onChanged}
+          initialRecipient={kind === 'send' ? initialRecipient : ''}
+        />
+        {kind === 'deposit' && capabilities?.conversion?.available && (
+          <button className="fin-link-row" onClick={() => go('/personal/convert')}>
+            <ArrowLeftRight size={17} /> Buy digital dollars with naira <ChevronRight size={16} />
+          </button>
+        )}
+      </div>
+    );
   return (
     <>
-      <button className="fin-text fin-back" onClick={() => go('/personal/payments')}>
-        <ArrowLeft size={16} /> Payments
-      </button>
-      <PageHeading
-        title={title}
-        text={
-          kind === 'convert'
-            ? capability?.available
-              ? 'Buy digital dollars with naira through Fonbnk. Every fee is shown before you pay.'
-              : 'Currency exchange is not available yet.'
-            : kind === 'deposit'
-              ? 'Receive QIE to a wallet you link, or check local funding.'
-              : kind === 'send'
-                ? 'Send native QIE from a wallet you link, on QIE Mainnet.'
-                : 'Bank withdrawals are not available yet.'
-        }
-      />
+      {back}
+      <PageHeading title={kind === 'convert' ? 'Convert' : 'Withdraw'} />
       <div className="fin-flow-layout">
         <section className="fin-panel fin-flow">
-          {kind === 'deposit' && (
-            <div className="fin-methods" role="group" aria-label="Deposit method">
-              <button
-                type="button"
-                className={method === 'bank' ? 'active' : ''}
-                aria-pressed={method === 'bank'}
-                onClick={() => setMethod('bank')}
-              >
-                <CreditCard size={20} /> Bank / card
-              </button>
-              <button
-                type="button"
-                className={method === 'crypto' ? 'active' : ''}
-                aria-pressed={method === 'crypto'}
-                onClick={() => setMethod('crypto')}
-              >
-                <Globe2 size={20} /> Crypto transfer
-              </button>
-            </div>
-          )}
           {kind === 'convert' && capability?.available ? (
             <ConversionPanel csrf={csrf} />
-          ) : kind === 'send' || (kind === 'deposit' && method === 'crypto') ? (
-            <ConsumerChainWallet
-              csrf={csrf}
-              mode={kind === 'send' ? 'send' : 'receive'}
-              onChanged={onChanged}
-              initialRecipient={kind === 'send' ? initialRecipient : ''}
-            />
           ) : (
             <div className="fin-method-detail">
               <span className="fin-method-icon">
-                {kind === 'deposit' ? (
-                  <CreditCard size={30} />
-                ) : kind === 'convert' ? (
-                  <ArrowLeftRight size={30} />
-                ) : (
-                  <ArrowDownLeft size={30} />
-                )}
+                {kind === 'convert' ? <ArrowLeftRight size={30} /> : <ArrowDownLeft size={30} />}
               </span>
-              <h2>
-                {kind === 'deposit'
-                  ? 'Local deposits'
-                  : kind === 'convert'
-                    ? 'Currency exchange'
-                    : 'Bank withdrawal'}
-              </h2>
-              <p>{capability?.reason ?? 'This payment method is not available yet.'}</p>
+              <h2>{kind === 'convert' ? 'Currency exchange' : 'Bank withdrawal'}</h2>
+              <p>{capability?.reason ?? 'Not available yet.'}</p>
               <span className="fin-status">Not available</span>
-              {kind === 'convert' && (
-                <p className="fin-small">
-                  No exchange is offered and no funds are moved here. A digital-dollar balance is
-                  an asset balance, not a bank deposit.
-                </p>
-              )}
             </div>
           )}
         </section>

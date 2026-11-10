@@ -2003,187 +2003,325 @@
   }
 }
 
-/* Account linked, user controlled QIE wallet. */
+/* Send and receive. Receive is a single address screen; send is form → review → done. */
+.fin-flow-narrow {
+  max-width: 460px;
+  margin: 0 auto;
+}
+.fin-flow-title {
+  margin: 6px 0 18px;
+}
 .fin-chain-wallet {
-  max-width: 900px;
-  margin: 0 auto 17px;
-  padding: 24px;
-}
-.fin-chain-wallet .fin-section-head {
-  align-items: flex-start;
-  margin-bottom: 18px;
-}
-.fin-chain-wallet .fin-section-head h2 {
-  font-size: 20px;
-  margin: 4px 0 0;
-}
-.fin-chain-wallet .fin-section-head > svg {
-  color: var(--fin-blue);
-}
-.fin-chain-empty p,
-.fin-chain-send p,
-.fin-chain-receive p {
-  color: var(--fin-muted);
-  font-size: 12px;
-  line-height: 1.6;
-}
-.fin-chain-empty .fin-primary {
-  margin-top: 12px;
-}
-.fin-chain-select {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 14px;
-  margin-bottom: 18px;
-}
-.fin-chain-select label,
-.fin-chain-send label {
   display: grid;
-  gap: 7px;
-  color: var(--fin-muted);
-  font-size: 11px;
-  font-weight: 600;
+  gap: 18px;
 }
-.fin-chain-select select,
-.fin-chain-send input {
-  display: block;
-  width: 100%;
-  min-width: 0;
+.fin-flow-send .fin-chain-wallet {
+  padding: 22px;
+  border-radius: 22px;
+  background: var(--fin-panel);
   border: 1px solid var(--fin-line);
-  border-radius: 10px;
-  background: var(--fin-input);
+}
+.fin-source-switch {
+  justify-self: center;
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--fin-soft);
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.fin-source-switch button {
+  min-height: 40px;
+  padding: 8px 18px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
   color: var(--fin-ink);
-  padding: 11px 13px;
-  font-size: 13px;
+  font-weight: 650;
+  font-size: 14px;
+  white-space: nowrap;
 }
-.fin-chain-balance {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  border-top: 1px solid var(--fin-line);
-  padding-top: 17px;
+.fin-source-switch button.active {
+  background: #4f93c8;
+  color: #fff;
 }
-.fin-chain-balance > span {
+.fin-receive {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 0;
+  padding-top: 6px;
+}
+.fin-app .fin-receive h1 {
+  margin: 0;
+  font-size: 26px;
+  letter-spacing: -0.02em;
+}
+.fin-receive > p {
+  max-width: 330px;
+  margin: 8px 0 22px;
   color: var(--fin-muted);
-  font-size: 11px;
-}
-.fin-chain-balance strong {
-  font-size: 23px;
-  letter-spacing: -.7px;
-}
-.fin-chain-balance strong small {
-  font-size: 11px;
-  color: var(--fin-muted);
-  letter-spacing: 0;
-}
-.fin-chain-balance button {
-  margin-left: auto;
+  font-size: 15px;
+  line-height: 1.45;
 }
 .fin-chain-receive {
-  display: flex;
-  align-items: flex-start;
-  flex-direction: column;
-  gap: 13px;
-  margin-top: 20px;
+  width: min(100%, 320px);
+  padding: 24px 24px 20px;
+  border-radius: 26px;
+  background: #fff;
+  box-shadow: 0 14px 40px #1634481a;
+  display: grid;
+  justify-items: center;
+  gap: 20px;
 }
-.fin-chain-receive img {
-  background: white;
-  border: 1px solid var(--fin-line);
-  border-radius: 12px;
-  padding: 6px;
-  max-width: 100%;
-  height: auto;
+.fin-qr {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+}
+.fin-qr img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  image-rendering: pixelated;
+}
+.fin-qr-mark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 20%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  padding: 4px;
+  border-radius: 28%;
+  background: #fff;
+}
+.fin-qr-mark svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 .fin-chain-receive code {
   display: block;
-  max-width: 100%;
-  overflow-wrap: anywhere;
-  padding: 12px;
-  border: 1px solid var(--fin-line);
-  border-radius: 10px;
-  background: var(--fin-soft);
-  color: var(--fin-ink);
-  font-size: 12px;
+  width: 100%;
+  font-family: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, monospace;
+  font-size: 16px;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  color: #0f1c27;
+  word-break: break-all;
+  text-align: center;
+  user-select: all;
 }
-.fin-chain-receive a,
-.fin-chain-pending a {
+.fin-receive-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 22px;
+}
+.fin-receive-copy,
+.fin-receive-share {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  text-decoration: none;
+  justify-content: center;
+  gap: 8px;
+  height: 52px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--fin-soft);
+  color: var(--fin-ink);
+  font-weight: 650;
+  font-size: 16px;
 }
-.fin-chain-send {
+.fin-receive-copy {
+  padding: 0 26px;
+  min-width: 128px;
+}
+.fin-receive-share {
+  width: 52px;
+}
+.fin-receive-copy:hover,
+.fin-receive-share:hover {
+  background: var(--fin-line);
+}
+:root[data-theme='dark'] .fin-receive-copy,
+:root[data-theme='dark'] .fin-receive-share {
+  background: #1b2430;
+}
+.fin-chain-empty {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 12px;
+  padding: 24px 0 8px;
+}
+.fin-chain-empty p {
+  margin: 0;
+  color: var(--fin-muted);
+}
+.fin-chain-send,
+.fin-send-review {
   display: grid;
   gap: 16px;
 }
-.fin-chain-send p {
-  margin: 0;
+.fin-chain-send label,
+.fin-send-review label {
+  display: grid;
+  gap: 7px;
+  font-weight: 600;
 }
-.fin-chain-send .fin-primary {
+.fin-amount-field > span {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-right: 16px;
+  border: 1px solid var(--fin-line);
+  border-radius: 12px;
+  background: var(--fin-input);
+}
+.fin-amount-field > span:focus-within {
+  border-color: var(--fin-blue);
+}
+.fin-app .fin-amount-field input {
+  flex: 1;
+  border: 0 !important;
+  background: transparent !important;
+  font-size: 22px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  box-shadow: none !important;
+}
+/* These fields draw focus on their wrapper, so the input itself shows no ring. */
+.fin-app .fin-amount-field input:focus,
+.fin-app .fin-amount-field input:focus-visible,
+.fin-app .fin-pay-search input:focus,
+.fin-app .fin-pay-search input:focus-visible {
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: none;
+}
+.fin-amount-field > span:focus-within {
+  box-shadow: 0 0 0 3px #4682b42e;
+}
+.fin-amount-field b {
+  color: var(--fin-muted);
+  font-weight: 600;
+}
+.fin-send-edit {
   justify-self: start;
 }
-.fin-chain-notice {
-  color: #257262;
-  font-size: 12px;
-  margin: 14px 0 0;
-}
-.fin-chain-pending {
-  display: flex;
-  gap: 11px;
-  align-items: flex-start;
-  border: 1px solid var(--fin-line);
-  border-radius: 11px;
-  padding: 14px;
-  margin-top: 17px;
-  font-size: 11px;
-}
-.fin-chain-pending > svg {
-  color: var(--fin-blue);
-  flex: 0 0 auto;
-}
-.fin-chain-pending p {
-  color: var(--fin-muted);
-  margin: 4px 0;
-}
-.fin-flow > .fin-chain-wallet {
-  border: 0;
-  box-shadow: none;
-  padding: 0;
-  margin: 0;
-  background: transparent;
-}
-@media (max-width: 650px) {
-  .fin-chain-wallet { padding: 20px; }
-  .fin-chain-select { align-items: stretch; flex-direction: column; }
-  .fin-chain-select label { width: 100%; }
-  .fin-chain-balance { align-items: baseline; }
-  .fin-chain-balance > span { flex-basis: 100%; }
-}
-.fin-code-actions{display:flex;flex-wrap:wrap;gap:4px 20px;margin:-6px 0 14px}
-.fin-chain-unlink{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin-top:16px;font-size:13px}
-.fin-chain-account{display:flex;gap:12px;align-items:flex-start;margin-top:20px;padding:14px 16px;border:1px solid var(--fin-line);border-radius:12px;font-size:13px}
-.fin-chain-account > svg{color:var(--fin-blue)}
-.fin-chain-account p{margin:4px 0 0;color:var(--fin-muted);font-size:12px;line-height:1.6}
-.fin-chain-account .fin-text{margin-top:6px}
-/* Account wallet (custodial) panel sits above the user's own linked wallets. */
-.fin-chain-managed {
+.fin-send-summary {
   display: grid;
-  gap: 14px;
-  padding-bottom: 18px;
-  border-bottom: 1px solid var(--fin-line, #e3dccb);
+  justify-items: center;
+  gap: 2px;
+  padding: 10px 0 6px;
+  text-align: center;
+  color: var(--fin-muted);
 }
-.fin-chain-managed .fin-chain-balance span {
+.fin-send-summary strong {
+  color: var(--fin-ink);
+  font-size: 40px;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.fin-send-summary strong small {
+  font-size: 18px;
+  color: var(--fin-muted);
+}
+.fin-send-summary b {
+  color: var(--fin-ink);
+}
+.fin-send-facts {
+  display: grid;
+  margin: 0;
+  border-top: 1px solid var(--fin-line);
+}
+.fin-send-facts > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--fin-line);
+}
+.fin-send-facts dt {
+  color: var(--fin-muted);
+}
+.fin-send-facts dd {
+  margin: 0;
+  font-weight: 600;
+}
+.fin-send-done {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 18px 0 6px;
+}
+.fin-send-done-icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 8px;
+  border-radius: 50%;
+  background: #e3f3e9;
+  color: #2f7d4f;
+}
+:root[data-theme='dark'] .fin-send-done-icon {
+  background: #16301f;
+  color: #6fcf97;
+}
+.fin-app .fin-send-done h2 {
+  margin: 0;
+  font-size: 24px;
+}
+.fin-send-done p {
+  margin: 0 0 8px;
+  color: var(--fin-muted);
+}
+.fin-send-done a {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  min-height: 44px;
+  color: var(--fin-blue);
+  font-weight: 600;
 }
-.fin-chain-subhead {
-  margin: 18px 0 4px;
-  font-size: 15px;
-  font-weight: 650;
+.fin-chain-notice {
+  margin: 0;
+  color: #2f7d4f;
+  text-align: center;
+}
+.fin-chain-unlink {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 14px;
+  font-size: 13px;
+}
+.fin-chain-account {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--fin-line);
+  border-radius: 14px;
+  font-size: 13px;
+  text-align: left;
+  justify-items: start;
+}
+.fin-chain-account p {
+  margin: 0;
+  color: var(--fin-muted);
+}
+.fin-flow-deposit .fin-link-row {
+  width: 100%;
+  margin-top: 26px;
+  justify-content: space-between;
+  gap: 10px;
 }
 /* P2P: resolved recipient and the username payments switch. */
 .fin-recipient {

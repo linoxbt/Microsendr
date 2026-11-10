@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { formatEther, getAddress, isAddress, parseEther } from 'viem';
-import { ArrowRight, ArrowUpRight, Copy, Link2, RefreshCw, ShieldCheck, Unlink, Wallet } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUpRight, Check, Copy, Link2, RefreshCw, Share2, Unlink } from 'lucide-react';
 import { consumerRequest } from './consumer-api.js';
-import { ManagedWalletPanel, type ManagedLimits } from './managed-wallet-panel.js';
 import { RecipientStatus, recipientPattern, useRecipient } from './recipient.js';
+import { RootsMark } from './roots-logo.js';
+
+type ManagedLimits = { per_transfer_wei: string; daily_wei: string; requires_identity_verification: boolean };
 
 type WalletRecord = {
   id: string;
@@ -25,11 +27,6 @@ const qieChainId = '0x7c6';
 const explorer = 'https://mainnet.qie.digital/';
 /** A managed (custodial) wallet is offered for deposits only when it can also send. */
 export const isManaged = (wallet: WalletRecord) => wallet.managed === true || wallet.custody === 'managed';
-function previewAmount(wei: string) {
-  const [whole, fraction = ''] = formatEther(BigInt(wei)).split('.');
-  const short = fraction.slice(0, 6).replace(/0+$/, '');
-  return `${BigInt(whole).toLocaleString()}${short ? `.${short}` : ''}`;
-}
 
 function provider(): EthereumProvider {
   const injected = (window as Window & { ethereum?: EthereumProvider }).ethereum;
@@ -67,6 +64,15 @@ async function signature(wallet: EthereumProvider, address: string, message: str
   return signed;
 }
 
+type Source = { key: string; wallet: WalletRecord; managed: boolean; label: string };
+type Sent = { id: string; hash?: string | null; confirmed: boolean };
+const short = (address: string) => `${address.slice(0, 6)}…${address.slice(-4)}`;
+
+/**
+ * Receive and send QIE. Sources are the Roots account wallet (only while it can
+ * also send) and the self-custody wallets the user linked. Receive shows one
+ * address at a time; send goes form → review → done.
+ */
 export function ConsumerChainWallet({
   csrf, mode, onChanged, initialRecipient = '',
 }: {
@@ -76,22 +82,26 @@ export function ConsumerChainWallet({
   initialRecipient?: string;
 }) {
   const [wallets, setWallets] = useState<WalletRecord[]>();
-  const [managedLimits, setManagedLimits] = useState<ManagedLimits | null>(null);
-  const [selectedId, setSelectedId] = useState('');
-  const [balance, setBalance] = useState<Balance>();
-  const [qr, setQr] = useState('');
-  const [amount, setAmount] = useState('');
-  const [destination, setDestination] = useState(initialRecipient);
-  const payee = useRecipient(destination);
+  const [limits, setLimits] = useState<ManagedLimits | null>(null);
+  const [sourceKey, setSourceKey] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [confirmUnlink, setConfirmUnlink] = useState(false);
-  const [pending, setPending] = useState<{ id: string; hash?: string }>();
-  // Only wallets the user controls can receive or send. The managed account wallet is described separately.
-  const linked = (wallets ?? []).filter(wallet => !isManaged(wallet));
+  // Once a payment is under review the source is fixed.
+  const [locked, setLocked] = useState(false);
+
   const managed = (wallets ?? []).find(isManaged);
-  const selected = linked.find(wallet => wallet.id === selectedId);
+  const managedOpen = !!managed?.can_send && !!limits;
+  const linked = (wallets ?? []).filter(wallet => !isManaged(wallet));
+  const sources: Source[] = [
+    ...(managedOpen && managed ? [{ key: managed.id, wallet: managed, managed: true, label: 'Roots wallet' }] : []),
+    ...linked.map((wallet) => ({
+      key: wallet.id, wallet, managed: false,
+      label: linked.length > 1 ? `Wallet ··${wallet.address.slice(-4)}` : 'My wallet',
+    })),
+  ];
+  const source = sources.find(s => s.key === sourceKey) ?? sources[0];
 
   async function notifyChanged() {
     try { await onChanged?.(); } catch { /* the overview refresh reports its own errors */ }
@@ -99,30 +109,10 @@ export function ConsumerChainWallet({
   async function loadWallets() {
     const result = await consumerRequest<{ data: WalletRecord[]; managed_transfers?: ManagedLimits | null }>('wallets');
     setWallets(result.data);
-    setManagedLimits(result.managed_transfers ?? null);
-    const own = result.data.filter(wallet => !isManaged(wallet));
-    setSelectedId(current => own.some(wallet => wallet.id === current) ? current : own[0]?.id ?? '');
-    return own;
+    setLimits(result.managed_transfers ?? null);
   }
   useEffect(() => { void loadWallets().catch(e => setError((e as Error).message)); }, []);
-  useEffect(() => {
-    setBalance(undefined);
-    setConfirmUnlink(false);
-    if (!selectedId) return;
-    let active = true;
-    void consumerRequest<Balance>(`wallets/${selectedId}/balance`)
-      .then(value => { if (active) setBalance(value); })
-      .catch(e => { if (active) setError((e as Error).message); });
-    return () => { active = false; };
-  }, [selectedId]);
-  useEffect(() => {
-    setQr('');
-    if (mode !== 'receive' || !selected) return;
-    void QRCode.toDataURL(selected.address, {
-      width: 240, margin: 2, errorCorrectionLevel: 'M',
-      color: { dark: '#183247', light: '#ffffff' },
-    }).then(setQr).catch(() => setError('Could not create the QR code. Copy the address instead.'));
-  }, [mode, selected?.address]);
+  useEffect(() => { setConfirmUnlink(false); setNotice(''); setError(''); }, [source?.key]);
 
   async function linkWallet() {
     setBusy(true); setError(''); setNotice('');
@@ -137,193 +127,229 @@ export function ConsumerChainWallet({
       const result = await consumerRequest<WalletRecord>('wallets', 'POST',
         { challenge_id: challenge.challenge_id, signature: signed }, csrf);
       await loadWallets();
-      setSelectedId(result.id);
+      setSourceKey(result.id);
       setNotice('QIE wallet linked to your account.');
       await notifyChanged();
     } catch (cause) { setError((cause as Error).message || 'Could not link this wallet.'); }
     finally { setBusy(false); }
   }
   async function unlinkWallet() {
-    if (!selected) return;
+    if (!source || source.managed) return;
     setBusy(true); setError(''); setNotice('');
     try {
-      await consumerRequest(`wallets/${encodeURIComponent(selected.id)}`, 'DELETE', undefined, csrf);
+      await consumerRequest(`wallets/${encodeURIComponent(source.wallet.id)}`, 'DELETE', undefined, csrf);
       setConfirmUnlink(false);
+      setSourceKey('');
       await loadWallets();
-      setNotice('Wallet unlinked. It keeps its funds; Roots no longer shows it.');
+      setNotice('Wallet unlinked. Its funds stay in that wallet.');
       await notifyChanged();
     } catch (cause) { setError((cause as Error).message); }
     finally { setBusy(false); }
   }
   async function setUpAccountWallet() {
-    setBusy(true); setError(''); setNotice('');
-    try {
-      await consumerRequest('wallets/managed', 'POST', {}, csrf);
-      await loadWallets();
-    } catch (cause) { setError((cause as Error).message); }
-    finally { setBusy(false); }
-  }
-  async function refreshBalance() {
-    if (!selected) return;
     setBusy(true); setError('');
-    try { setBalance(await consumerRequest<Balance>(`wallets/${selected.id}/balance`)); }
+    try { await consumerRequest('wallets/managed', 'POST', {}, csrf); await loadWallets(); }
     catch (cause) { setError((cause as Error).message); }
     finally { setBusy(false); }
   }
-  async function copyAddress() {
-    if (!selected) return;
-    try { await navigator.clipboard.writeText(selected.address); setNotice('Address copied.'); }
-    catch { setError('Copy is unavailable. Select the address shown below.'); }
-  }
-  async function send(event: React.FormEvent) {
-    event.preventDefault();
-    if (!selected || pending) return;
-    setBusy(true); setError(''); setNotice('');
-    try {
-      const target = payee.recipient?.address;
-      if (!target || getAddress(target) === getAddress(selected.address))
-        throw new Error(payee.error ?? 'Enter a QIE address or the @username of a Roots user.');
-      if (!/^\d+(?:\.\d{1,18})?$/.test(amount)) throw new Error('Enter a valid QIE amount.');
-      const atomic = parseEther(amount);
-      if (atomic <= 0n) throw new Error('Enter an amount above zero.');
-      const injected = provider();
-      await mainnet(injected);
-      const connected = await selectedAccount(injected);
-      if (connected.toLowerCase() !== selected.address.toLowerCase())
-        throw new Error('Select the linked sending address in your wallet.');
-      const current = await consumerRequest<Balance>(`wallets/${selected.id}/balance`);
-      setBalance(current);
-      if (atomic >= BigInt(current.balance_wei))
-        throw new Error('Leave enough QIE in this wallet to pay the network fee.');
-      const authorization = await consumerRequest<{
-        message: string; idempotency_key: string; expires_at: string; network: string;
-      }>('settlements/authorization', 'POST', {
-        from: selected.address, to: target, amount_atomic: atomic.toString(),
-      }, csrf);
-      const signed = await signature(injected, selected.address, authorization.message);
-      const settlement = await consumerRequest<{ id: string }>('settlements', 'POST', {
-        network: authorization.network, from: selected.address, to: target,
-        amount_atomic: atomic.toString(), expires_at: authorization.expires_at, signature: signed,
-        ...(payee.recipient?.username ? { recipient_username: payee.recipient.username } : {}),
-      }, csrf, { 'Idempotency-Key': authorization.idempotency_key });
-      setPending({ id: settlement.id });
-      // Only the wallet can broadcast. A rejected or ambiguous provider result is never retried automatically.
-      if (await injected.request({ method: 'eth_chainId' }) !== qieChainId)
-        throw new Error('Network changed. No transfer was requested. Switch back to QIE Mainnet.');
-      const hash = await injected.request({ method: 'eth_sendTransaction', params: [{
-        from: selected.address, to: target, value: `0x${atomic.toString(16)}`,
-        chainId: qieChainId,
-      }] });
-      if (typeof hash !== 'string' || !/^0x[a-fA-F0-9]{64}$/.test(hash))
-        throw new Error('Check your wallet history before attempting another transfer.');
-      setPending({ id: settlement.id, hash });
-      await consumerRequest(`settlements/${settlement.id}/submit`, 'POST', { tx_hash: hash }, csrf);
-      setNotice('Sent to QIE Mainnet. The transaction is being confirmed.');
-      await notifyChanged();
-      await refreshBalance();
-    } catch (cause) {
-      setError((cause as Error).message || 'Check your wallet history before retrying.');
-    } finally { setBusy(false); }
-  }
-  async function retryTracking() {
-    if (!pending?.hash) return;
-    setBusy(true); setError('');
-    try {
-      await consumerRequest(`settlements/${pending.id}/submit`, 'POST', { tx_hash: pending.hash }, csrf);
-      setNotice('Transfer is being confirmed.');
-      await notifyChanged();
-    } catch (cause) { setError((cause as Error).message); }
-    finally { setBusy(false); }
-  }
 
-  const managedOpen = !!managed?.can_send && !!managedLimits;
-  const accountWallet = wallets && !managedOpen && <div className="fin-chain-account" aria-label="Roots account wallet" role="group">
-    <ShieldCheck size={19} />
-    <div>
-      <b>Roots account wallet</b>
-      {managed ? <p>Roots manages this wallet's signing key. Deposits to and sends from the account wallet are not open yet, so no address is shown. Use a linked wallet you control for QIE.</p>
-        : <p>Your account wallet isn't set up yet. Deposits to the account wallet are not open yet either way.</p>}
-      {!managed && <button className="fin-text" type="button" onClick={() => void setUpAccountWallet()} disabled={busy}>
-        <RefreshCw size={14} /> Check wallet
-      </button>}
+  const switcher = sources.length > 1 && !locked && (
+    <div className="fin-source-switch" role="group" aria-label={mode === 'receive' ? 'Receive to' : 'Send from'}>
+      {sources.map(s => <button key={s.key} type="button" aria-pressed={s.key === source?.key}
+        className={s.key === source?.key ? 'active' : ''} onClick={() => setSourceKey(s.key)}>{s.label}</button>)}
     </div>
+  );
+  const manage = source && !source.managed && !locked && <div className="fin-chain-unlink">
+    {confirmUnlink ? <>
+      <span>Unlink {short(source.wallet.address)}?</span>
+      <button className="fin-text" type="button" onClick={() => void unlinkWallet()} disabled={busy}>Confirm unlink</button>
+      <button className="fin-text" type="button" onClick={() => setConfirmUnlink(false)} disabled={busy}>Cancel</button>
+    </> : <>
+      <button className="fin-text" type="button" onClick={() => setConfirmUnlink(true)} disabled={busy}><Unlink size={14} /> Unlink wallet</button>
+      <button className="fin-text" type="button" onClick={() => void linkWallet()} disabled={busy}><Link2 size={14} /> Add wallet</button>
+    </>}
+  </div>;
+  const accountWallet = wallets && !managedOpen && <div className="fin-chain-account" role="group" aria-label="Roots account wallet">
+    <b>Roots account wallet</b>
+    {managed ? <p>Roots manages this wallet's signing key; it's not open yet.</p>
+      : <><p>Your account wallet isn't set up yet.</p>
+        <button className="fin-text" type="button" onClick={() => void setUpAccountWallet()} disabled={busy}><RefreshCw size={14} /> Check wallet</button></>}
   </div>;
 
-  return <section className={`fin-panel fin-chain-wallet fin-chain-wallet-${mode}`} aria-label="QIE wallet">
-    <div className="fin-section-head">
-      <div><span className="fin-kicker">QIE MAINNET · NATIVE ASSET</span><h2>
-        {mode === 'receive' ? 'Receive QIE' : 'Send QIE'}
-      </h2></div>
-      <Wallet size={23} />
-    </div>
-    {managedOpen && managed && <ManagedWalletPanel wallet={managed} limits={managedLimits!} mode={mode} csrf={csrf} onChanged={onChanged} initialRecipient={initialRecipient} />}
-    {managedOpen && <h3 className="fin-chain-subhead">Your own wallets</h3>}
-    {!wallets ? <p className="fin-chain-empty" role="status">Loading your wallets…</p>
-      : !linked.length ? <div className="fin-chain-empty">
-        <p>{managedOpen ? 'You can also link' : 'Link'} a self-custody EVM wallet to {mode === 'receive' ? 'receive' : 'send'} native QIEV3 on QIE Mainnet. Your wallet keeps control of its keys; Roots never holds them.</p>
+  return <section className={`fin-chain-wallet fin-chain-wallet-${mode}`} aria-label="QIE wallet">
+    {switcher}
+    {!wallets ? <p className="fin-chain-empty" role="status">Loading…</p>
+      : !source ? <div className="fin-chain-empty">
+        {mode === 'receive' && <h1>Your address</h1>}
+        <p>Link a wallet you control to {mode === 'receive' ? 'receive' : 'send'} QIE.</p>
         <button className="fin-primary" type="button" onClick={() => void linkWallet()} disabled={busy}>
           <Link2 size={17} /> {busy ? 'Connecting…' : 'Link QIE wallet'}
         </button>
-      </div> : <>
-        <div className="fin-chain-select">
-          <label>Linked wallet
-            <select value={selectedId} onChange={e => setSelectedId(e.target.value)}>
-              {linked.map(wallet => <option key={wallet.id} value={wallet.id}>
-                {wallet.address.slice(0, 8)}…{wallet.address.slice(-6)}
-              </option>)}
-            </select>
-          </label>
-          <button className="fin-text" type="button" onClick={() => void linkWallet()} disabled={busy}><Link2 size={15} /> Add wallet</button>
-        </div>
-        {selected && <>
-          <div className="fin-chain-balance">
-            <span>Onchain balance</span>
-            <strong>{balance ? previewAmount(balance.balance_wei) : '—'} <small>QIEV3</small></strong>
-            <button className="fin-text" type="button" onClick={() => void refreshBalance()} disabled={busy}><RefreshCw size={14} /> Refresh</button>
-          </div>
-          {mode === 'receive' && <div className="fin-chain-receive">
-            {qr && <img src={qr} alt="QR code for the QIE wallet address shown below" width="240" height="240" />}
-            <code>{selected.address}</code>
-            <button className="fin-secondary" type="button" onClick={() => void copyAddress()}><Copy size={16} /> Copy address</button>
-            <p>This is your own linked wallet: you hold its keys. Send only native QIEV3 on QIE Mainnet to this address. Other assets and networks are not shown by Roots.</p>
-            <a href={`${explorer}address/${selected.address}`} target="_blank" rel="noreferrer">View on explorer <ArrowUpRight size={15} /></a>
-          </div>}
-          {mode === 'send' && <form className="fin-chain-send" onSubmit={send}>
-            <label>Recipient<input value={destination} onChange={e => setDestination(e.target.value.trim())}
-              placeholder="@username or 0x…" autoComplete="off" required disabled={!!pending}
-              pattern={recipientPattern} title="A Roots @username or a 0x-prefixed QIE address" /></label>
-            <RecipientStatus state={payee} />
-            <label>Amount in QIEV3<input value={amount} onChange={e => setAmount(e.target.value)}
-              placeholder="0.00" inputMode="decimal" required disabled={!!pending}
-              pattern="[0-9]+(\.[0-9]{1,18})?" title="A QIE amount, up to 18 decimal places" /></label>
-            <p>Available onchain: {balance ? formatEther(BigInt(balance.balance_wei)) : 'checking…'} QIEV3. Your wallet shows the network fee before you confirm. Onchain sends cannot be reversed.</p>
-            {!pending && <button className="fin-primary" disabled={busy || !balance}>
-              {busy ? 'Opening wallet…' : 'Review in wallet'} <ArrowRight size={17} />
-            </button>}
-          </form>}
-          {pending && <div className="fin-chain-pending">
-            <ShieldCheck size={19} /><div><b>Transfer reference: {pending.id}</b>
-              <p>{pending.hash ? 'Broadcast to QIE Mainnet. Awaiting confirmation.' : 'Check wallet history before starting another send.'}</p>
-              {pending.hash && <a href={`${explorer}tx/${pending.hash}`} target="_blank" rel="noreferrer">View transaction <ArrowUpRight size={14} /></a>}
-            </div>
-            {pending.hash && <button className="fin-text" type="button" onClick={() => void retryTracking()} disabled={busy}>Track</button>}
-            <button className="fin-text" type="button" onClick={() => {
-              setPending(undefined); setNotice('Check your wallet history before sending again.');
-            }}>New send</button>
-          </div>}
-          <div className="fin-chain-unlink">
-            {confirmUnlink ? <>
-              <span>Unlink {selected.address.slice(0, 8)}…{selected.address.slice(-6)}? Its funds stay in your wallet.</span>
-              <button className="fin-text" type="button" onClick={() => void unlinkWallet()} disabled={busy}>Confirm unlink</button>
-              <button className="fin-text" type="button" onClick={() => setConfirmUnlink(false)} disabled={busy}>Cancel</button>
-            </> : <button className="fin-text" type="button" onClick={() => setConfirmUnlink(true)} disabled={busy || !!pending}>
-              <Unlink size={14} /> Unlink wallet
-            </button>}
-          </div>
-        </>}
-      </>}
-    {accountWallet}
+        {accountWallet}
+      </div>
+      : mode === 'receive' ? <ReceiveCard key={source.key} source={source} />
+        : <SendFlow key={source.key} source={source} limits={limits} csrf={csrf} initialRecipient={initialRecipient} onChanged={notifyChanged} onLock={setLocked} />}
+    {manage}
     {notice && <p className="fin-chain-notice" role="status">{notice}</p>}
     {error && <p className="fin-error" role="alert">{error}</p>}
   </section>;
+}
+
+function ReceiveCard({ source }: { source: Source }) {
+  const [qr, setQr] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [problem, setProblem] = useState('');
+  const address = source.wallet.address;
+  useEffect(() => {
+    // High error correction keeps the code readable under the centre mark.
+    void QRCode.toDataURL(address, { width: 480, margin: 0, errorCorrectionLevel: 'H', color: { dark: '#0f1c27', light: '#ffffff' } })
+      .then(setQr).catch(() => setProblem('Could not draw the QR code. Copy the address instead.'));
+  }, [address]);
+  async function copy() {
+    try { await navigator.clipboard.writeText(address); setCopied(true); setTimeout(() => setCopied(false), 1600); }
+    catch { setProblem('Copy is unavailable. Select the address instead.'); }
+  }
+  const canShare = typeof navigator !== 'undefined' && 'share' in navigator;
+  return <div className="fin-receive" role="group" aria-label={source.managed ? 'Roots account wallet' : 'Linked wallet'}>
+    <h1>Your address</h1>
+    <p>Send only QIE on QIE Mainnet to this address, or you might lose your funds.</p>
+    <div className="fin-chain-receive">
+      <div className="fin-qr">
+        {qr && <img src={qr} width="240" height="240"
+          alt={source.managed ? 'QR code for your account wallet address' : 'QR code for the QIE wallet address shown below'} />}
+        <span className="fin-qr-mark" aria-hidden="true"><RootsMark /></span>
+      </div>
+      <code>{address}</code>
+    </div>
+    <div className="fin-receive-actions">
+      <button type="button" className="fin-receive-copy" onClick={() => void copy()}>
+        {copied ? <Check size={18} /> : <Copy size={18} />} {copied ? 'Copied' : 'Copy'}
+      </button>
+      {canShare && <button type="button" className="fin-receive-share" aria-label="Share address"
+        onClick={() => void navigator.share({ text: address }).catch(() => undefined)}><Share2 size={18} /></button>}
+    </div>
+    {problem && <p className="fin-error" role="alert">{problem}</p>}
+  </div>;
+}
+
+function SendFlow({ source, limits, csrf, initialRecipient, onChanged, onLock }: {
+  source: Source; limits: ManagedLimits | null; csrf: string; initialRecipient: string; onChanged: () => Promise<void>;
+  onLock: (locked: boolean) => void;
+}) {
+  const [to, setTo] = useState(initialRecipient);
+  const payee = useRecipient(to);
+  const [amount, setAmount] = useState('');
+  const [step, setStep] = useState<'form' | 'review'>('form');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [sent, setSent] = useState<Sent>();
+  // One key per intended transfer: a retry after a timeout cannot send twice.
+  const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
+  const fresh = () => setRequestKey(crypto.randomUUID());
+  useEffect(() => { onLock(step !== 'form' || !!sent); return () => onLock(false); }, [step, sent]);
+
+  function review(event: React.FormEvent) {
+    event.preventDefault();
+    setError('');
+    const target = payee.recipient?.address;
+    if (!target || getAddress(target) === getAddress(source.wallet.address))
+      return setError(payee.error ?? 'Enter a QIE address or the @username of a Roots user.');
+    if (!/^\d+(?:\.\d{1,18})?$/.test(amount) || parseEther(amount) <= 0n) return setError('Enter an amount above zero.');
+    if (source.managed && limits && parseEther(amount) > BigInt(limits.per_transfer_wei))
+      return setError(`The most you can send at once is ${formatEther(BigInt(limits.per_transfer_wei))} QIE.`);
+    setStep('review');
+  }
+  const extra = payee.recipient?.username ? { recipient_username: payee.recipient.username } : {};
+
+  async function sendManaged() {
+    const result = await consumerRequest<{ id: string; tx_hash: string | null }>('wallets/managed/transfers', 'POST',
+      { to: payee.recipient!.address, amount_atomic: parseEther(amount).toString(), password, ...extra }, csrf, { 'Idempotency-Key': requestKey });
+    setPassword('');
+    setSent({ id: result.id, hash: result.tx_hash, confirmed: true });
+  }
+  async function sendLinked() {
+    const target = payee.recipient!.address;
+    const atomic = parseEther(amount);
+    const injected = provider();
+    await mainnet(injected);
+    const connected = await selectedAccount(injected);
+    if (connected.toLowerCase() !== source.wallet.address.toLowerCase())
+      throw new Error(`Select ${short(source.wallet.address)} in your wallet.`);
+    const current = await consumerRequest<{ balance_wei: string }>(`wallets/${source.wallet.id}/balance`);
+    if (atomic >= BigInt(current.balance_wei)) throw new Error('Leave enough QIE in this wallet to pay the network fee.');
+    const authorization = await consumerRequest<{ message: string; idempotency_key: string; expires_at: string; network: string }>(
+      'settlements/authorization', 'POST', { from: source.wallet.address, to: target, amount_atomic: atomic.toString() }, csrf);
+    const signed = await signature(injected, source.wallet.address, authorization.message);
+    const settlement = await consumerRequest<{ id: string }>('settlements', 'POST', {
+      network: authorization.network, from: source.wallet.address, to: target,
+      amount_atomic: atomic.toString(), expires_at: authorization.expires_at, signature: signed, ...extra,
+    }, csrf, { 'Idempotency-Key': authorization.idempotency_key });
+    setSent({ id: settlement.id, confirmed: false });
+    // Only the wallet can broadcast. A rejected or ambiguous provider result is never retried automatically.
+    if (await injected.request({ method: 'eth_chainId' }) !== qieChainId)
+      throw new Error('Network changed. No transfer was requested. Switch back to QIE Mainnet.');
+    const hash = await injected.request({ method: 'eth_sendTransaction', params: [{
+      from: source.wallet.address, to: target, value: `0x${atomic.toString(16)}`, chainId: qieChainId,
+    }] });
+    if (typeof hash !== 'string' || !/^0x[a-fA-F0-9]{64}$/.test(hash))
+      throw new Error('Check your wallet history before attempting another transfer.');
+    setSent({ id: settlement.id, hash, confirmed: true });
+    await consumerRequest(`settlements/${settlement.id}/submit`, 'POST', { tx_hash: hash }, csrf);
+  }
+  async function confirm(event: React.FormEvent) {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true); setError('');
+    try {
+      await (source.managed ? sendManaged() : sendLinked());
+      fresh();
+      await onChanged();
+    } catch (cause) { setError((cause as Error).message || 'Check your wallet history before retrying.'); }
+    finally { setBusy(false); }
+  }
+  const who = payee.recipient?.username ? `@${payee.recipient.username}` : payee.recipient ? short(payee.recipient.address) : '';
+
+  if (sent?.confirmed) return <div className="fin-send-done" role="status">
+    <span className="fin-send-done-icon"><Check size={28} /></span>
+    <h2>Sent</h2>
+    <p>{amount} QIE to {who}</p>
+    {sent.hash && <a href={`${explorer}tx/${sent.hash}`} target="_blank" rel="noreferrer">View transaction <ArrowUpRight size={14} /></a>}
+    <button className="fin-secondary" type="button" onClick={() => { setSent(undefined); setStep('form'); setTo(''); setAmount(''); }}>Done</button>
+  </div>;
+
+  if (step === 'review') return <form className="fin-send-review" onSubmit={confirm} aria-label="Review payment">
+    <button type="button" className="fin-text fin-send-edit" onClick={() => { setStep('form'); setError(''); }} disabled={busy}>
+      <ArrowLeft size={15} /> Edit
+    </button>
+    <div className="fin-send-summary">
+      <span>You send</span>
+      <strong>{amount} <small>QIE</small></strong>
+      <span>to <b>{payee.recipient?.label ?? who}</b></span>
+    </div>
+    <dl className="fin-send-facts">
+      <div><dt>From</dt><dd>{source.label}</dd></div>
+      <div><dt>Network fee</dt><dd>Paid from this wallet</dd></div>
+    </dl>
+    {source.managed && <label>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)}
+      autoComplete="current-password" required autoFocus /></label>}
+    <button className="fin-primary" disabled={busy}>
+      {busy ? 'Sending…' : source.managed ? 'Confirm and send' : 'Confirm in wallet'} <ArrowRight size={17} />
+    </button>
+    {sent && !sent.confirmed && <p className="fin-small" role="status">Reference {sent.id}. Check your wallet history before trying again.</p>}
+    {error && <p className="fin-error" role="alert">{error}</p>}
+  </form>;
+
+  return <form className="fin-chain-send" onSubmit={review}>
+    <label>Recipient<input value={to} onChange={e => { setTo(e.target.value.trim()); fresh(); }}
+      placeholder="@username or 0x…" autoComplete="off" autoCapitalize="none" spellCheck={false} required
+      pattern={recipientPattern} title="A Roots @username or a 0x-prefixed QIE address" /></label>
+    <RecipientStatus state={payee} />
+    <label className="fin-amount-field">Amount
+      <span><input value={amount} onChange={e => { setAmount(e.target.value); fresh(); }} placeholder="0.00" inputMode="decimal" required
+        pattern="[0-9]+(\.[0-9]{1,18})?" title="A QIE amount, up to 18 decimal places" /><b>QIE</b></span>
+    </label>
+    <button className="fin-primary" disabled={payee.loading}>Continue <ArrowRight size={17} /></button>
+    {error && <p className="fin-error" role="alert">{error}</p>}
+  </form>;
 }

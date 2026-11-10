@@ -247,10 +247,6 @@ test('custom registration, optional identity, profile editing and mobile money n
   await expect(page.getByText('First, make it official.')).toHaveCount(0);
   await expect(page.getByLabel('You exchange', { exact: true })).toHaveCount(0);
   await expect(page.locator('.fin-method-detail')).toContainText('Not available');
-  await page.goto('/personal/deposit');
-  await expect(page.getByRole('button', { name: 'Crypto transfer', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await page.getByRole('button', { name: 'Bank / card', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Bank / card', exact: true })).toHaveAttribute('aria-pressed', 'true');
   const wallet = privateKeyToAccount(generatePrivateKey());
   await page.route('**/personal/api/wallets', route => route.fulfill({
     status: 200, contentType: 'application/json', body: JSON.stringify({
@@ -264,8 +260,7 @@ test('custom registration, optional identity, profile editing and mobile money n
       explorer_url: `https://mainnet.qie.digital/address/${wallet.address}`,
     }),
   }));
-  await page.reload();
-  await page.getByRole('button', { name: 'Crypto transfer', exact: true }).click();
+  await page.goto('/personal/deposit');
   // A managed (custodial) wallet cannot send yet, so it is never offered as a deposit address.
   await expect(page.getByRole('group', { name: 'Roots account wallet' })).toContainText('not open yet');
   await expect(page.getByRole('button', { name: 'Link QIE wallet' })).toBeVisible();
@@ -426,7 +421,7 @@ test('links a self-custody wallet by signature, receives to it, and unlinks it',
   await page.screenshot({ path: '/tmp/roots-linked-wallet-receive.png', fullPage: true });
   await page.goto('/personal/send');
   await expect(page.getByLabel('Recipient', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Review in wallet' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Continue' })).toBeEnabled();
   await page.getByRole('button', { name: 'Unlink wallet' }).click();
   await page.getByRole('button', { name: 'Confirm unlink' }).click();
   await expect(page.getByRole('button', { name: 'Link QIE wallet' })).toBeVisible();
@@ -540,12 +535,17 @@ test('when account wallet sends are enabled it can receive and send with the pas
   await expect(panel.locator('code')).toHaveText(managedAddress);
   await expect(panel.getByAltText(/QR code for your account wallet/)).toBeVisible();
   await page.goto('/personal/send');
-  await panel.getByLabel('Recipient', { exact: true }).fill(recipient);
-  await panel.getByLabel('Amount in QIEV3').fill('1.5');
-  await panel.getByLabel('Password').fill('my-account-password');
-  await expect(panel).toContainText('Up to 1000 QIE per transfer');
-  await panel.getByRole('button', { name: /Confirm and send/ }).click();
-  await expect(panel).toContainText('Broadcast to QIE Mainnet');
+  const send = page.getByRole('region', { name: 'QIE wallet' });
+  // The password belongs to the review step, not the form.
+  await expect(send.getByLabel('Password')).toHaveCount(0);
+  await send.getByLabel('Recipient', { exact: true }).fill(recipient);
+  await send.getByLabel('Amount').fill('1.5');
+  await send.getByRole('button', { name: 'Continue' }).click();
+  const review = page.getByRole('form', { name: 'Review payment' });
+  await expect(review).toContainText('1.5');
+  await review.getByLabel('Password').fill('my-account-password');
+  await review.getByRole('button', { name: /Confirm and send/ }).click();
+  await expect(send.getByRole('heading', { name: 'Sent' })).toBeVisible();
   expect(posts).toHaveLength(1);
   expect(posts[0].body).toEqual({ to: recipient, amount_atomic: '1500000000000000000', password: 'my-account-password' });
   expect(posts[0].key).toMatch(/^[0-9a-f-]{36}$/);

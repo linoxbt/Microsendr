@@ -76,8 +76,7 @@ export function ConsumerProfileForm({
           </div>
           {profile.identity_locked && (
             <div className="fin-notice">
-              Your identity details are protected during and after verification. Contact support if
-              they need correcting.
+              Verified details are locked. Contact support to correct them.
             </div>
           )}
           <ConsumerFields
@@ -104,7 +103,6 @@ export function ConsumerProfileForm({
               ))}
             </select>
           </label>
-          <p className="fin-small">Your display preference does not convert or move money.</p>
           {error && (
             <div className="fin-error" role="alert">
               {error}
@@ -134,7 +132,6 @@ export function ConsumerProfileForm({
           <section className="fin-panel">
             <ShieldCheck size={23} />
             <h2>Identity check</h2>
-            <p>Complete your identity check before using available payment services.</p>
             <button className="fin-link-row" onClick={() => go('/personal/identity')}>
               Manage verification <ArrowRight size={16} />
             </button>
@@ -214,16 +211,10 @@ export function ConsumerSecurity({
         <Mail size={24} />
         <h2>Email verification</h2>
         <p className="fin-break">{profile.email ?? 'No email linked'}</p>
-        <p>
-          {profile.email_verified_at
-            ? 'Your email is verified.'
-            : 'Verify ownership of your email before making payments.'}
-        </p>
-        {!emailEnabled && (
-          <p className="fin-small">
-            Email delivery is being configured. Password sign-in remains available.
-          </p>
-        )}
+        <span className={`fin-status ${profile.email_verified_at ? 'verified' : ''}`}>
+          {profile.email_verified_at ? 'Verified' : 'Not verified'}
+        </span>
+        {!emailEnabled && !profile.email_verified_at && <p className="fin-small">Email codes are not available yet.</p>}
         {challenge && (
           <label>
             Six-digit code
@@ -273,9 +264,7 @@ export function ConsumerSecurity({
             required
           />
         </label>
-        <p className="fin-small">
-          Use at least 12 characters. A fresh email code can also authorize a password reset.
-        </p>
+        <p className="fin-small">At least 12 characters.</p>
         <button className="fin-primary" disabled={busy}>
           Update password
         </button>
@@ -327,8 +316,8 @@ function PaymentSettings({ csrf }: { csrf: string }) {
         <>
           <p>
             {settings.username
-              ? <>Let other Roots users pay <b>@{settings.username}</b> without asking for your wallet address. They see your first name and last initial, and the address they pay.</>
-              : 'Choose a username in your profile to be payable by username.'}
+              ? <>Let people pay <b>@{settings.username}</b> without your address.</>
+              : 'Choose a username in your profile first.'}
           </p>
           <label className="fin-switch">
             <input type="checkbox" checked={settings.payable_by_username} disabled={busy || !settings.username}

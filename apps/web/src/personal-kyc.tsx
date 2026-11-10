@@ -101,10 +101,7 @@ export function PersonalKyc({ csrf }: { csrf?: string }) {
       {kyc?.configured && !kyc.email_verified && (
         <p>Verify your email in Account → Security before starting your identity check.</p>
       )}
-      <small>
-        Verification is provided by Didit. Payment availability depends on your account and
-        location.
-      </small>
+      <small>Verification by Didit.</small>
       {canStart && (
         <>
           <label className="personal-kyc-consent">

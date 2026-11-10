@@ -23,7 +23,13 @@ export function useRecipient(value: string) {
     const timer = setTimeout(() => {
       consumerRequest<{ address: string; display_name: string; username: string }>(`recipients/${encodeURIComponent(input.replace(/^@/, '').toLowerCase())}`)
         .then((found) => { if (active) setState({ loading: false, recipient: { address: getAddress(found.address), label: `${found.display_name} (@${found.username})`, username: found.username } }); })
-        .catch((cause) => { if (active) setState({ loading: false, error: (cause as Error).message }); });
+        .catch((cause) => {
+          if (!active) return;
+          const code = (cause as { code?: string }).code;
+          const name = input.replace(/^@/, '').toLowerCase();
+          setState({ loading: false, error: code === 'recipient_unavailable' || /No Roots user/.test((cause as Error).message)
+            ? `@${name} can't receive by username yet.` : (cause as Error).message });
+        });
     }, 350);
     return () => { active = false; clearTimeout(timer); };
   }, [value]);
