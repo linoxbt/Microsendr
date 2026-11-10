@@ -3003,3 +3003,42 @@
 .fin-payment-settings .fin-switch {
   min-height: 44px;
 }
+
+/* Add money: crypto or bank/card, as one segmented control. */
+.fin-add-method {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 18px;
+  border-radius: 14px;
+  background: var(--fin-soft);
+}
+.fin-add-method button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 11px;
+  background: none;
+  color: var(--fin-muted);
+  font-weight: 650;
+}
+.fin-add-method button.active {
+  background: var(--fin-panel);
+  color: var(--fin-ink);
+  box-shadow: 0 1px 3px #0f1f2b1f;
+}
+.fin-app .fin-add-bank h1 {
+  font-size: 24px;
+  margin: 0 0 14px;
+}
+.fin-method-detail.fin-add-bank {
+  text-align: center;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 28px 0;
+}

@@ -18,6 +18,8 @@ import {
   Search,
   RefreshCw,
   Printer,
+  CreditCard,
+  Globe2,
   CheckCircle2,
   Circle,
   ArrowLeft,
@@ -896,7 +898,7 @@ function GetStarted({ profile, go }: { profile: ConsumerProfile; go: (path: stri
   }, []);
   const steps = [
     { label: 'Verify your email', done: !!profile.email_verified_at, path: '/personal/security' },
-    { label: 'Set a payment PIN', done: !!approval, path: '/personal/security' },
+    { label: 'Set up a passkey or PIN', done: !!approval, path: '/personal/security' },
     { label: 'Add money', done: false, path: '/personal/deposit' },
   ];
   const done = steps.filter((step) => step.done).length;
@@ -948,6 +950,9 @@ function MoneyFlow({
     return payeePattern.test(to) ? to : '';
   });
   const capability = capabilities?.[kind === 'convert' ? 'conversion' : 'withdrawal'];
+  // Add money: crypto to a wallet address, or naira by bank (and card where the provider offers it).
+  const [method, setMethod] = useState<'crypto' | 'bank'>(() =>
+    new URLSearchParams(window.location.search).get('method') === 'bank' ? 'bank' : 'crypto');
   const back = (
     <button className="fin-text fin-back" onClick={() => go('/personal/payments')}>
       <ArrowLeft size={16} /> Payments
@@ -958,16 +963,37 @@ function MoneyFlow({
       <div className={`fin-flow-narrow fin-flow-${kind}`}>
         {back}
         {kind === 'send' && <h1 className="fin-flow-title">Send</h1>}
-        <ConsumerChainWallet
-          csrf={csrf}
-          mode={kind === 'send' ? 'send' : 'receive'}
-          onChanged={onChanged}
-          initialRecipient={kind === 'send' ? initialRecipient : ''}
-        />
-        {kind === 'deposit' && capabilities?.conversion?.available && (
-          <button className="fin-link-row" onClick={() => go('/personal/convert')}>
-            <ArrowLeftRight size={17} /> Buy digital dollars with naira <ChevronRight size={16} />
-          </button>
+        {kind === 'deposit' && (
+          <div className="fin-add-method" role="group" aria-label="Add money with">
+            <button type="button" className={method === 'crypto' ? 'active' : ''} aria-pressed={method === 'crypto'} onClick={() => setMethod('crypto')}>
+              <Globe2 size={18} /> Crypto
+            </button>
+            <button type="button" className={method === 'bank' ? 'active' : ''} aria-pressed={method === 'bank'} onClick={() => setMethod('bank')}>
+              <CreditCard size={18} /> Bank / card
+            </button>
+          </div>
+        )}
+        {kind === 'deposit' && method === 'bank' ? (
+          capabilities?.conversion?.available ? (
+            <section className="fin-panel fin-add-bank" aria-label="Add money by bank">
+              <h1>Buy with naira</h1>
+              <ConversionPanel csrf={csrf} buyOnly />
+            </section>
+          ) : (
+            <div className="fin-method-detail fin-add-bank">
+              <span className="fin-method-icon"><CreditCard size={30} /></span>
+              <h1>Bank and card</h1>
+              <p>{capabilities?.fiat_deposit?.reason ?? 'Not available yet.'}</p>
+              <span className="fin-status">Not available</span>
+            </div>
+          )
+        ) : (
+          <ConsumerChainWallet
+            csrf={csrf}
+            mode={kind === 'send' ? 'send' : 'receive'}
+            onChanged={onChanged}
+            initialRecipient={kind === 'send' ? initialRecipient : ''}
+          />
         )}
       </div>
     );

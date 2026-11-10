@@ -196,6 +196,6 @@ test('a new account sees a get-started checklist instead of an empty activity li
   await expect(feed).toContainText('Get started');
   await expect(feed).toContainText('1 of 3');
   await expect(feed.getByRole('button', { name: 'Verify your email' })).toBeDisabled();
-  await feed.getByRole('button', { name: 'Set a payment PIN' }).click();
+  await feed.getByRole('button', { name: 'Set up a passkey or PIN' }).click();
   await expect(page).toHaveURL(/\/personal\/security$/);
 });

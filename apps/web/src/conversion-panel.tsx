@@ -31,7 +31,7 @@ const coin = (code: string) => code.split('_').slice(1).join('_');
 const money = (amount: number, currency: string) => currency === 'NGN' ? naira(amount) : `${amount.toLocaleString(undefined, { maximumFractionDigits: 6 })} ${coin(currency)}`;
 
 /** Buy stablecoins with naira through Fonbnk, and quote both directions with every fee shown. */
-export function ConversionPanel({ csrf }: { csrf: string }) {
+export function ConversionPanel({ csrf, buyOnly = false }: { csrf: string; buyOnly?: boolean }) {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [direction, setDirection] = useState<'buy' | 'sell'>('buy');
   const [asset, setAsset] = useState('');
@@ -113,10 +113,10 @@ export function ConversionPanel({ csrf }: { csrf: string }) {
   }
 
   return <div className="fin-convert">
-    <div className="fin-methods" role="group" aria-label="Conversion direction">
+    {!buyOnly && <div className="fin-methods" role="group" aria-label="Conversion direction">
       {(['buy', 'sell'] as const).map((d) => <button key={d} type="button" className={direction === d ? 'active' : ''} aria-pressed={direction === d}
         onClick={() => { setDirection(d); reset(); }}>{d === 'buy' ? 'Buy with naira' : 'Sell for naira'}</button>)}
-    </div>
+    </div>}
     <form className="fin-convert-form" onSubmit={getQuote}>
       <label>Stablecoin
         <select value={asset} onChange={(e) => { setAsset(e.target.value); reset(); }}>

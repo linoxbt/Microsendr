@@ -63,3 +63,22 @@ test('buying digital dollars with naira shows every fee, then Fonbnk bank instru
   await page.getByRole('button', { name: /I've sent the payment/ }).click();
   await expect(page.getByRole('heading', { name: 'Checking your payment' })).toBeVisible();
 });
+
+test('Add money offers Crypto or Bank / card; Bank / card buys with naira when Fonbnk is on', async ({ page }) => {
+  await page.route('**/personal/api/session', (r) => r.fulfill(json({ authenticated: true, csrf_token: csrf, email: profile.email })));
+  await page.route('**/personal/api/profile', (r) => r.fulfill(json(profile)));
+  await page.route('**/personal/api/payment-auth', (r) => r.fulfill(json({ pin_set: false, pin_locked_until: null, passkeys: [] })));
+  await page.route('**/personal/api/kyc', (r) => r.fulfill(json({ email_verified: true, status: 'Approved', url: null, updated_at: null, configured: true })));
+  await page.route('**/personal/api/overview', (r) => r.fulfill(json({ balances: [], total: null, assets: [], activity: [], wallet_value_usd: { amount_usd: null, checked_at: null },
+    capabilities: { ...capabilities, conversion: { available: true, reason: '' } } })));
+  await page.route('**/personal/api/conversion/config', (r) => r.fulfill(json({ available: true, assets: [{ code: 'POLYGON_USDC', network: 'Polygon', asset: 'USDC' }] })));
+  await page.route('**/personal/api/conversion/orders', (r) => r.fulfill(json({ data: [] })));
+  await page.route('**/personal/api/wallets', (r) => r.fulfill(json({ data: [{ id: 'cwa_' + 'b'.repeat(32), address: linked, managed: false }] })));
+  await page.goto('/personal/deposit');
+  await expect(page.getByRole('heading', { name: 'Your address' })).toBeVisible();
+  await page.getByRole('button', { name: 'Bank / card', exact: true }).click();
+  const bank = page.getByRole('region', { name: 'Add money by bank' });
+  await expect(bank.getByRole('heading', { name: 'Buy with naira' })).toBeVisible();
+  await expect(bank.getByLabel('Amount in naira (NGN)')).toBeVisible();
+  await expect(bank.getByRole('button', { name: 'Sell for naira' })).toHaveCount(0);
+});

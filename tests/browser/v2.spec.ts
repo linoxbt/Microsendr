@@ -251,6 +251,12 @@ test('custom registration, optional identity, profile editing and mobile money n
   await expect(page.getByText('First, make it official.')).toHaveCount(0);
   await expect(page.getByLabel('You exchange', { exact: true })).toHaveCount(0);
   await expect(page.locator('.fin-method-detail')).toContainText('Not available');
+  await page.goto('/personal/deposit');
+  await expect(page.getByRole('button', { name: 'Crypto', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Bank / card', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Bank / card', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.fin-add-bank')).toContainText('Not available');
+  await page.getByRole('button', { name: 'Crypto', exact: true }).click();
   const wallet = privateKeyToAccount(generatePrivateKey());
   await page.route('**/personal/api/wallets', route => route.fulfill({
     status: 200, contentType: 'application/json', body: JSON.stringify({
