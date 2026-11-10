@@ -1,7 +1,10 @@
 # Roots public sandbox deployment
 
 The frontend is published at `https://kora-sandbox-linoxbt.netlify.app` and
-proxies API paths to `https://kora-api.13-140-188-185.sslip.io`. The API, worker,
+proxies API paths to the Railway API at `https://roots-api.up.railway.app` (see
+[Railway deployment](railway-deployment.md)). The sections below describe the
+earlier self-hosted Compose setup, kept as a fallback. Previously the proxy target was
+`https://kora-api.13-140-188-185.sslip.io`, where the API, worker,
 and PostgreSQL run on the Roots host with `compose.public.yaml`. The database is
 stored in the `kora-public-postgres` Docker volume. Fiat providers remain in
 test mode. Linked native QIEV3 wallets use QIE Mainnet and can move real assets.
@@ -38,7 +41,7 @@ Legacy Privy authentication endpoints remain for older accounts but are not used
 by new Personal registration.
 
 For Personal identity checks, set `DIDIT_API_KEY` and `DIDIT_WEBHOOK_SECRET` in
-`.env.public`. Register `https://kora-api.13-140-188-185.sslip.io/personal/api/webhooks/didit`
+`.env.public`. Register `https://roots-api.up.railway.app/personal/api/webhooks/didit`
 as the HTTPS webhook destination in Didit. The selected Free KYC workflow ID is
 configured per session in the API code. Both secrets are required before the
 verification button appears; the signed webhook is the only source of approval.

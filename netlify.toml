@@ -4,42 +4,42 @@
 
 [[redirects]]
   from = "/console/*"
-  to = "https://kora-api.13-140-188-185.sslip.io/console/:splat"
+  to = "https://roots-api.up.railway.app/console/:splat"
   status = 200
   force = true
   signed = "KORA_PROXY_SIGNING_SECRET"
 
 [[redirects]]
   from = "/personal/api/*"
-  to = "https://kora-api.13-140-188-185.sslip.io/personal/api/:splat"
+  to = "https://roots-api.up.railway.app/personal/api/:splat"
   status = 200
   force = true
   signed = "KORA_PROXY_SIGNING_SECRET"
 
 [[redirects]]
   from = "/business/api/*"
-  to = "https://kora-api.13-140-188-185.sslip.io/business/api/:splat"
+  to = "https://roots-api.up.railway.app/business/api/:splat"
   status = 200
   force = true
   signed = "KORA_PROXY_SIGNING_SECRET"
 
 [[redirects]]
   from = "/v1/*"
-  to = "https://kora-api.13-140-188-185.sslip.io/v1/:splat"
+  to = "https://roots-api.up.railway.app/v1/:splat"
   status = 200
   force = true
   signed = "KORA_PROXY_SIGNING_SECRET"
 
 [[redirects]]
   from = "/openapi.json"
-  to = "https://kora-api.13-140-188-185.sslip.io/openapi.json"
+  to = "https://roots-api.up.railway.app/openapi.json"
   status = 200
   force = true
   signed = "KORA_PROXY_SIGNING_SECRET"
 
 [[redirects]]
   from = "/reference/*"
-  to = "https://kora-api.13-140-188-185.sslip.io/reference/:splat"
+  to = "https://roots-api.up.railway.app/reference/:splat"
   status = 200
   force = true
   signed = "KORA_PROXY_SIGNING_SECRET"
