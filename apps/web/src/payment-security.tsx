@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Fingerprint, KeyRound, Trash2 } from 'lucide-react';
 import { browserSupportsWebAuthn, startRegistration } from '@simplewebauthn/browser';
 import { consumerRequest } from './consumer-api.js';
+import { useToast } from './toast.js';
 
 export type PaymentAuthStatus = {
   pin_set: boolean;
@@ -27,13 +28,13 @@ export function PaymentSecurity({ csrf, hasPassword }: { csrf: string; hasPasswo
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const toast = useToast();
   const load = () => consumerRequest<PaymentAuthStatus>('payment-auth').then(setStatus).catch((e) => setError((e as Error).message));
   useEffect(() => { void load(); }, []);
   const close = () => { setMode(null); setPin(''); setConfirmPin(''); setPassword(''); };
 
   async function run(action: () => Promise<void>) {
-    setBusy(true); setError(''); setNotice('');
+    setBusy(true); setError('');
     try { await action(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
   const savePin = (event: FormEvent) => {
@@ -41,7 +42,7 @@ export function PaymentSecurity({ csrf, hasPassword }: { csrf: string; hasPasswo
     void run(async () => {
       if (pin !== confirmPin) throw new Error('The PINs do not match.');
       await consumerRequest('payment-auth/pin', 'POST', { pin, ...(hasPassword ? { password } : {}) }, csrf);
-      close(); setNotice('Payment PIN saved.'); await load();
+      close(); toast('Payment PIN saved.'); await load();
     });
   };
   const addPasskey = (event: FormEvent) => {
@@ -53,7 +54,7 @@ export function PaymentSecurity({ csrf, hasPassword }: { csrf: string; hasPasswo
         throw new Error('The passkey was not created. Try again.');
       });
       await consumerRequest('payment-auth/passkeys', 'POST', { challenge_id, response, label: deviceLabel() }, csrf);
-      close(); setNotice('Passkey added.'); await load();
+      close(); toast('Passkey added.'); await load();
     });
   };
   const remove = (passkeyId: string) => void run(async () => {
@@ -105,7 +106,6 @@ export function PaymentSecurity({ csrf, hasPassword }: { csrf: string; hasPasswo
         </li>)}
       </ul>}
     </>}
-    {notice && <p className="fin-chain-notice" role="status">{notice}</p>}
     {error && <p className="fin-error" role="alert">{error}</p>}
   </section>;
 }

@@ -90,7 +90,7 @@ test('being payable by username is an explicit opt-in on the Security page', asy
   await expect(toggle).not.toBeChecked();
   await toggle.check();
   await expect(toggle).toBeChecked();
-  await expect(panel).toContainText(`Payments go to ${payeeAddress.slice(0, 8)}`);
+  await expect(panel).toContainText(`to ${payeeAddress.slice(0, 6)}…${payeeAddress.slice(-4)}`);
   expect(posts).toEqual([{ payable_by_username: true }]);
 });
 
@@ -183,7 +183,19 @@ test('Security sets a payment PIN with the password', async ({ page }) => {
   await expect(section.getByRole('alert')).toContainText('The PINs do not match.');
   await section.getByLabel('Confirm PIN').fill('402913');
   await section.getByRole('button', { name: 'Save PIN' }).click();
-  await expect(section.getByRole('status')).toContainText('Payment PIN saved.');
+  await expect(page.getByText('Payment PIN saved.')).toBeVisible();
   await expect(section).toContainText('On');
   expect(bodies).toEqual([{ pin: '402913', password: 'my-account-password' }]);
+});
+
+test('a new account sees a get-started checklist instead of an empty activity list', async ({ page }) => {
+  await signedIn(page);
+  await page.route('**/personal/api/payment-settings', (route) => route.fulfill(json({ username: 'tobi_mock', payable_by_username: false, receiving_address: null })));
+  await page.goto('/personal/home');
+  const feed = page.getByRole('region', { name: 'Activity' });
+  await expect(feed).toContainText('Get started');
+  await expect(feed).toContainText('1 of 3');
+  await expect(feed.getByRole('button', { name: 'Verify your email' })).toBeDisabled();
+  await feed.getByRole('button', { name: 'Set a payment PIN' }).click();
+  await expect(page).toHaveURL(/\/personal\/security$/);
 });

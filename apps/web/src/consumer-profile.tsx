@@ -1,8 +1,59 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { CheckCircle2, ShieldCheck, ArrowRight, Mail, LockKeyhole, AtSign } from 'lucide-react';
+import { ShieldCheck, ChevronRight, Mail, LockKeyhole, AtSign } from 'lucide-react';
+import { useToast } from './toast.js';
 import { ConsumerFields } from './consumer-fields.js';
 import { PaymentSecurity } from './payment-security.js';
-import { consumerRequest, profileDraft, profilePayload, type ConsumerProfile } from './consumer-api.js';
+import { consumerRequest, countries, profileDraft, profilePayload, type ConsumerProfile } from './consumer-api.js';
+
+const countryName = (code: unknown) => countries.find(([value]) => value === code)?.[1] ?? (code ? String(code) : '—');
+const shown = (value: unknown) => (value === null || value === undefined || value === '' ? '—' : String(value));
+type Row = [label: string, value: string];
+
+/** One part of the profile: read-only rows, edited and saved on its own. */
+function ProfileSection({ title, section, rows, profile, csrf, onSaved, note }: {
+  title: string; section: 'identity' | 'address'; rows: Row[]; profile: ConsumerProfile; csrf: string;
+  onSaved: () => Promise<void>; note?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<any>(() => profileDraft(profile));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const toast = useToast();
+  useEffect(() => { if (!editing) setDraft(profileDraft(profile)); }, [profile, editing]);
+  const set = (key: string, value: string) => setDraft({ ...draft, [key]: value });
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true); setError('');
+    try {
+      // The other sections' values come from the saved profile, so saving one never changes another.
+      await consumerRequest('profile', 'PATCH', {
+        ...profilePayload({ ...draft, nationality: draft.nationality || null, phone: String(draft.phone ?? '').replace(/[\s()-]/g, '') }),
+        profile_version: profile.profile_version,
+      }, csrf);
+      await onSaved();
+      setEditing(false);
+      toast('Profile saved.');
+    } catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  }
+  return <section className="fin-panel fin-settings-section" aria-label={title}>
+    <div className="fin-settings-head">
+      <h2>{title}</h2>
+      {note && <span className="fin-settings-note"><LockKeyhole size={13} /> {note}</span>}
+      {!editing && <button className="fin-secondary" type="button" onClick={() => setEditing(true)}>Edit</button>}
+    </div>
+    {editing ? <form onSubmit={save} className="fin-settings-form">
+      <ConsumerFields value={draft} set={set} section={section} locked={profile.identity_locked} />
+      {error && <div className="fin-error" role="alert">{error}</div>}
+      <div className="fin-form-actions">
+        <button className="fin-primary" disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</button>
+        <button className="fin-text" type="button" onClick={() => { setEditing(false); setError(''); }} disabled={busy}>Cancel</button>
+      </div>
+    </form> : <dl className="fin-settings-rows">
+      {rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
+    </dl>}
+  </section>;
+}
 
 export function ConsumerProfileForm({
   profile,
@@ -15,129 +66,78 @@ export function ConsumerProfileForm({
   onSaved: () => Promise<void>;
   go: (path: string) => void;
 }) {
-  const [draft, setDraft] = useState<any>(() => profileDraft(profile)),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState(''),
-    [saved, setSaved] = useState(false);
-  const set = (key: string, value: string) => {
-    setDraft({ ...draft, [key]: value });
-    setSaved(false);
-  };
-  async function save(e: FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError('');
-    setSaved(false);
+  const [currency, setCurrency] = useState(profile.display_currency ?? 'USD');
+  const [error, setError] = useState('');
+  const toast = useToast();
+  async function saveCurrency(next: string) {
+    const previous = currency;
+    setCurrency(next); setError('');
     try {
-      await consumerRequest(
-        'profile',
-        'PATCH',
-        {
-          ...profilePayload({
-            ...draft,
-            nationality: draft.nationality || null,
-            phone: String(draft.phone ?? '').replace(/[\s()-]/g, ''),
-          }),
-          profile_version: profile.profile_version,
-        },
-        csrf,
-      );
+      await consumerRequest('profile', 'PATCH', {
+        ...profilePayload({ ...profileDraft(profile), display_currency: next }), profile_version: profile.profile_version,
+      }, csrf);
       await onSaved();
-      setSaved(true);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+      toast('Preference saved.');
+    } catch (e) { setCurrency(previous); setError((e as Error).message); }
   }
+  const locked = profile.identity_locked ? 'Locked after verification' : undefined;
+  const dob = profile.date_of_birth
+    ? new Date(`${profile.date_of_birth}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
   return (
     <>
       <div className="fin-profile-banner">
         <div className="fin-avatar large">
-          {(profile.first_name?.[0] ?? 'M') + (profile.last_name?.[0] ?? '')}
+          {(profile.first_name?.[0] ?? 'R') + (profile.last_name?.[0] ?? '')}
         </div>
         <div>
-          <h2>
-            {profile.first_name
-              ? `${profile.first_name} ${profile.last_name}`
-              : 'Your personal account'}
-          </h2>
-          <p>{profile.username ? `@${profile.username}` : 'Choose your username below'}</p>
+          <h2>{profile.first_name ? `${profile.first_name} ${profile.last_name}` : 'Your account'}</h2>
+          <p>{profile.username ? `@${profile.username}` : 'No username yet'}</p>
         </div>
         <span className={`fin-status ${profile.identity_status === 'Approved' ? 'verified' : ''}`}>
           <ShieldCheck size={14} />
-          {profile.identity_status === 'Approved' ? 'Identity verified' : 'Identity not verified'}
+          {profile.identity_status === 'Approved' ? 'Verified' : 'Not verified'}
         </span>
       </div>
-      <div className="fin-account-grid">
-        <form className="fin-panel" onSubmit={save}>
-          <div className="fin-section-head">
-            <h2>Personal information</h2>
-            <span>Private to you</span>
-          </div>
-          {profile.identity_locked && (
-            <div className="fin-notice">
-              Verified details are locked. Contact support to correct them.
-            </div>
-          )}
-          <ConsumerFields
-            value={draft}
-            set={set}
-            section="identity"
-            locked={profile.identity_locked}
-          />
-          <h3>Residential address</h3>
-          <ConsumerFields
-            value={draft}
-            set={set}
-            section="address"
-            locked={profile.identity_locked}
-          />
-          <label>
-            Display currency
-            <select
-              value={draft.display_currency}
-              onChange={(e) => set('display_currency', e.target.value)}
-            >
-              {['USD', 'NGN', 'GHS', 'EUR', 'GBP'].map((x) => (
-                <option key={x}>{x}</option>
-              ))}
+      <div className="fin-settings">
+        <ProfileSection title="Profile" section="identity" profile={profile} csrf={csrf} onSaved={onSaved} note={locked} rows={[
+          ['Name', `${shown(profile.first_name)} ${profile.last_name ?? ''}`.trim()],
+          ['Username', profile.username ? `@${profile.username}` : '—'],
+          ['Phone', shown(profile.phone)],
+          ['Date of birth', dob],
+          ['Country', countryName(profile.residence_country)],
+        ]} />
+        <ProfileSection title="Address & details" section="address" profile={profile} csrf={csrf} onSaved={onSaved} note={locked} rows={[
+          ['Address', [profile.address_line1, profile.address_line2].filter(Boolean).join(', ') || '—'],
+          ['City', [profile.city, profile.region, profile.postal_code].filter(Boolean).join(', ') || '—'],
+          ['Occupation', shown(profile.occupation)],
+          ['Nationality', profile.nationality ? countryName(profile.nationality) : '—'],
+        ]} />
+        <section className="fin-panel fin-settings-section" aria-label="Preferences">
+          <div className="fin-settings-head"><h2>Preferences</h2></div>
+          <label className="fin-settings-inline">Display currency
+            <select value={currency} onChange={(e) => void saveCurrency(e.target.value)}>
+              {['USD', 'NGN', 'GHS', 'EUR', 'GBP'].map((x) => <option key={x}>{x}</option>)}
             </select>
           </label>
-          {error && (
-            <div className="fin-error" role="alert">
-              {error}
-            </div>
-          )}
-          {saved && (
-            <div className="fin-success" role="status">
-              <CheckCircle2 size={16} /> Profile saved.
-            </div>
-          )}
-          <button className="fin-primary" disabled={busy}>
-            {busy ? 'Saving…' : 'Save changes'}
+          {error && <div className="fin-error" role="alert">{error}</div>}
+        </section>
+        <section className="fin-panel fin-settings-section" aria-label="Sign-in and verification">
+          <div className="fin-settings-head"><h2>Sign-in & verification</h2></div>
+          <button className="fin-settings-link" onClick={() => go('/personal/security')}>
+            <Mail size={18} /><span><b>Email</b><small>{profile.email ?? 'No email linked'}</small></span>
+            <em className={`fin-status ${profile.email_verified_at ? 'verified' : ''}`}>{profile.email_verified_at ? 'Verified' : 'Not verified'}</em>
+            <ChevronRight size={16} />
           </button>
-        </form>
-        <aside className="fin-stack">
-          <section className="fin-panel">
-            <Mail size={23} />
-            <h2>Email address</h2>
-            <p className="fin-break">{profile.email ?? 'No email linked'}</p>
-            <span className="fin-status">
-              {profile.email_verified_at ? 'Verified' : 'Not verified'}
-            </span>
-            <button className="fin-link-row" onClick={() => go('/personal/security')}>
-              Email & security <ArrowRight size={16} />
-            </button>
-          </section>
-          <section className="fin-panel">
-            <ShieldCheck size={23} />
-            <h2>Identity check</h2>
-            <button className="fin-link-row" onClick={() => go('/personal/identity')}>
-              Manage verification <ArrowRight size={16} />
-            </button>
-          </section>
-        </aside>
+          <button className="fin-settings-link" onClick={() => go('/personal/identity')}>
+            <ShieldCheck size={18} /><span><b>Identity</b><small>Didit verification</small></span>
+            <em className={`fin-status ${profile.identity_status === 'Approved' ? 'verified' : ''}`}>{profile.identity_status === 'Approved' ? 'Verified' : 'Not verified'}</em>
+            <ChevronRight size={16} />
+          </button>
+          <button className="fin-settings-link" onClick={() => go('/personal/security')}>
+            <LockKeyhole size={18} /><span><b>Password, PIN & passkeys</b><small>How you sign in and approve payments</small></span>
+            <ChevronRight size={16} />
+          </button>
+        </section>
       </div>
     </>
   );
@@ -231,13 +231,13 @@ export function ConsumerSecurity({
             />
           </label>
         )}
-        <button
+        {!profile.email_verified_at && <button
           className="fin-secondary"
           disabled={busy || !profile.email || !emailEnabled || (!!challenge && code.length !== 6)}
           onClick={verify}
         >
           {challenge ? 'Verify email' : 'Send verification code'}
-        </button>
+        </button>}
       </section>
       <form className="fin-panel" onSubmit={change}>
         <LockKeyhole size={24} />
@@ -312,29 +312,24 @@ function PaymentSettings({ csrf }: { csrf: string }) {
   }
   return (
     <section className="fin-panel fin-payment-settings" aria-label="Payments by username">
-      <AtSign size={24} />
-      <h2>Get paid by username</h2>
-      {settings ? (
-        <>
-          <p>
-            {settings.username
-              ? <>Let people pay <b>@{settings.username}</b> without your address.</>
-              : 'Choose a username in your profile first.'}
-          </p>
-          <label className="fin-switch">
-            <input type="checkbox" checked={settings.payable_by_username} disabled={busy || !settings.username}
-              onChange={(e) => void toggle(e.target.checked)} />
-            <span>{settings.payable_by_username ? 'On' : 'Off'}</span>
-          </label>
-          {settings.payable_by_username && (
-            <p className="fin-muted">
-              {settings.receiving_address
-                ? <>Payments go to {settings.receiving_address.slice(0, 8)}…{settings.receiving_address.slice(-6)}.</>
-                : 'Link a QIE wallet to start receiving payments by username.'}
-            </p>
-          )}
-        </>
-      ) : !error && <p role="status">Loading…</p>}
+      <div className="fin-security-row fin-security-row-first">
+        <AtSign size={20} />
+        <div>
+          <b>Get paid by username</b>
+          <small>
+            {!settings ? 'Loading…' : !settings.username ? 'Choose a username in your profile first'
+              : settings.payable_by_username
+                ? settings.receiving_address
+                  ? `@${settings.username} · to ${settings.receiving_address.slice(0, 6)}…${settings.receiving_address.slice(-4)}`
+                  : 'Link a QIE wallet to receive'
+                : `People can't pay @${settings.username} yet`}
+          </small>
+        </div>
+        {settings && <label className="fin-switch">
+          <input type="checkbox" aria-label="Get paid by username" checked={settings.payable_by_username} disabled={busy || !settings.username}
+            onChange={(e) => void toggle(e.target.checked)} />
+        </label>}
+      </div>
       {error && <p className="fin-error" role="alert">{error}</p>}
     </section>
   );

@@ -17,7 +17,9 @@ import {
   Check,
   Search,
   RefreshCw,
-  Download,
+  Printer,
+  CheckCircle2,
+  Circle,
   ArrowLeft,
   Copy,
 } from 'lucide-react';
@@ -35,6 +37,8 @@ import { RootsMark, RootsWatermark } from './roots-logo.js';
 import { ConsumerChainWallet } from './consumer-chain-wallet.js';
 import { AssetDetail, AssetIcon, assetAmount, assetDefaults, type PersonalAsset } from './personal-assets.js';
 import { ConversionPanel } from './conversion-panel.js';
+import { ToastProvider, useToast } from './toast.js';
+import { type PaymentAuthStatus } from './payment-security.js';
 
 type Session = { authenticated: boolean; csrf_token?: string; email?: string; account_id?: string };
 type Capability = { available: boolean; reason: string };
@@ -118,6 +122,28 @@ function PersonalLoading() {
     </div>
   );
 }
+/** The app's shape while the account loads, so nothing jumps when data arrives. */
+function PersonalSkeleton() {
+  return (
+    <div className="fin-app fin-skeleton-app" role="status" aria-label="Loading account">
+      <header className="fin-topbar fin-skeleton-top">
+        <span className="fin-mobile-logo"><RootsMark /></span>
+        <i className="fin-sk fin-sk-circle" />
+      </header>
+      <main className="fin-content fin-home-content" aria-hidden="true">
+        <i className="fin-sk fin-sk-title" />
+        <i className="fin-sk fin-sk-line" />
+        <div className="fin-home-grid">
+          <div className="fin-skeleton-balance"><i className="fin-sk fin-sk-line" /><i className="fin-sk fin-sk-amount" /></div>
+          <i className="fin-sk fin-sk-card" />
+          <div className="fin-skeleton-rows">
+            {[0, 1, 2, 3].map((row) => <span key={row}><i className="fin-sk fin-sk-circle" /><i className="fin-sk fin-sk-line" /></span>)}
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
 const actions = [
   ['deposit', 'Add money', Plus],
   ['send', 'Send', ArrowUpRight],
@@ -155,6 +181,8 @@ export function PersonalPage({
     [signInNotice, setSignInNotice] = useState('');
   const [payTo, setPayTo] = useState(''),
     [copied, setCopied] = useState(false);
+  const toastRef = useRef<(message: string) => void>(() => undefined);
+  const toast = (message: string) => toastRef.current(message);
   const rawTab = path.split('/')[2]?.split('?')[0] || 'home';
   const tab = rawTab === 'login' ? 'home' : rawTab === 'money' ? 'deposit' : rawTab;
   const assetCode = path.split('/')[3]?.split('?')[0]?.toUpperCase();
@@ -286,8 +314,10 @@ export function PersonalPage({
           Try again
         </button>
       </div>
-    ) : (
+    ) : path.startsWith('/personal/login') || path === '/personal' ? (
       <PersonalLoading />
+    ) : (
+      <PersonalSkeleton />
     );
   if (!session.authenticated)
     return (
@@ -341,6 +371,7 @@ export function PersonalPage({
   async function copyUsername() {
     try {
       await navigator.clipboard.writeText(`@${p.username}`);
+      toast('Username copied');
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
     } catch {
@@ -401,6 +432,8 @@ export function PersonalPage({
     </div>
   );
   return (
+    <ToastProvider>
+    <ToastBridge target={toastRef} />
     <div className="fin-app">
       <aside className="fin-sidebar">
         <button className="fin-brand" onClick={() => go('/personal/home')}>
@@ -630,10 +663,7 @@ export function PersonalPage({
                       ))}
                     </div>
                   )) : (
-                    <div className="fin-feed-empty">
-                      <ReceiptText size={22} />
-                      <p>Payments you send and receive will show up here.</p>
-                    </div>
+                    <GetStarted profile={p} go={go} />
                   )}
                 </section>
                 <section className="fin-panel fin-home-assets" id="home-assets">
@@ -712,7 +742,10 @@ export function PersonalPage({
                 {activity()}
               </section>
               {receipt && (
-                <section className="fin-panel fin-receipt">
+                <section className="fin-panel fin-receipt" aria-label="Receipt">
+                  <div className="fin-receipt-print-head" aria-hidden="true">
+                    <RootsMark /> <b>Roots</b> <span>Payment receipt</span>
+                  </div>
                   <div className="fin-section-head">
                     <h2>{movementTitle(receipt)}</h2>
                     <button className="fin-text" onClick={() => setSelected(null)}>
@@ -723,6 +756,7 @@ export function PersonalPage({
                     {Object.entries(received(receipt) ? {
                       Status: statusLabel(receipt.status),
                       Amount: `${formatAmount(receipt)} ${assetLabel(receipt.asset)}`,
+                      Date: new Date(receipt.created_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }),
                       From: receipt.from ?? '',
                       'Received at': receipt.to,
                       Reference: receipt.id,
@@ -731,7 +765,8 @@ export function PersonalPage({
                     } : {
                       Status: statusLabel(receipt.status),
                       Amount: `${formatAmount(receipt)} ${assetLabel(receipt.asset)}`,
-                      Recipient: receipt.to,
+                      Date: new Date(receipt.created_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }),
+                      Recipient: receipt.to_username ? `@${receipt.to_username} · ${receipt.to}` : receipt.to,
                       Reference: receipt.id,
                       Network: receipt.network,
                       'Transaction reference': receipt.tx_hash ?? 'Not submitted',
@@ -754,22 +789,8 @@ export function PersonalPage({
                         View transaction <ArrowUpRight size={15} />
                       </a>
                     )}
-                    <button
-                      className="fin-secondary"
-                      onClick={() => {
-                        const url = URL.createObjectURL(
-                          new Blob([JSON.stringify(receipt, null, 2)], {
-                            type: 'application/json',
-                          }),
-                        );
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `roots-${receipt.id}.json`;
-                        a.click();
-                        setTimeout(() => URL.revokeObjectURL(url), 1000);
-                      }}
-                    >
-                      <Download size={15} /> Download record
+                    <button className="fin-secondary" onClick={() => window.print()}>
+                      <Printer size={15} /> Print or save PDF
                     </button>
                   </div>
                 </section>
@@ -856,8 +877,47 @@ export function PersonalPage({
         </main>
       </div>
     </div>
+    </ToastProvider>
   );
 }
+/** Lets PersonalPage, which renders the provider, show toasts. */
+function ToastBridge({ target }: { target: React.MutableRefObject<(message: string) => void> }) {
+  target.current = useToast();
+  return null;
+}
+
+/** New accounts: three steps in place of an empty activity list. */
+function GetStarted({ profile, go }: { profile: ConsumerProfile; go: (path: string) => void }) {
+  const [approval, setApproval] = useState<boolean>();
+  useEffect(() => {
+    void consumerRequest<PaymentAuthStatus>('payment-auth')
+      .then((status) => setApproval(status.pin_set || status.passkeys.length > 0))
+      .catch(() => setApproval(false));
+  }, []);
+  const steps = [
+    { label: 'Verify your email', done: !!profile.email_verified_at, path: '/personal/security' },
+    { label: 'Set a payment PIN', done: !!approval, path: '/personal/security' },
+    { label: 'Add money', done: false, path: '/personal/deposit' },
+  ];
+  const done = steps.filter((step) => step.done).length;
+  return (
+    <div className="fin-get-started">
+      <div className="fin-get-started-head">
+        <b>Get started</b>
+        <span>{done} of {steps.length}</span>
+      </div>
+      <i className="fin-get-started-bar"><i style={{ width: `${(done / steps.length) * 100}%` }} /></i>
+      {steps.map((step) => (
+        <button key={step.label} className={step.done ? 'done' : ''} onClick={() => go(step.path)} disabled={step.done}>
+          {step.done ? <CheckCircle2 size={20} /> : <Circle size={20} />}
+          <span>{step.label}</span>
+          {!step.done && <ChevronRight size={16} />}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function PageHeading({ kicker, title, text }: { kicker?: string; title: string; text?: string }) {
   return (
     <div className="fin-heading">

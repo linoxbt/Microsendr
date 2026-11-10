@@ -207,12 +207,16 @@ test('custom registration, optional identity, profile editing and mobile money n
   await page.getByRole('button', { name: 'Hide balance' }).click();
   await expect(page.getByRole('button', { name: 'Show balance' })).toBeVisible();
   await page.getByRole('button', { name: 'Open your profile' }).click();
+  const profileSection = page.getByRole('region', { name: 'Profile', exact: true });
+  await expect(profileSection).toContainText('1995');
+  await profileSection.getByRole('button', { name: 'Edit' }).click();
   await expect(page.getByLabel('Date of birth')).toHaveValue('1995-05-12');
   await page.getByLabel('First name').fill('Amara');
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect(page.getByText('Profile saved.', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('First name')).toHaveCount(0);
   await page.reload();
-  await expect(page.getByLabel('First name')).toHaveValue('Amara');
+  await expect(profileSection).toContainText('Amara');
   await page.getByRole('button', { name: 'Sign out', exact: true }).last().click();
   await page.getByLabel('Email address').fill(email);
   await page.getByLabel('Password', { exact: true }).fill(password);
@@ -461,12 +465,12 @@ test('sign out clears local state even when the server call fails', async ({ pag
     return route.fulfill(json({ error: { code: 'internal_error', message: 'The request could not be completed' } }, 500));
   });
   await page.goto('/personal/profile');
-  await expect(page.getByLabel('First name')).toHaveValue('Ada');
+  await expect(page.getByRole('region', { name: 'Profile', exact: true })).toContainText('Ada');
   await page.getByRole('button', { name: 'Sign out', exact: true }).last().click();
   await expect(page).toHaveURL(/\/personal\/login$/);
   await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
   await expect(page.getByText('You are signed out on this device.')).toBeVisible();
-  await expect(page.getByLabel('First name')).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Profile', exact: true })).toHaveCount(0);
   expect(logoutCalls).toBe(1);
 });
 

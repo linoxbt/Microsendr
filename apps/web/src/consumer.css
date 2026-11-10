@@ -5,7 +5,7 @@
   --fin-bg: #f7f3e9;
   --fin-panel: #fffefa;
   --fin-ink: #203749;
-  --fin-muted: #677981;
+  --fin-muted: #566872;
   --fin-line: #e2e5df;
   --fin-blue: #4682b4;
   --fin-soft: #edf3f6;
@@ -23,7 +23,7 @@
   --fin-bg: #090909;
   --fin-panel: #131313;
   --fin-ink: #f4f2eb;
-  --fin-muted: #a0a7ac;
+  --fin-muted: #aab3b9;
   --fin-line: #2c2c2c;
   --fin-soft: #20272b;
   --fin-input: #191919;
@@ -56,7 +56,7 @@
 }
 .fin-app h1,
 .fin-auth h1 {
-  font-size: 34px;
+  font-size: 32px;
   font-weight: 600;
   letter-spacing: -1.3px;
   line-height: 1.15;
@@ -126,7 +126,7 @@
   line-height: 1.6;
 }
 .fin-kicker {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 1.6px;
   color: var(--fin-muted);
@@ -248,7 +248,7 @@
   flex-direction: column;
 }
 .fin-sidebar-label {
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 1.6px;
   color: var(--fin-muted);
   margin: 48px 14px 15px;
@@ -302,7 +302,7 @@
   font-size: 13px;
 }
 .fin-sidebar-note p {
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.6;
   margin: 7px 0 16px;
 }
@@ -310,7 +310,7 @@
   border: 0;
   background: none;
   color: var(--fin-blue);
-  font-size: 11px !important;
+  font-size: 12px !important;
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -431,7 +431,7 @@
   font-size: 15px;
 }
 .fin-section-head > span {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--fin-muted);
 }
 .fin-section-head > svg {
@@ -492,7 +492,7 @@
   font-weight: 600;
 }
 .fin-transaction small {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--fin-muted);
   display: flex;
   align-items: center;
@@ -524,7 +524,7 @@
   margin-top: 50px;
   padding-top: 20px;
   border-top: 1px solid var(--fin-line);
-  font-size: 10px;
+  font-size: 12px;
   color: var(--fin-muted);
 }
 .fin-app-footer button {
@@ -534,7 +534,7 @@
   background: none;
   border: 0;
   color: inherit;
-  font-size: 10px !important;
+  font-size: 12px !important;
   padding: 0;
 }
 /* Payments, profile, verification */
@@ -642,7 +642,7 @@
   border: 1px solid var(--fin-line);
   border-radius: 20px;
   padding: 5px 10px;
-  font-size: 10px;
+  font-size: 12px;
   white-space: nowrap;
 }
 .fin-status.verified {
@@ -655,7 +655,7 @@
   margin-bottom: 15px;
 }
 .fin-flow-layout aside h2 {
-  font-size: 17px;
+  font-size: 18px;
 }
 .fin-flow-layout aside p {
   font-size: 12px;
@@ -806,7 +806,7 @@
   box-shadow: none;
 }
 .fin-app .personal-kyc h2 {
-  font-size: 17px;
+  font-size: 18px;
 }
 .fin-app .personal-kyc p,
 .fin-app .personal-kyc small {
@@ -904,7 +904,7 @@
 }
 .fin-art-card > b {
   display: block;
-  font-size: 23px;
+  font-size: 24px;
   line-height: 1.3;
   letter-spacing: -0.6px;
   margin: 20px 0;
@@ -913,7 +913,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: 1.5px;
 }
 .fin-art-chip {
@@ -964,7 +964,7 @@
   box-shadow: 0 12px 40px #20374905;
 }
 .fin-auth-form h1 {
-  font-size: 31px;
+  font-size: 32px;
   margin: 14px 0 12px;
 }
 .fin-auth-form > p {
@@ -997,7 +997,7 @@
   padding: 0;
 }
 .fin-forgot {
-  font-size: 11px !important;
+  font-size: 12px !important;
   text-align: left;
   line-height: 1.5;
   justify-content: flex-start;
@@ -1028,7 +1028,7 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--fin-muted);
   flex: 1;
 }
@@ -1041,7 +1041,7 @@
   display: grid;
   place-items: center;
   flex: none;
-  font-size: 9px;
+  font-size: 12px;
 }
 .fin-steps li.active {
   color: var(--fin-blue);
@@ -1058,7 +1058,7 @@
   display: flex;
   justify-content: space-between;
   color: var(--fin-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 .fin-connection {
   display: flex;
@@ -1224,7 +1224,7 @@
     gap: 4px;
     padding: 8px 4px;
     border-radius: 8px;
-    font-size: 9px;
+    font-size: 12px;
   }
   .fin-sidebar nav button > span {
     display: block;
@@ -1244,7 +1244,7 @@
     gap: 12px;
   }
   .fin-topbar > div:first-child > span:not(.fin-mobile-logo) {
-    font-size: 11px;
+    font-size: 12px;
   }
   .fin-mobile-logo {
     display: block;
@@ -1261,11 +1261,11 @@
     margin-bottom: 24px;
   }
   .fin-app h1 {
-    font-size: 29px;
+    font-size: 28px;
     letter-spacing: -1px;
   }
   .fin-kicker {
-    font-size: 9px;
+    font-size: 12px;
     letter-spacing: 1.3px;
   }
   .fin-panel {
@@ -1296,7 +1296,7 @@
     padding: 20px 17px;
   }
   .fin-payment-tiles p {
-    font-size: 11px;
+    font-size: 12px;
     line-height: 1.6;
   }
   .fin-payment-tiles h2 {
@@ -1327,10 +1327,10 @@
     gap: 10px;
   }
   .fin-transaction b {
-    font-size: 11px;
+    font-size: 12px;
   }
   .fin-transaction small {
-    font-size: 10px;
+    font-size: 12px;
   }
   .fin-transaction > span:last-child {
     max-width: 42%;
@@ -1343,14 +1343,14 @@
     height: 80px;
   }
   .fin-auth-header .logo {
-    font-size: 21px;
+    font-size: 20px;
   }
   .fin-auth-header .logo svg {
     width: 30px;
     height: 30px;
   }
   .fin-auth-header .fin-text {
-    font-size: 11px !important;
+    font-size: 12px !important;
   }
   .fin-auth-layout {
     padding: 20px 18px 30px;
@@ -1362,7 +1362,7 @@
     border-radius: 16px;
   }
   .fin-auth-form h1 {
-    font-size: 29px;
+    font-size: 28px;
   }
   .fin-auth-form > p {
     font-size: 13px;
@@ -1373,13 +1373,13 @@
   }
   .fin-auth-footer {
     padding: 18px 23px;
-    font-size: 9px;
+    font-size: 12px;
   }
   .fin-steps {
     gap: 8px;
   }
   .fin-steps li {
-    font-size: 9px;
+    font-size: 12px;
     gap: 4px;
   }
   .fin-auth .fin-fields {
@@ -1426,7 +1426,7 @@
   min-width: 160px;
 }
 .fin-topbar > div:first-child > span:not(.fin-mobile-logo) {
-  font-size: 19px;
+  font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.8px;
   color: var(--fin-ink);
@@ -1435,7 +1435,7 @@
   font-weight: 700;
 }
 .fin-topbar-brand .logo.roots-wordmark {
-  font-size: 22px;
+  font-size: 24px;
   color: var(--fin-ink);
 }
 .fin-desktop-nav {
@@ -1596,7 +1596,7 @@
 .fin-app .fin-pay-card h2 {
   color: #fff;
   margin: 0;
-  font-size: 21px;
+  font-size: 20px;
   letter-spacing: -0.01em;
 }
 .fin-pay-card > p {
@@ -1865,7 +1865,7 @@
 .fin-asset-icon-large.fin-asset-ngn { font-size: 40px; }
 .fin-asset-name, .fin-asset-value { display: grid; gap: 2px; }
 .fin-asset-name b, .fin-asset-value b { font-size: 13px; font-weight: 600; }
-.fin-asset-name small, .fin-asset-value small { font-size: 11px; color: var(--fin-muted); }
+.fin-asset-name small, .fin-asset-value small { font-size: 12px; color: var(--fin-muted); }
 .fin-asset-value { margin-left: auto; text-align: right; }
 .fin-asset-chevron { flex: 0 0 auto; color: var(--fin-muted); transition: transform .2s, color .2s; }
 .fin-asset-detail { max-width: 900px; margin: 0 auto; }
@@ -1881,8 +1881,8 @@
 .fin-asset-detail-title .fin-asset-icon { box-shadow: 0 5px 18px #071f2633; }
 .fin-asset-detail-title > div { min-width: 0; }
 .fin-asset-detail-title span:not(.fin-asset-icon) { display: block; color: #e0eaf1; font-size: 12px; }
-.fin-asset-detail-title h1 { margin: 0; color: #fff; font-size: 25px; letter-spacing: -.7px; }
-.fin-asset-detail-status { display: inline-flex; align-items: center; gap: 7px; padding: 7px 11px; border: 1px solid #ffffff44; border-radius: 100px; color: #f2f7f8; background: #ffffff16; font-size: 11px; white-space: nowrap; }
+.fin-asset-detail-title h1 { margin: 0; color: #fff; font-size: 28px; letter-spacing: -.7px; }
+.fin-asset-detail-status { display: inline-flex; align-items: center; gap: 7px; padding: 7px 11px; border: 1px solid #ffffff44; border-radius: 100px; color: #f2f7f8; background: #ffffff16; font-size: 12px; white-space: nowrap; }
 .fin-asset-detail-status i { width: 6px; height: 6px; border-radius: 50%; background: #a8e8d1; }
 .fin-asset-detail-ngn .fin-asset-detail-status i { background: #f4d096; }
 .fin-asset-detail-balance { margin: 44px 0 33px; }
@@ -1905,7 +1905,7 @@
 .fin-asset-detail-movement-icon { display: grid; place-items: center; width: 35px; height: 35px; flex: 0 0 35px; border-radius: 50%; background: var(--fin-soft); color: var(--fin-blue); }
 .fin-asset-detail-movement-copy { display: grid; min-width: 0; }
 .fin-asset-detail-movement-copy b, .fin-asset-detail-movement > b { font-size: 12px; font-weight: 650; }
-.fin-asset-detail-movement-copy small { color: var(--fin-muted); font-size: 11px; }
+.fin-asset-detail-movement-copy small { color: var(--fin-muted); font-size: 12px; }
 .fin-asset-detail-movement > b { margin-left: auto; white-space: nowrap; }
 .fin-asset-detail-empty { display: grid; justify-items: start; gap: 5px; padding: 18px 0 8px; color: var(--fin-muted); font-size: 12px; }
 .fin-asset-detail-empty svg { margin-bottom: 4px; color: var(--fin-blue); }
@@ -1920,8 +1920,8 @@
   .fin-asset-detail-title .fin-asset-icon { width: 56px; height: 56px; flex-basis: 56px; }
   .fin-asset-detail-title .fin-asset-qie img { width: 47px; height: 47px; }
   .fin-asset-detail-title .fin-asset-qusdc img { width: 118px; height: 118px; transform: translate(-30px, -20px); }
-  .fin-asset-detail-title .fin-asset-ngn { font-size: 33px; }
-  .fin-asset-detail-status { font-size: 10px; padding: 6px 8px; }
+  .fin-asset-detail-title .fin-asset-ngn { font-size: 32px; }
+  .fin-asset-detail-status { font-size: 12px; padding: 6px 8px; }
   .fin-asset-detail-status i { width: 7px; height: 7px; }
   .fin-asset-detail-balance { margin: 38px 0 26px; }
   .fin-asset-detail-balance strong { font-size: clamp(35px, 10vw, 49px); }
@@ -1958,7 +1958,7 @@
     font-size: 16px;
   }
   .fin-topbar-brand .logo.roots-wordmark {
-    font-size: 17px;
+    font-size: 18px;
   }
   .fin-topbar-brand .logo.roots-wordmark > svg {
     display: none;
@@ -1973,7 +1973,7 @@
     margin-bottom: 23px;
   }
   .fin-home-heading h1 {
-    font-size: 27px;
+    font-size: 28px;
   }
   .fin-pay-card {
     padding: 20px 18px;
@@ -2056,7 +2056,7 @@
 }
 .fin-app .fin-receive h1 {
   margin: 0;
-  font-size: 26px;
+  font-size: 28px;
   letter-spacing: -0.02em;
 }
 .fin-receive > p {
@@ -2187,7 +2187,7 @@
   flex: 1;
   border: 0 !important;
   background: transparent !important;
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   box-shadow: none !important;
@@ -2542,7 +2542,7 @@
 .fin-convert-quote dl > div, .fin-convert-instructions > div { display: flex; justify-content: space-between; gap: 12px; }
 .fin-convert-quote dt, .fin-convert-instructions dt { color: var(--fin-muted, #4d6170); }
 .fin-convert-quote dd, .fin-convert-instructions dd { margin: 0; font-weight: 600; text-align: right; overflow-wrap: anywhere; display: inline-flex; align-items: center; gap: 6px; }
-.fin-convert-total { padding-top: 10px; border-top: 1px solid var(--fin-line, #e3dccb); font-size: 17px; }
+.fin-convert-total { padding-top: 10px; border-top: 1px solid var(--fin-line, #e3dccb); font-size: 18px; }
 .fin-convert-warning { padding: 12px 14px; border-radius: 12px; background: #fff4e5; color: #7a4b00; }
 :root[data-theme='dark'] .fin-convert-warning { background: #3a2a10; color: #ffd591; }
 .fin-convert-orders { display: grid; gap: 8px; }
@@ -2553,7 +2553,7 @@
 
 /* Payment approval: PIN entry, passkeys and their setup in Security. */
 .fin-app .fin-pin-input {
-  font-size: 26px;
+  font-size: 28px;
   letter-spacing: 0.6em;
   text-align: center;
   font-variant-numeric: tabular-nums;
@@ -2623,4 +2623,383 @@
 }
 .fin-passkeys small {
   color: var(--fin-muted);
+}
+
+/* Type: one scale (12/13/14/15/16/18/20/24/28/32), lining tabular figures for money. */
+.fin-app h1 {
+  font-size: 30px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+.fin-app h2 {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.fin-app .fin-kicker {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+.fin-wallet-amount strong,
+.fin-asset-value b,
+.fin-transaction b,
+.fin-feed-amount,
+.fin-asset-detail-balance strong,
+.fin-asset-detail-movement b,
+.fin-receipt dd,
+.fin-convert-quote dd {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+@media (max-width: 650px) {
+  .fin-app h1 {
+    font-size: 28px;
+  }
+}
+
+/* Loading skeleton: the shape of Home, with a soft shimmer. */
+.fin-skeleton-top {
+  justify-content: space-between;
+}
+.fin-skeleton-top .fin-mobile-logo svg {
+  width: 32px;
+  height: 32px;
+}
+.fin-sk {
+  display: block;
+  border-radius: 10px;
+  background: linear-gradient(90deg, var(--fin-line) 0%, var(--fin-soft) 45%, var(--fin-line) 90%) 0 0 / 300% 100%;
+  animation: fin-shimmer 1.4s ease-in-out infinite;
+}
+.fin-sk-circle { width: 40px; height: 40px; border-radius: 50%; flex: none; }
+.fin-sk-title { width: min(320px, 70%); height: 32px; margin-bottom: 10px; }
+.fin-sk-line { width: min(220px, 60%); height: 14px; margin-bottom: 26px; }
+.fin-sk-amount { width: min(260px, 70%); height: 50px; }
+.fin-sk-card { grid-area: pay; height: 220px; border-radius: 24px; }
+.fin-skeleton-balance { grid-area: overview; }
+.fin-skeleton-balance .fin-sk-line { margin-bottom: 12px; }
+.fin-skeleton-rows {
+  grid-area: activity;
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+  border-radius: 22px;
+  border: 1px solid var(--fin-line);
+  background: var(--fin-panel);
+}
+.fin-skeleton-rows span {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.fin-skeleton-rows .fin-sk-line {
+  flex: 1;
+  margin: 0;
+  max-width: none;
+}
+@keyframes fin-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: 0 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fin-sk { animation: none; }
+}
+.fin-wallet-skeleton {
+  display: grid;
+  gap: 16px;
+}
+.fin-wallet-skeleton-receive {
+  justify-items: center;
+  padding-top: 18px;
+}
+.fin-sk-qr { width: min(100%, 320px); aspect-ratio: 0.82; border-radius: 26px; }
+.fin-sk-field { height: 70px; }
+.fin-sk-button { height: 48px; border-radius: 12px; }
+
+/* Toasts */
+.fin-toast-region {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  z-index: 60;
+  transform: translateX(-50%);
+  pointer-events: none;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+}
+.fin-toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  background: #172d40;
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 12px 32px #0f1f2b40;
+  animation: fin-toast-in 0.22s ease-out;
+}
+.fin-toast svg {
+  color: #8fd3a8;
+}
+:root[data-theme='dark'] .fin-toast {
+  background: #f4f2eb;
+  color: #10202d;
+}
+:root[data-theme='dark'] .fin-toast svg {
+  color: #2f7d4f;
+}
+@keyframes fin-toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@media (max-width: 650px) {
+  .fin-toast-region {
+    bottom: calc(92px + env(safe-area-inset-bottom));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fin-toast { animation: none; }
+}
+
+/* Account settings: read-only rows, each section edited on its own. */
+.fin-settings {
+  display: grid;
+  gap: 16px;
+  max-width: 760px;
+}
+.fin-settings-section {
+  display: grid;
+  gap: 4px;
+}
+.fin-settings-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.fin-app .fin-settings-head h2 {
+  margin: 0;
+  flex: 1;
+}
+.fin-settings-head .fin-secondary {
+  min-height: 40px;
+  padding: 8px 16px;
+}
+.fin-settings-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--fin-muted);
+  font-size: 12px;
+}
+.fin-settings-rows {
+  display: grid;
+  margin: 0;
+}
+.fin-settings-rows > div {
+  display: grid;
+  grid-template-columns: minmax(110px, 180px) 1fr;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--fin-line);
+}
+.fin-settings-rows dt {
+  color: var(--fin-muted);
+}
+.fin-settings-rows dd {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.fin-settings-form {
+  display: grid;
+  gap: 14px;
+}
+.fin-app .fin-settings-inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.fin-settings-inline select {
+  width: auto !important;
+  min-width: 120px;
+}
+.fin-settings-link {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 60px;
+  padding: 10px 0;
+  border: 0;
+  border-top: 1px solid var(--fin-line);
+  background: none;
+  color: var(--fin-ink);
+  text-align: left;
+}
+.fin-settings-link > svg:first-child {
+  flex: none;
+  color: var(--fin-blue);
+}
+.fin-settings-link > span {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+}
+.fin-settings-link small {
+  color: var(--fin-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fin-settings-link em {
+  font-style: normal;
+}
+.fin-settings-link > svg:last-child {
+  flex: none;
+  color: var(--fin-muted);
+}
+@media (max-width: 650px) {
+  .fin-settings-rows > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
+
+/* First run: three steps where the activity list will be. */
+.fin-get-started {
+  display: grid;
+  gap: 4px;
+  padding-top: 6px;
+}
+.fin-get-started-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.fin-get-started-head span {
+  color: var(--fin-muted);
+  font-size: 13px;
+}
+.fin-get-started-bar {
+  display: block;
+  height: 6px;
+  margin: 8px 0 6px;
+  border-radius: 999px;
+  background: var(--fin-soft);
+  overflow: hidden;
+}
+.fin-get-started-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #4f93c8;
+  transition: width 0.3s;
+}
+.fin-get-started button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 4px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: var(--fin-ink);
+  font-weight: 600;
+  text-align: left;
+}
+.fin-get-started button:not(:disabled):hover {
+  background: var(--fin-soft);
+}
+.fin-get-started button span {
+  flex: 1;
+}
+.fin-get-started button > svg:first-child {
+  color: var(--fin-muted);
+}
+.fin-get-started button.done {
+  color: var(--fin-muted);
+  cursor: default;
+}
+.fin-get-started button.done span {
+  text-decoration: line-through;
+}
+.fin-get-started button.done > svg:first-child {
+  color: #2f7d4f;
+}
+
+/* Dropdowns: the native control (accessible, mobile pickers) with the app's own chevron. */
+.fin-app select,
+.fin-auth select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 42px !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23566872' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 14px center !important;
+  background-size: 16px !important;
+  cursor: pointer;
+}
+:root[data-theme='dark'] .fin-app select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23aab3b9' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+}
+
+/* Receipt: printable on its own, with the Roots header. */
+.fin-receipt-print-head {
+  display: none;
+}
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .fin-receipt,
+  .fin-receipt * {
+    visibility: visible;
+  }
+  .fin-app {
+    background: #fff !important;
+  }
+  .fin-receipt {
+    position: absolute;
+    inset: 0 0 auto 0;
+    margin: 0;
+    padding: 32px;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    color: #10202d !important;
+  }
+  .fin-receipt-print-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 24px;
+    font-size: 18px;
+  }
+  .fin-receipt-print-head svg {
+    width: 32px;
+    height: 32px;
+  }
+  .fin-receipt-print-head span {
+    margin-left: auto;
+    color: #566872;
+    font-size: 14px;
+  }
+  .fin-receipt .fin-form-actions,
+  .fin-receipt .fin-section-head button {
+    display: none !important;
+  }
+  .fin-receipt dd,
+  .fin-receipt dt {
+    color: #10202d !important;
+  }
+}
+.fin-security-row-first {
+  border-top: 0;
+  padding: 0;
+}
+.fin-payment-settings .fin-switch {
+  min-height: 44px;
 }

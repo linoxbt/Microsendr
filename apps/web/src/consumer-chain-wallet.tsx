@@ -180,7 +180,10 @@ export function ConsumerChainWallet({
 
   return <section className={`fin-chain-wallet fin-chain-wallet-${mode}`} aria-label="QIE wallet">
     {switcher}
-    {!wallets ? <p className="fin-chain-empty" role="status">Loading…</p>
+    {!wallets ? <div className={`fin-wallet-skeleton fin-wallet-skeleton-${mode}`} role="status" aria-label="Loading wallets">
+        {mode === 'receive' ? <><i className="fin-sk fin-sk-line" /><i className="fin-sk fin-sk-qr" /></>
+          : <><i className="fin-sk fin-sk-field" /><i className="fin-sk fin-sk-field" /><i className="fin-sk fin-sk-button" /></>}
+      </div>
       : !source ? <div className="fin-chain-empty">
         {mode === 'receive' && <h1>Your address</h1>}
         <p>Link a wallet you control to {mode === 'receive' ? 'receive' : 'send'} QIE.</p>
