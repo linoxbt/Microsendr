@@ -30,7 +30,10 @@ export function PersonalKyc({ csrf }: { csrf?: string }) {
   async function refresh() {
     setKyc(await consumerRequest<Kyc>('kyc'));
   }
+  // A final decision does not change on its own, so polling stops there.
+  const final = kyc?.status === 'Approved' || kyc?.status === 'Declined';
   useEffect(() => {
+    if (final) return;
     void refresh().catch(() => setError('Verification status is unavailable'));
     // Poll only while the page is visible; catch up as soon as it is shown again.
     let timer: ReturnType<typeof setInterval> | undefined;
@@ -55,7 +58,7 @@ export function PersonalKyc({ csrf }: { csrf?: string }) {
       stop();
       document.removeEventListener('visibilitychange', visibility);
     };
-  }, []);
+  }, [final]);
   async function start() {
     setBusy(true);
     setError('');

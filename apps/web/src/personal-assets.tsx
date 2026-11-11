@@ -1,3 +1,4 @@
+import { formatAtomic } from './money.js';
 import { RootsWatermark } from './roots-logo.js';
 import React from 'react';
 import { ArrowDownLeft, ArrowLeft, ArrowRight, ArrowUpRight, Clock3, RefreshCw } from 'lucide-react';
@@ -19,17 +20,9 @@ export const assetDefaults: PersonalAsset[] = [
 
 export function assetAmount(asset: PersonalAsset): string {
   if (asset.amount_atomic === null || asset.decimals === null || asset.decimals === undefined) return '—';
-  const amount = BigInt(asset.amount_atomic);
-  const unit = 10n ** BigInt(asset.decimals);
-  const whole = (amount / unit).toLocaleString();
-  const fraction = (amount % unit).toString().padStart(asset.decimals, '0');
-  const visible = fraction.slice(0, 8).replace(/0+$/, '');
-  if (amount > 0n && amount < unit / 100000000n) return '<0.00000001';
-  return visible ? `${whole}.${visible}` : whole;
+  return formatAtomic(asset.amount_atomic, asset.decimals, 8);
 }
 
-/** Money amounts in lists always show at least two decimal places: 120 → 120.00, 1.5 → 1.50. */
-export const twoPlaces = (value: string) => /^[\d,]+$/.test(value) ? `${value}.00` : /^[\d,]+\.\d$/.test(value) ? `${value}0` : value;
 
 export function AssetIcon({ code, large = false }: { code: PersonalAsset['code']; large?: boolean }) {
   return <span className={`fin-asset-icon fin-asset-${code.toLowerCase()}${large ? ' fin-asset-icon-large' : ''}`} aria-hidden="true">
@@ -78,7 +71,7 @@ export function AssetDetail({ asset, activity, go, hidden, refresh, refreshing }
       </div>
       <div className="fin-asset-detail-balance">
         <span>Your balance</span>
-        <strong>{hidden ? '••••' : twoPlaces(assetAmount(asset))} <small>{asset.amount_atomic === null ? '' : asset.code}</small></strong>
+        <strong>{hidden ? '••••' : assetAmount(asset)} <small>{asset.amount_atomic === null ? '' : asset.code}</small></strong>
         <p>{asset.status === 'ready' ? 'Across your Roots wallets' : asset.code === 'NGN'
           ? 'Naira accounts are not available yet' : 'Balance could not be loaded'}</p>
       </div>
@@ -96,7 +89,7 @@ export function AssetDetail({ asset, activity, go, hidden, refresh, refreshing }
           <div className="fin-asset-detail-movement" key={item.id}>
             <span className="fin-asset-detail-movement-icon">{item.direction === 'received' ? <ArrowDownLeft size={17} /> : <ArrowUpRight size={17} />}</span>
             <span className="fin-asset-detail-movement-copy"><b>{item.direction === 'received' ? 'Received' : 'Sent'} {item.asset === 'QIEV3' ? 'QIE' : item.asset}</b><small>{new Date(item.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} · {item.status === 'confirmed' ? 'Completed' : item.status === 'failed' ? 'Failed' : 'Processing'}</small></span>
-            <b>{hidden ? '••••' : `${item.direction === 'received' ? '+' : '−'}${twoPlaces(assetAmount({ ...asset, amount_atomic: item.amount_atomic, decimals: item.decimals ?? asset.decimals }))}`}</b>
+            <b>{hidden ? '••••' : `${item.direction === 'received' ? '+' : '−'}${assetAmount({ ...asset, amount_atomic: item.amount_atomic, decimals: item.decimals ?? asset.decimals })}`}</b>
           </div>)}</div> : <div className="fin-asset-detail-empty"><Clock3 size={21} /><strong>No activity yet</strong><span>{asset.code === 'NGN' ? 'Naira activity will appear here when available.' : `${asset.code} you send or receive in your wallets appears here.`}</span></div>}
       </section>
       <section className="fin-panel fin-asset-detail-info" aria-label="Asset information">

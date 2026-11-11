@@ -23,6 +23,20 @@ export function isSessionExpired(error: unknown): error is SessionExpiredError {
   return error instanceof SessionExpiredError;
 }
 
+/** The request may or may not have reached Roots (offline, timed out, dropped). */
+export class NetworkError extends ConsumerRequestError {
+  constructor(timedOut: boolean) {
+    super(timedOut ? 'Roots is taking too long to answer. Check your connection and try again.'
+      : "Can't reach Roots. Check your connection and try again.", 0, timedOut ? 'timeout' : 'network');
+    this.name = 'NetworkError';
+  }
+}
+export const isNetworkError = (error: unknown): error is NetworkError => error instanceof NetworkError;
+
+// Sends sign and broadcast on the server, so they get longer than ordinary reads.
+const timeoutFor = (path: string, method: string) =>
+  method !== 'GET' && /transfers|settlements|conversion\/orders/.test(path) ? 45_000 : 20_000;
+
 export async function consumerRequest<T = any>(
   path: string,
   method = 'GET',
@@ -30,16 +44,22 @@ export async function consumerRequest<T = any>(
   csrf?: string,
   headers?: Record<string, string>,
 ): Promise<T> {
-  const response = await fetch(`/personal/api/${path}`, {
-    method,
-    credentials: 'include',
-    headers: {
-      ...(body ? { 'content-type': 'application/json' } : {}),
-      ...(csrf ? { 'x-kora-csrf': csrf } : {}),
-      ...headers,
-    },
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`/personal/api/${path}`, {
+      method,
+      credentials: 'include',
+      headers: {
+        ...(body ? { 'content-type': 'application/json' } : {}),
+        ...(csrf ? { 'x-kora-csrf': csrf } : {}),
+        ...headers,
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+      signal: AbortSignal.timeout(timeoutFor(path, method)),
+    });
+  } catch (cause) {
+    throw new NetworkError((cause as Error)?.name === 'TimeoutError');
+  }
   const data = await response.json().catch(() => null);
   if (!response.ok) {
     const code: string | null = typeof data?.error?.code === 'string' ? data.error.code : null;

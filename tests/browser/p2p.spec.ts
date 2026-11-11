@@ -239,3 +239,64 @@ test('each token has its own receive screen, and QUSDC sends from the Roots wall
   await expect(panel).toContainText('2.5 QUSDC to');
   expect(posts).toEqual([{ to: payeeAddress, amount_atomic: '2500000', asset: 'QUSDC', pin: '402913' }]);
 });
+
+test('a failed or expired account-wallet send is never shown as sent, and a clear failure gets a fresh key', async ({ page }) => {
+  await signedIn(page);
+  await page.route('**/personal/api/payment-auth', (route) => route.fulfill(json({ pin_set: true, pin_locked_until: null, passkeys: [] })));
+  const limits = { per_transfer_wei: '1000000000000000000000', daily_wei: '5000000000000000000000', requires_identity_verification: false };
+  await page.route('**/personal/api/wallets', (route) => route.fulfill(json({
+    data: [{ id: 'privy_wallet_mock', address: accountAddress, network: 'qie-mainnet', managed: true, custody: 'managed', can_send: true }],
+    managed_transfers: limits,
+  })));
+  const keys: string[] = [];
+  const replies = [
+    { status: 503, body: { error: { code: 'transfer_unavailable', message: 'Your transfer could not be sent. Nothing was moved; try again.' } } },
+    { status: 200, body: { id: 'stl_' + 'e'.repeat(32), tx_hash: null, status: 'expired', custody: 'managed' } },
+    { status: 409, body: { error: { code: 'transfer_failed', message: 'That attempt did not go through and nothing was sent. Try again.' } } },
+    { status: 200, body: { id: 'stl_' + 'f'.repeat(32), tx_hash: '0x' + 'f'.repeat(64), status: 'submitted', custody: 'managed' } },
+  ];
+  await page.route('**/personal/api/wallets/managed/transfers', (route) => {
+    keys.push(route.request().headers()['idempotency-key']);
+    const reply = replies.shift()!;
+    return route.fulfill(json(reply.body, reply.status));
+  });
+  await page.goto('/personal/send');
+  const panel = page.getByRole('region', { name: 'QIE wallet' });
+  await panel.getByLabel('Recipient').fill(payeeAddress);
+  await panel.getByLabel('Amount').fill('1');
+  await panel.getByRole('button', { name: 'Continue' }).click();
+  const confirm = async () => {
+    await panel.getByLabel('Payment PIN').fill('402913');
+    await panel.getByRole('button', { name: /Confirm and send/ }).click();
+  };
+  await confirm();
+  await expect(panel.getByRole('alert')).toContainText('Nothing was moved');
+  await expect(panel.getByRole('heading', { name: 'Sent' })).toHaveCount(0);
+  await confirm();
+  await expect(panel.getByRole('alert')).toContainText('did not go through');
+  await expect(panel.getByRole('heading', { name: 'Sent' })).toHaveCount(0);
+  await confirm();
+  await expect(panel.getByRole('alert')).toContainText('did not go through');
+  await confirm();
+  await expect(panel.getByRole('heading', { name: 'Sent' })).toBeVisible();
+  // The unclear 503 kept its key; the expired record and the 409 each got a fresh one.
+  expect(keys[1]).toBe(keys[0]);
+  expect(keys[2]).not.toBe(keys[1]);
+  expect(keys[3]).not.toBe(keys[2]);
+});
+
+test('if balances fail to load the rest of the app still works, with a retry', async ({ page }) => {
+  await signedIn(page);
+  let fail = true;
+  await page.route('**/personal/api/overview', (route) => fail
+    ? route.fulfill(json({ error: { code: 'qie_unavailable', message: 'QIE is temporarily unavailable.' } }, 503))
+    : route.fulfill(json(overview)));
+  await page.goto('/personal/home');
+  await expect(page.getByRole('heading', { name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText('Balances and activity could not load');
+  fail = false;
+  await page.getByRole('button', { name: 'Try again' }).click();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await page.goto('/personal/profile');
+  await expect(page.getByRole('heading', { name: 'Account' })).toBeVisible();
+});

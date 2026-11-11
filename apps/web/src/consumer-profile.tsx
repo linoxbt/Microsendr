@@ -66,20 +66,6 @@ export function ConsumerProfileForm({
   onSaved: () => Promise<void>;
   go: (path: string) => void;
 }) {
-  const [currency, setCurrency] = useState(profile.display_currency ?? 'USD');
-  const [error, setError] = useState('');
-  const toast = useToast();
-  async function saveCurrency(next: string) {
-    const previous = currency;
-    setCurrency(next); setError('');
-    try {
-      await consumerRequest('profile', 'PATCH', {
-        ...profilePayload({ ...profileDraft(profile), display_currency: next }), profile_version: profile.profile_version,
-      }, csrf);
-      await onSaved();
-      toast('Preference saved.');
-    } catch (e) { setCurrency(previous); setError((e as Error).message); }
-  }
   const locked = profile.identity_locked ? 'Locked after verification' : undefined;
   const dob = profile.date_of_birth
     ? new Date(`${profile.date_of_birth}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
@@ -112,15 +98,6 @@ export function ConsumerProfileForm({
           ['Occupation', shown(profile.occupation)],
           ['Nationality', profile.nationality ? countryName(profile.nationality) : '—'],
         ]} />
-        <section className="fin-panel fin-settings-section" aria-label="Preferences">
-          <div className="fin-settings-head"><h2>Preferences</h2></div>
-          <label className="fin-settings-inline">Display currency
-            <select value={currency} onChange={(e) => void saveCurrency(e.target.value)}>
-              {['USD', 'NGN', 'GHS', 'EUR', 'GBP'].map((x) => <option key={x}>{x}</option>)}
-            </select>
-          </label>
-          {error && <div className="fin-error" role="alert">{error}</div>}
-        </section>
         <section className="fin-panel fin-settings-section" aria-label="Sign-in and verification">
           <div className="fin-settings-head"><h2>Sign-in & verification</h2></div>
           <button className="fin-settings-link" onClick={() => go('/personal/security')}>

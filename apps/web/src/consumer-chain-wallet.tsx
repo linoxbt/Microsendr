@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { formatUnits, getAddress, isAddress, parseUnits } from 'viem';
 import { ArrowLeft, ArrowRight, ArrowUpRight, Check, Copy, Fingerprint, Link2, RefreshCw, Share2, Unlink } from 'lucide-react';
-import { consumerRequest } from './consumer-api.js';
+import { consumerRequest, isNetworkError } from './consumer-api.js';
 import { RecipientStatus, recipientPattern, useRecipient } from './recipient.js';
 import { RootsMark } from './roots-logo.js';
 import { startAuthentication } from '@simplewebauthn/browser';
@@ -77,7 +77,12 @@ async function signature(wallet: EthereumProvider, address: string, message: str
 }
 
 type Source = { key: string; wallet: WalletRecord; managed: boolean; label: string };
-type Sent = { id: string; hash?: string | null; confirmed: boolean };
+/**
+ * A send in progress. `done` shows the Sent screen; `unrecorded` means the wallet broadcast
+ * it but Roots could not record it yet, so the user can finish recording.
+ */
+type Sent = { id: string; hash?: string | null; done: boolean; unrecorded?: boolean };
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const short = (address: string) => `${address.slice(0, 6)}…${address.slice(-4)}`;
 
 /**
@@ -86,15 +91,18 @@ const short = (address: string) => `${address.slice(0, 6)}…${address.slice(-4)
  * address at a time; send goes form → review → done.
  */
 export function ConsumerChainWallet({
-  csrf, mode, onChanged, initialRecipient = '', initialToken = 'QIE',
+  csrf, mode, onChanged, initialRecipient = '', initialToken = 'QIE', go,
 }: {
   csrf: string;
   mode: 'receive' | 'send';
   onChanged?: () => Promise<unknown> | void;
   initialRecipient?: string;
   initialToken?: Token;
+  go?: (path: string) => void;
 }) {
   const [token, setToken] = useState<Token>(initialToken);
+  // What the user typed survives switching token or wallet.
+  const [draft, setDraft] = useState({ to: initialRecipient, amount: '' });
   const [wallets, setWallets] = useState<WalletRecord[]>();
   const [limits, setLimits] = useState<ManagedLimits | null>(null);
   const [sourceKey, setSourceKey] = useState('');
@@ -212,7 +220,8 @@ export function ConsumerChainWallet({
         {accountWallet}
       </div>
       : mode === 'receive' ? <ReceiveCard key={source.key} source={source} token={token} />
-        : <SendFlow key={`${source.key}-${token}`} source={source} token={token} limits={limits} csrf={csrf} initialRecipient={initialRecipient} onChanged={notifyChanged} onLock={setLocked} />}
+        : <SendFlow key={`${source.key}-${token}`} source={source} token={token} limits={limits} csrf={csrf} draft={draft} onDraft={setDraft}
+          onChanged={notifyChanged} onLock={setLocked} go={go} />}
     {manage}
     {notice && <p className="fin-chain-notice" role="status">{notice}</p>}
     {error && <p className="fin-error" role="alert">{error}</p>}
@@ -256,13 +265,16 @@ function ReceiveCard({ source, token }: { source: Source; token: Token }) {
   </div>;
 }
 
-function SendFlow({ source, token, limits, csrf, initialRecipient, onChanged, onLock }: {
-  source: Source; token: Token; limits: ManagedLimits | null; csrf: string; initialRecipient: string; onChanged: () => Promise<void>;
-  onLock: (locked: boolean) => void;
+function SendFlow({ source, token, limits, csrf, draft, onDraft, onChanged, onLock, go }: {
+  source: Source; token: Token; limits: ManagedLimits | null; csrf: string;
+  draft: { to: string; amount: string }; onDraft: (draft: { to: string; amount: string }) => void;
+  onChanged: () => Promise<void>; onLock: (locked: boolean) => void; go?: (path: string) => void;
 }) {
-  const [to, setTo] = useState(initialRecipient);
+  const [to, setToRaw] = useState(draft.to);
   const payee = useRecipient(to);
-  const [amount, setAmount] = useState('');
+  const [amount, setAmountRaw] = useState(draft.amount);
+  const setTo = (value: string) => { setToRaw(value); onDraft({ to: value, amount }); };
+  const setAmount = (value: string) => { setAmountRaw(value); onDraft({ to, amount: value }); };
   const [step, setStep] = useState<'form' | 'review'>('form');
   const [password, setPassword] = useState('');
   const [pin, setPin] = useState('');
@@ -277,12 +289,15 @@ function SendFlow({ source, token, limits, csrf, initialRecipient, onChanged, on
   const { decimals } = TOKENS[token];
   const atomicAmount = () => parseUnits(amount, decimals);
   useEffect(() => { onLock(step !== 'form' || !!sent); return () => onLock(false); }, [step, sent]);
-  // The account wallet is approved by passkey, else PIN, else password.
+  const pinLocked = !!auth?.pin_locked_until && new Date(auth.pin_locked_until) > new Date();
+  const pinUsable = !!auth?.pin_set && !pinLocked;
+  // The account wallet is approved by passkey, else PIN (unless locked), else password.
   useEffect(() => {
     if (!source.managed || step !== 'review' || auth) return;
     void consumerRequest<PaymentAuthStatus>('payment-auth').then((status) => {
       setAuth(status);
-      setMethod(status.passkeys.length && passkeysSupported() ? 'passkey' : status.pin_set ? 'pin' : 'password');
+      const locked = !!status.pin_locked_until && new Date(status.pin_locked_until) > new Date();
+      setMethod(status.passkeys.length && passkeysSupported() ? 'passkey' : status.pin_set && !locked ? 'pin' : 'password');
     }).catch(() => setAuth({ pin_set: false, pin_locked_until: null, passkeys: [] }));
   }, [source.managed, step, auth]);
 
@@ -290,8 +305,9 @@ function SendFlow({ source, token, limits, csrf, initialRecipient, onChanged, on
     event.preventDefault();
     setError('');
     const target = payee.recipient?.address;
-    if (!target || getAddress(target) === getAddress(source.wallet.address))
-      return setError(payee.error ?? 'Enter a QIE address or the @username of a Roots user.');
+    if (target && getAddress(target) === getAddress(source.wallet.address))
+      return setError("That's this wallet's own address. Choose someone else to pay.");
+    if (!target) return setError(payee.error ?? 'Enter a QIE address or the @username of a Roots user.');
     if (!new RegExp(`^\\d+(?:\\.\\d{1,${decimals}})?$`).test(amount) || atomicAmount() <= 0n)
       return setError(`Enter an amount above zero, with up to ${decimals} decimal places.`);
     const max = token === 'QUSDC' ? limits?.qusdc_per_transfer_atomic : limits?.per_transfer_wei;
@@ -313,10 +329,31 @@ function SendFlow({ source, token, limits, csrf, initialRecipient, onChanged, on
     return { passkey: { challenge_id, response } };
   }
   async function sendManaged() {
-    const result = await consumerRequest<{ id: string; tx_hash: string | null }>('wallets/managed/transfers', 'POST',
+    const result = await consumerRequest<{ id: string; tx_hash: string | null; status: string }>('wallets/managed/transfers', 'POST',
       { to: payee.recipient!.address, amount_atomic: atomicAmount().toString(), asset: token, ...(await approval()), ...extra }, csrf, { 'Idempotency-Key': requestKey });
     setPassword(''); setPin('');
-    setSent({ id: result.id, hash: result.tx_hash, confirmed: true });
+    // Only a transfer that was signed and recorded counts as sent.
+    if (!result.tx_hash || ['expired', 'failed', 'mismatched'].includes(result.status)) {
+      fresh();
+      throw new Error('That attempt did not go through and nothing was sent. Try again.');
+    }
+    setSent({ id: result.id, hash: result.tx_hash, done: true });
+  }
+  // The wallet already broadcast the transaction; record it with Roots, retrying briefly.
+  async function record(settlementId: string, hash: string) {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await consumerRequest(`settlements/${settlementId}/submit`, 'POST', { tx_hash: hash }, csrf);
+        setSent({ id: settlementId, hash, done: true });
+        return;
+      } catch (cause) {
+        if (attempt >= 2) {
+          setSent({ id: settlementId, hash, done: false, unrecorded: true });
+          throw new Error('Your wallet sent the payment, but Roots could not record it yet. Tap Finish recording.');
+        }
+        await sleep(1000 * 3 ** attempt);
+      }
+    }
   }
   async function sendLinked() {
     const target = payee.recipient!.address;
@@ -338,7 +375,7 @@ function SendFlow({ source, token, limits, csrf, initialRecipient, onChanged, on
       network: authorization.network, from: source.wallet.address, to: target,
       amount_atomic: atomic.toString(), expires_at: authorization.expires_at, signature: signed, asset: token, ...extra,
     }, csrf, { 'Idempotency-Key': authorization.idempotency_key });
-    setSent({ id: settlement.id, confirmed: false });
+    setSent({ id: settlement.id, done: false });
     // Only the wallet can broadcast. A rejected or ambiguous provider result is never retried automatically.
     if (await injected.request({ method: 'eth_chainId' }) !== qieChainId)
       throw new Error('Network changed. No transfer was requested. Switch back to QIE Mainnet.');
@@ -348,8 +385,7 @@ function SendFlow({ source, token, limits, csrf, initialRecipient, onChanged, on
       : { from: source.wallet.address, to: target, value: `0x${atomic.toString(16)}`, chainId: qieChainId }] });
     if (typeof hash !== 'string' || !/^0x[a-fA-F0-9]{64}$/.test(hash))
       throw new Error('Check your wallet history before attempting another transfer.');
-    setSent({ id: settlement.id, hash, confirmed: true });
-    await consumerRequest(`settlements/${settlement.id}/submit`, 'POST', { tx_hash: hash }, csrf);
+    await record(settlement.id, hash);
   }
   async function confirm(event: React.FormEvent) {
     event.preventDefault();
@@ -359,17 +395,41 @@ function SendFlow({ source, token, limits, csrf, initialRecipient, onChanged, on
       await (source.managed ? sendManaged() : sendLinked());
       fresh();
       await onChanged();
-    } catch (cause) { setError((cause as Error).message || 'Check your wallet history before retrying.'); }
+    } catch (cause) {
+      const code = (cause as { code?: string | null }).code;
+      // A definite refusal frees the attempt; an unclear outcome keeps its key, so retrying
+      // returns the same transfer instead of sending twice.
+      if (code && ['transfer_failed', 'transfer_expired', 'idempotency_conflict'].includes(code)) fresh();
+      setError(isNetworkError(cause)
+        ? "We couldn't confirm whether this went through. Check Activity before trying again."
+        : (cause as Error).message || 'Check your wallet history before retrying.');
+    }
+    finally { setBusy(false); }
+  }
+  async function finishRecording() {
+    if (!sent?.hash || busy) return;
+    setBusy(true); setError('');
+    try { await record(sent.id, sent.hash); await onChanged(); }
+    catch (cause) { setError((cause as Error).message); }
     finally { setBusy(false); }
   }
   const who = payee.recipient?.username ? `@${payee.recipient.username}` : payee.recipient ? short(payee.recipient.address) : '';
 
-  if (sent?.confirmed) return <div className="fin-send-done" role="status">
+  if (sent?.done) return <div className="fin-send-done" role="status">
     <span className="fin-send-done-icon"><Check size={28} /></span>
     <h2>Sent</h2>
     <p>{amount} {token} to {who}</p>
+    <p className="fin-small">Confirming on QIE Mainnet. It shows as completed in Activity once final.</p>
     {sent.hash && <a href={`${explorer}tx/${sent.hash}`} target="_blank" rel="noreferrer">View transaction <ArrowUpRight size={14} /></a>}
     <button className="fin-secondary" type="button" onClick={() => { setSent(undefined); setStep('form'); setTo(''); setAmount(''); }}>Done</button>
+  </div>;
+
+  if (sent?.unrecorded) return <div className="fin-send-done" role="alert">
+    <h2>Almost done</h2>
+    <p>Your wallet sent {amount} {token} to {who}. Roots still needs to record it.</p>
+    {sent.hash && <a href={`${explorer}tx/${sent.hash}`} target="_blank" rel="noreferrer">View transaction <ArrowUpRight size={14} /></a>}
+    <button className="fin-primary" type="button" onClick={() => void finishRecording()} disabled={busy}>{busy ? 'Recording…' : 'Finish recording'}</button>
+    {error && <p className="fin-error">{error}</p>}
   </div>;
 
   if (step === 'review') return <form className="fin-send-review" onSubmit={confirm} aria-label="Review payment">
@@ -396,10 +456,11 @@ function SendFlow({ source, token, limits, csrf, initialRecipient, onChanged, on
     </button>
     {source.managed && auth && <div className="fin-approval-switch">
       {method !== 'passkey' && !!auth.passkeys.length && passkeysSupported() && <button type="button" className="fin-text" onClick={() => setMethod('passkey')}>Use passkey</button>}
-      {method !== 'pin' && auth.pin_set && <button type="button" className="fin-text" onClick={() => setMethod('pin')}>Use PIN</button>}
-      {!auth.pin_set && !auth.passkeys.length && <a className="fin-text" href="/personal/security">Set up a PIN or passkey</a>}
+      {method !== 'pin' && pinUsable && <button type="button" className="fin-text" onClick={() => setMethod('pin')}>Use PIN</button>}
+      {pinLocked && <span className="fin-small">PIN locked until {new Date(auth.pin_locked_until!).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>}
+      {!auth.pin_set && !auth.passkeys.length && go && <button type="button" className="fin-text" onClick={() => go('/personal/security')}>Set up a PIN or passkey</button>}
     </div>}
-    {sent && !sent.confirmed && <p className="fin-small" role="status">Reference {sent.id}. Check your wallet history before trying again.</p>}
+    {sent && !sent.done && <p className="fin-small" role="status">Reference {sent.id}. Check your wallet history before trying again.</p>}
     {error && <p className="fin-error" role="alert">{error}</p>}
   </form>;
 

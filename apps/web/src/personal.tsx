@@ -37,7 +37,8 @@ import {
 import { logoutPrivyIfMounted } from './auth-shell.js';
 import { RootsMark, RootsWatermark } from './roots-logo.js';
 import { ConsumerChainWallet } from './consumer-chain-wallet.js';
-import { AssetDetail, AssetIcon, assetAmount, assetDefaults, twoPlaces, type PersonalAsset } from './personal-assets.js';
+import { AssetDetail, AssetIcon, assetAmount, assetDefaults, type PersonalAsset } from './personal-assets.js';
+import { formatAtomic } from './money.js';
 import { ConversionPanel } from './conversion-panel.js';
 import { ToastProvider, useToast } from './toast.js';
 import { type PaymentAuthStatus } from './payment-security.js';
@@ -110,10 +111,7 @@ const shortAddress = (value: string) =>
 const formatAmount = (item: Movement) => {
   if (item.decimals === null || item.decimals === undefined)
     return `${item.amount_atomic} base units of`;
-  const unit = 10n ** BigInt(item.decimals);
-  const n = BigInt(item.amount_atomic);
-  const fraction = (n % unit).toString().padStart(item.decimals, '0').slice(0, 6).replace(/0+$/, '');
-  return `${(n / unit).toLocaleString('en-US')}.${fraction.padEnd(2, '0')}`;
+  return formatAtomic(item.amount_atomic, item.decimals);
 };
 function PersonalLoading() {
   return (
@@ -193,16 +191,26 @@ export function PersonalPage({
     : ['deposit', 'withdraw', 'send', 'convert'].includes(tab)
       ? 'payments'
       : tab;
+  // Balances and activity load on their own: a slow or failing chain read never blocks
+  // the rest of the app. Each load is numbered so an older answer cannot overwrite a newer one.
+  const overviewSeq = useRef(0), appliedSeq = useRef(0);
+  const [overviewError, setOverviewError] = useState('');
+  async function loadOverview() {
+    const seq = ++overviewSeq.current;
+    try {
+      const next = await consumerRequest<Overview>('overview');
+      if (seq > appliedSeq.current) { appliedSeq.current = seq; setOverview(next); setOverviewError(''); }
+    } catch (e) {
+      if (!isSessionExpired(e) && seq > appliedSeq.current) setOverviewError((e as Error).message);
+      throw e;
+    }
+  }
   async function refresh() {
     const s = await consumerRequest<Session>('session');
     setSession(s);
     if (s.authenticated) {
-      const [p, o] = await Promise.all([
-        consumerRequest<ConsumerProfile>('profile'),
-        consumerRequest<Overview>('overview'),
-      ]);
-      setProfile(p);
-      setOverview(o);
+      setProfile(await consumerRequest<ConsumerProfile>('profile'));
+      void loadOverview().catch(() => undefined);
     }
   }
   // Drop everything tied to the account so no stale dashboard survives a sign-out or expiry.
@@ -230,6 +238,12 @@ export function PersonalPage({
   useEffect(() => {
     if (session) onAuthChange(session.authenticated);
   }, [session?.authenticated, onAuthChange]);
+  // Each page names itself in the browser tab.
+  useEffect(() => {
+    const titles: Record<string, string> = { home: 'Home', payments: 'Payments', deposit: 'Add money', send: 'Send', convert: 'Convert',
+      withdraw: 'Withdraw', activity: 'Activity', profile: 'Account', security: 'Security', identity: 'Identity', assets: 'Assets', onboarding: 'Welcome' };
+    if (session?.authenticated) document.title = `${titles[tab] ?? 'Roots'} · Roots`;
+  }, [tab, session?.authenticated]);
   useEffect(() => {
     if (tab !== 'activity') setSelected(null);
     setError('');
@@ -246,13 +260,13 @@ export function PersonalPage({
   useEffect(() => {
     if (!session?.authenticated) return;
     let active = true;
+    let inFlight = false;
     let timer: ReturnType<typeof setInterval> | undefined;
+    // One poll at a time: a slow answer is never stacked on or overtaken by older ones.
     const tick = () => {
-      void consumerRequest<Overview>('overview')
-        .then((next) => {
-          if (active) setOverview(next);
-        })
-        .catch(() => undefined);
+      if (inFlight || !active) return;
+      inFlight = true;
+      void loadOverview().catch(() => undefined).finally(() => { inFlight = false; });
     };
     const start = () => {
       if (timer === undefined && !document.hidden) timer = setInterval(tick, 15000);
@@ -306,7 +320,7 @@ export function PersonalPage({
       );
     signingOut.current = false;
   }
-  if (!session || (session.authenticated && (!profile || !overview)))
+  if (!session || (session.authenticated && !profile))
     return error ? (
       <div className="fin-connection">
         <RootsMark />
@@ -315,6 +329,7 @@ export function PersonalPage({
         <button className="fin-primary" onClick={retry}>
           Try again
         </button>
+        {session?.authenticated && <button className="fin-text" onClick={logout}>Sign out</button>}
       </div>
     ) : path.startsWith('/personal/login') || path === '/personal' ? (
       <PersonalLoading />
@@ -341,7 +356,7 @@ export function PersonalPage({
       />
     );
   const p = profile!,
-    o = overview!,
+    o: Overview = overview ?? { balances: [], total: null, assets: [], activity: [], capabilities: {} },
     csrf = session.csrf_token!;
   const assets = assetDefaults.map(defaultAsset => o.assets?.find(asset => asset.code === defaultAsset.code) ?? defaultAsset);
   const walletValue = o.wallet_value_usd?.amount_usd ?? null;
@@ -509,7 +524,7 @@ export function PersonalPage({
               onClick={() => go('/personal/profile')}
               aria-label="Open your profile"
             >
-              {(p.first_name?.[0] ?? 'M') + (p.last_name?.[0] ?? '')}
+              {(p.first_name?.[0] ?? 'R') + (p.last_name?.[0] ?? '')}
             </button>
           </div>
         </header>
@@ -538,6 +553,12 @@ export function PersonalPage({
                   <RefreshCw size={18} className={refreshing ? 'fin-spin' : ''} />
                 </button>
               </div>
+              {overviewError && (
+                <div className="fin-error fin-inline-retry" role="alert">
+                  <span>Balances and activity could not load. {overviewError}</span>
+                  <button className="fin-text" onClick={() => void loadOverview().catch(() => undefined)}>Try again</button>
+                </div>
+              )}
               <div className="fin-home-grid">
                 <section className="fin-wallet-overview" aria-label="Your wallet overview">
                   <div className="fin-wallet-overview-top">
@@ -562,7 +583,7 @@ export function PersonalPage({
                         {hidden ? <EyeOff size={17} /> : <Eye size={17} />}
                       </button>
                     </div>
-                    <p>{hidden ? 'Your balances are hidden' : walletValue === null
+                    <p>{hidden ? 'Your balances are hidden' : !overview ? 'Loading balances…' : walletValue === null
                       ? 'Wallet value temporarily unavailable' : o.wallet_value_usd?.checked_at
                         ? `Estimated in USD · Price checked ${new Date(o.wallet_value_usd.checked_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
                         : 'Estimated in USD · See each balance below'}</p>
@@ -664,7 +685,11 @@ export function PersonalPage({
                         </button>
                       ))}
                     </div>
-                  )) : (
+                  )) : !overview ? (
+                    <div className="fin-skeleton-rows fin-skeleton-inline" aria-label="Loading activity" role="status">
+                      {[0, 1, 2].map((row) => <span key={row}><i className="fin-sk fin-sk-circle" /><i className="fin-sk fin-sk-line" /></span>)}
+                    </div>
+                  ) : (
                     <GetStarted profile={p} go={go} />
                   )}
                 </section>
@@ -673,10 +698,10 @@ export function PersonalPage({
                     <h2>Assets</h2>
                   </div>
                   <div className="fin-assets-list">
-                    {assets.map(asset => <button className="fin-asset-row" key={asset.code} onClick={() => go(`/personal/assets/${asset.code.toLowerCase()}`)} aria-label={`View ${asset.code} details, ${asset.name}, balance ${hidden ? 'hidden' : asset.amount_atomic === null ? 'unavailable' : `${twoPlaces(assetAmount(asset))} ${asset.code}`}`}>
+                    {assets.map(asset => <button className="fin-asset-row" key={asset.code} onClick={() => go(`/personal/assets/${asset.code.toLowerCase()}`)} aria-label={`View ${asset.code} details, ${asset.name}, balance ${hidden ? 'hidden' : asset.amount_atomic === null ? 'unavailable' : `${assetAmount(asset)} ${asset.code}`}`}>
                       <AssetIcon code={asset.code} />
                       <span className="fin-asset-name"><b>{asset.code}</b><small>{asset.name}</small></span>
-                      <span className="fin-asset-value"><b>{hidden ? '••••' : twoPlaces(assetAmount(asset))}</b><small>{asset.status === 'ready' ? 'Onchain' : 'Unavailable'}</small></span>
+                      <span className="fin-asset-value"><b>{hidden ? '••••' : assetAmount(asset)}</b><small>{asset.status === 'ready' ? 'Onchain' : 'Unavailable'}</small></span>
                       <ChevronRight className="fin-asset-chevron" size={17} />
                     </button>)}
                   </div>
@@ -757,7 +782,7 @@ export function PersonalPage({
                   <dl>
                     {Object.entries(received(receipt) ? {
                       Status: statusLabel(receipt.status),
-                      Amount: `${formatAmount(receipt)} ${assetLabel(receipt.asset)}`,
+                      Amount: hidden ? '••••' : `${formatAmount(receipt)} ${assetLabel(receipt.asset)}`,
                       Date: new Date(receipt.created_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }),
                       From: receipt.from ?? '',
                       'Received at': receipt.to,
@@ -766,7 +791,7 @@ export function PersonalPage({
                       'Transaction reference': receipt.tx_hash ?? '',
                     } : {
                       Status: statusLabel(receipt.status),
-                      Amount: `${formatAmount(receipt)} ${assetLabel(receipt.asset)}`,
+                      Amount: hidden ? '••••' : `${formatAmount(receipt)} ${assetLabel(receipt.asset)}`,
                       Date: new Date(receipt.created_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }),
                       Recipient: receipt.to_username ? `@${receipt.to_username} · ${receipt.to}` : receipt.to,
                       Reference: receipt.id,
@@ -997,6 +1022,7 @@ function MoneyFlow({
             onChanged={onChanged}
             initialRecipient={kind === 'send' ? initialRecipient : ''}
             initialToken={initialToken}
+            go={go}
           />
         )}
       </div>

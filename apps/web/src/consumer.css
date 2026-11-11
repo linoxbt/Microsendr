@@ -3296,3 +3296,16 @@
   border-radius: 50%;
   object-fit: cover;
 }
+
+.fin-inline-retry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.fin-skeleton-inline {
+  border: 0;
+  padding: 8px 0;
+  background: none;
+}

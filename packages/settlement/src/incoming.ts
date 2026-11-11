@@ -112,7 +112,8 @@ export async function indexOneIncomingWallet(client = new QieClient(), request: 
 
 /** Incoming transfers for an account: only those that arrived while it held the address. */
 export async function personalIncomingTransfers(userId: string, accountId: string, limit = 50) {
-  const rows = (await pool.query(`SELECT t.* FROM chain_incoming_transfers t
+  const rows = (await pool.query(`SELECT t.*, EXISTS(SELECT 1 FROM personal_managed_wallets m WHERE m.address=t.address) AS managed
+    FROM chain_incoming_transfers t
     WHERE t.network=$3 AND (
       EXISTS(SELECT 1 FROM personal_chain_wallets w WHERE w.personal_user_id=$1 AND w.account_id=$2 AND w.address=t.address
         AND t.block_time>=w.created_at-interval '1 hour' AND (w.status='active' OR t.block_time<=w.updated_at))
@@ -128,6 +129,6 @@ export function publicIncoming(row: Record<string, any>) {
     amount_atomic: String(row.amount_atomic), status: 'confirmed', tx_hash: row.tx_hash,
     block_number: String(row.block_number), block_hash: row.block_hash, created_at: row.block_time,
     updated_at: row.observed_at, explorer_url: `${QIE_EXPLORER}tx/${row.tx_hash}`,
-    custody: 'user_wallet', ledger_credited: false,
+    custody: row.managed ? 'managed' : 'user_wallet', ledger_credited: false,
   };
 }
