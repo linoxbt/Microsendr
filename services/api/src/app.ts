@@ -59,6 +59,7 @@ import { registerProduct } from './product.js';
 import { registerPersonal, type PersonalOptions } from './personal.js';
 import { registerDidit } from './didit.js';
 import { clientIp, trustedProxies } from './client-ip.js';
+import { legacyPlatformEnabled, legacyPlatformPath } from './config.js';
 // Keep in step with the [[headers]] block in netlify.toml, which serves production.
 export const contentSecurityPolicy =
   "default-src 'self'; script-src 'self' https://challenges.cloudflare.com https://js.hcaptcha.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://auth.privy.io https://*.hcaptcha.com; font-src 'self'; connect-src 'self' https://auth.privy.io https://api.privy.io https://challenges.cloudflare.com https://*.hcaptcha.com https://verification.didit.me https://rpc1mainnet.qie.digital; frame-src https://auth.privy.io https://challenges.cloudflare.com https://*.hcaptcha.com https://verify.didit.me; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'";
@@ -130,6 +131,9 @@ export async function buildApi(options: ApiOptions = {}) {
   app.decorateRequest('rawBody', '');
   app.decorateRequest('clientIp', '');
   app.addHook('onRequest', async (request) => {
+    // The retired business platform answers as if it did not exist, before any other work.
+    if (!legacyPlatformEnabled() && legacyPlatformPath.test(request.url))
+      throw new PaymentError(404, 'not_found', 'Not found');
     request.clientIp = await clientIp(request);
   });
   await app.register(rateLimit, {
@@ -409,7 +413,7 @@ export async function buildApi(options: ApiOptions = {}) {
   }
   app.get('/health', async () => {
     await pool.query('SELECT 1');
-    return { status: 'ok', service: 'kora-api', mode: 'sandbox' };
+    return { status: 'ok', service: 'roots-api' };
   });
   app.get('/v1/me', async (request) => {
     const merchantId = principal(request, 'payments:read');

@@ -3,43 +3,8 @@
   publish = "apps/web/dist"
 
 [[redirects]]
-  from = "/console/*"
-  to = "https://roots-api.up.railway.app/console/:splat"
-  status = 200
-  force = true
-  signed = "KORA_PROXY_SIGNING_SECRET"
-
-[[redirects]]
   from = "/personal/api/*"
   to = "https://roots-api.up.railway.app/personal/api/:splat"
-  status = 200
-  force = true
-  signed = "KORA_PROXY_SIGNING_SECRET"
-
-[[redirects]]
-  from = "/business/api/*"
-  to = "https://roots-api.up.railway.app/business/api/:splat"
-  status = 200
-  force = true
-  signed = "KORA_PROXY_SIGNING_SECRET"
-
-[[redirects]]
-  from = "/v1/*"
-  to = "https://roots-api.up.railway.app/v1/:splat"
-  status = 200
-  force = true
-  signed = "KORA_PROXY_SIGNING_SECRET"
-
-[[redirects]]
-  from = "/openapi.json"
-  to = "https://roots-api.up.railway.app/openapi.json"
-  status = 200
-  force = true
-  signed = "KORA_PROXY_SIGNING_SECRET"
-
-[[redirects]]
-  from = "/reference/*"
-  to = "https://roots-api.up.railway.app/reference/:splat"
   status = 200
   force = true
   signed = "KORA_PROXY_SIGNING_SECRET"

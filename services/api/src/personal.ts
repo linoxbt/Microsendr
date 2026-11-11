@@ -68,7 +68,7 @@ export async function required(request: FastifyRequest, write = false) {
 function publicSession(row: Awaited<ReturnType<typeof required>>) {
   return { authenticated: true, csrf_token: row.csrf_token, email: row.email,
     residence_country: row.residence_country, display_currency: row.display_currency,
-    kyc_state: row.kyc_state, account_id: row.account_id, privy_subject: row.privy_subject ?? null, mode: 'sandbox' };
+    kyc_state: row.kyc_state, account_id: row.account_id, privy_subject: row.privy_subject ?? null };
 }
 function setCookie(request: FastifyRequest, reply: FastifyReply, token: string) {
   reply.setCookie('kora_personal', token, { httpOnly: true, sameSite: 'strict',
@@ -90,8 +90,7 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
     const requestOrigin = origin(request);
     const { access_token, identity_token, restore_existing } = z.object({ restore_existing: z.boolean().optional(), access_token: z.string().min(1).max(8192), identity_token: z.string().min(1).max(32768).optional() }).strict().parse(request.body);
     const verified = await verifier.verify(access_token);
-    if (restore_existing && !(await pool.query('SELECT 1 FROM personal_users WHERE privy_app_id=$1 AND privy_subject=$2',[verified.app_id,verified.subject])).rowCount)
-      throw new PaymentError(404,'previous_account_not_found','No previous account was found. Use Create an account.');
+    void restore_existing; // Privy sign-in only restores existing accounts; the flag is kept for older clients.
     let email: string | null = null;
     if (identity_token) email = emailSchema.parse(await verifier.verifyEmailIdentity(identity_token, verified.subject));
     else {
@@ -103,19 +102,16 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
     const result = await transaction(async (c) => {
       await c.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [`personal-privy:${verified.app_id}:${verified.subject}`]);
       if (email) await c.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [`personal-email:${email}`]);
+      // Restore only: an account already linked to this Privy user, or one whose email Privy has verified.
+      // New accounts are created only by registration, which checks age, profile and limits.
       let user = (await c.query('SELECT * FROM personal_users WHERE privy_app_id=$1 AND privy_subject=$2 FOR UPDATE', [verified.app_id, verified.subject])).rows[0];
-      if (email && user && user.email !== email) {
+      const foundBySubject = !!user;
+      if (!user && email) user = (await c.query('SELECT * FROM personal_users WHERE email=$1 FOR UPDATE', [email])).rows[0];
+      if (!user) throw new PaymentError(404, 'previous_account_not_found', 'No Roots account uses this sign-in. Create an account with your email.');
+      if (foundBySubject && email && user.email !== email) {
         if ((await c.query('SELECT 1 FROM personal_users WHERE email=$1', [email])).rowCount)
           throw new PaymentError(409, 'identity_conflict', 'This email is linked to another account');
         await c.query('UPDATE personal_users SET email=$2,email_verified_at=now(),updated_at=now() WHERE id=$1', [user.id, email]);
-      }
-      if (!user && email) {
-        await c.query('INSERT INTO personal_users(id,email,email_verified_at,privy_app_id,privy_subject) VALUES($1,$2,now(),$3,$4) ON CONFLICT(email) DO NOTHING', [id('usr'), email, verified.app_id, verified.subject]);
-        user = (await c.query('SELECT * FROM personal_users WHERE email=$1 FOR UPDATE', [email])).rows[0];
-      }
-      if (!user) {
-        await c.query('INSERT INTO personal_users(id,privy_app_id,privy_subject) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [id('usr'), verified.app_id, verified.subject]);
-        user = (await c.query('SELECT * FROM personal_users WHERE privy_app_id=$1 AND privy_subject=$2 FOR UPDATE', [verified.app_id, verified.subject])).rows[0];
       }
       if (user.privy_subject && (user.privy_subject !== verified.subject || user.privy_app_id !== verified.app_id))
         throw new PaymentError(409, 'identity_conflict', 'This email is linked to another account');
@@ -130,7 +126,7 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
       await c.query('INSERT INTO ledger_accounts(id,asset_position_id,asset,purpose) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING', ['sys:NGN:funding',ngn,'NGN','funding']);
       const token = randomBytes(32).toString('hex'), csrfToken = randomBytes(32).toString('hex');
       await c.query("INSERT INTO personal_sessions(token_hash,personal_user_id,csrf_token,expires_at) VALUES($1,$2,$3,now()+interval '1 day')", [hashKey(token), user.id, csrfToken]);
-      if (restore_existing) await c.query("UPDATE personal_sessions SET auth_method='restore' WHERE token_hash=$1",[hashKey(token)]);
+      await c.query("UPDATE personal_sessions SET auth_method='restore' WHERE token_hash=$1",[hashKey(token)]);
       return { token, csrfToken, userId: user.id };
     });
     setCookie(request, reply, result.token);

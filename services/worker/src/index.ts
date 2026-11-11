@@ -9,6 +9,7 @@ import { indexOneIncomingWallet } from '../../../packages/settlement/src/incomin
 import { reconcileOneConversionOrder } from '../../api/src/conversion.js';
 import { reconcileOneDiditSession } from '../../api/src/didit.js';
 import { reconcileOnePersonalPaystack } from '../../api/src/personal-paystack.js';
+import { legacyPlatformEnabled, sandboxFixturesEnabled } from '../../api/src/config.js';
 let running = true;
 const args = process.argv.slice(2);
 const value = (flag: string) => (args.includes(flag) ? args[args.indexOf(flag) + 1] : undefined);
@@ -39,7 +40,13 @@ try {
     await indexOneIncomingWallet();
     await reconcileOneConversionOrder();
   } else {
-    const queues = { dispatch, rail, webhooks, chain: reconcileOneChainSettlement, kyc: () => reconcileOneDiditSession(), paystack: () => reconcileOnePersonalPaystack(), incoming: () => indexOneIncomingWallet(), conversion: () => reconcileOneConversionOrder() };
+    // Roots jobs always run; the retired business platform and the Paystack sandbox only where enabled.
+    const queues: Record<string, () => Promise<boolean>> = {
+      chain: reconcileOneChainSettlement, kyc: () => reconcileOneDiditSession(),
+      incoming: () => indexOneIncomingWallet(), conversion: () => reconcileOneConversionOrder(),
+      ...(legacyPlatformEnabled() ? { dispatch, rail, webhooks } : {}),
+      ...(sandboxFixturesEnabled() ? { paystack: () => reconcileOnePersonalPaystack() } : {}),
+    };
     const names = Object.keys(queues);
     // A heartbeat file, touched as queue iterations complete, backs the container healthcheck.
     let beat = 0;

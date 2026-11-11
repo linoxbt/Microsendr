@@ -33,6 +33,17 @@ export function authSecret(override?: string) {
   return secret;
 }
 
+// The retired business platform (console, /v1 developer API, network, Stellar, rails)
+// stays available for local and CI regression only. In production it is unreachable
+// unless KORA_LEGACY_PLATFORM=true is set on purpose.
+export function legacyPlatformEnabled() {
+  const flag = process.env.KORA_LEGACY_PLATFORM;
+  if (flag === 'true') return true;
+  if (flag === 'false') return false;
+  return !production();
+}
+export const legacyPlatformPath = /^\/(?:v1|console|business|internal|openapi\.json|reference)(?:[/?#]|$)/;
+
 // Self-approval, simulated funding and Paystack test routes exist for local and CI
 // regression coverage only. They are off in production unless explicitly enabled.
 export function sandboxFixturesEnabled() {
