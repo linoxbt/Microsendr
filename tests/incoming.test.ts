@@ -44,8 +44,12 @@ async function owner(address: string, createdAt = '2000-01-01T00:00:00Z') {
   return { userId, accountId, walletId };
 }
 
-async function drain(client: QieClient, request: typeof fetch) {
-  // Each call scans one due (address, asset); run until nothing is due.
+async function drain(client: QieClient, request: typeof fetch, address: string) {
+  // The shared test database holds wallets from other suites. Make sure every wallet has a
+  // cursor, defer every address but this test's, then scan until nothing is due.
+  await pool.query(`UPDATE chain_incoming_cursors SET next_poll_at=now()+interval '1 day' WHERE address<>$1`, [address]);
+  await indexOneIncomingWallet(client, request);
+  await pool.query(`UPDATE chain_incoming_cursors SET next_poll_at=now()+interval '1 day' WHERE address<>$1`, [address]);
   for (let i = 0; i < 400 && await indexOneIncomingWallet(client, request); i++);
 }
 
@@ -75,9 +79,9 @@ test('verified incoming QIE and QUSDC are recorded once; explorer claims without
       { transaction_hash: token, log_index: 2, token: { address_hash: QIE_QUSDC_CONTRACT }, ...at(902) }],
   );
   const client = new QieClient(chain(txs));
-  await drain(client, request);
+  await drain(client, request, address);
   await pool.query("UPDATE chain_incoming_cursors SET next_poll_at=now() WHERE address=$1", [address]);
-  await drain(client, request);
+  await drain(client, request, address);
   const rows = (await pool.query('SELECT asset,tx_hash,amount_atomic::text,from_address,log_index FROM chain_incoming_transfers WHERE address=$1 ORDER BY asset', [address])).rows;
   assert.deepEqual(rows, [
     { asset: 'QIEV3', tx_hash: native, amount_atomic: '500000000000000000', from_address: sender, log_index: -1 },
@@ -111,7 +115,7 @@ test('explorer failures back off one address without advancing its cursor', asyn
   await owner(address);
   const client = new QieClient(chain(new Map()));
   const failing = (async () => new Response('busy', { status: 503 })) as typeof fetch;
-  await drain(client, failing);
+  await drain(client, failing, address);
   const rows = (await pool.query('SELECT failures,scanned_through_block,last_error,next_poll_at>now() AS later FROM chain_incoming_cursors WHERE address=$1', [address])).rows;
   assert.equal(rows.length, 2);
   for (const row of rows) assert.deepEqual([row.failures, row.scanned_through_block, row.last_error, row.later], [1, null, 'explorer_status_503', true]);
