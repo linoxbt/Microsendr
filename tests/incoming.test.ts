@@ -120,3 +120,67 @@ test('explorer failures back off one address without advancing its cursor', asyn
   assert.equal(rows.length, 2);
   for (const row of rows) assert.deepEqual([row.failures, row.scanned_through_block, row.last_error, row.later], [1, null, 'explorer_status_503', true]);
 });
+
+test('a deposit the node cannot prove yet holds the cursor and is recorded on a later pass', async () => {
+  const address = hex(20), sender = hex(20), real = hex(32);
+  await owner(address);
+  const txs = new Map<string, Tx>();
+  const recent = new Date().toISOString();
+  const request = explorer([{ hash: real, value: '7000000000000000000', status: 'ok', block_number: 900, timestamp: recent, to: { hash: address } }], []);
+  // The explorer already lists it but the node does not have it yet.
+  await drain(new QieClient(chain(txs)), request, address);
+  assert.equal((await pool.query('SELECT 1 FROM chain_incoming_transfers WHERE tx_hash=$1', [real])).rowCount, 0);
+  const held = (await pool.query("SELECT scanned_through_block::text b FROM chain_incoming_cursors WHERE address=$1 AND asset='QIEV3'", [address])).rows[0];
+  assert.equal(held.b, '899');
+  // The node catches up: the next pass records it and the cursor moves on.
+  txs.set(real, { from: sender, to: address, value: 7_000_000_000_000_000_000n, block: 900n });
+  await pool.query('UPDATE chain_incoming_cursors SET next_poll_at=now() WHERE address=$1', [address]);
+  await drain(new QieClient(chain(txs)), request, address);
+  assert.equal((await pool.query('SELECT 1 FROM chain_incoming_transfers WHERE tx_hash=$1', [real])).rowCount, 1);
+  const moved = (await pool.query("SELECT scanned_through_block::text b FROM chain_incoming_cursors WHERE address=$1 AND asset='QIEV3'", [address])).rows[0];
+  assert.equal(moved.b, String(HEAD - 12n));
+});
+
+test('a deposit buried under many pages of dust is still found by resuming the walk', async () => {
+  const address = hex(20), sender = hex(20);
+  await owner(address);
+  const txs = new Map<string, Tx>();
+  // Fourteen pages of dust (newest first), then the real deposit on page fifteen.
+  const pages: { hash: string; block: number }[][] = [];
+  for (let page = 0; page < 14; page++) {
+    const hash = hex(32), block = 980 - page;
+    txs.set(hash, { from: sender, to: address, value: 1n, block: BigInt(block) });
+    pages.push([{ hash, block }]);
+  }
+  const real = hex(32);
+  txs.set(real, { from: sender, to: address, value: 9_000_000_000_000_000_000n, block: 950n });
+  pages.push([{ hash: real, block: 950 }]);
+  const calls: string[] = [];
+  const request = (async (url: string | URL | Request) => {
+    calls.push(String(url));
+    if (String(url).includes('/token-transfers')) return Response.json({ items: [], next_page_params: null });
+    const page = Number(new URL(String(url)).searchParams.get('page') ?? '0');
+    return Response.json({
+      items: pages[page].map((item) => ({ hash: item.hash, value: item.hash === real ? '9000000000000000000' : '1', status: 'ok',
+        block_number: item.block, timestamp: '2026-11-01T00:00:00Z', to: { hash: address } })),
+      next_page_params: page + 1 < pages.length ? { page: page + 1 } : null,
+    });
+  }) as typeof fetch;
+  // One pass stops at the page budget, saves its place and does not move the cursor.
+  await pool.query(`UPDATE chain_incoming_cursors SET next_poll_at=now()+interval '1 day' WHERE address<>$1`, [address]);
+  await indexOneIncomingWallet(new QieClient(chain(txs)), request);
+  await pool.query(`UPDATE chain_incoming_cursors SET next_poll_at=now()+interval '1 day' WHERE address<>$1`, [address]);
+  let resumed = false;
+  for (let i = 0; i < 4 && !resumed; i++) {
+    const row = (await pool.query("SELECT resume_params,scanned_through_block FROM chain_incoming_cursors WHERE address=$1 AND asset='QIEV3'", [address])).rows[0];
+    if (row?.resume_params) { assert.equal(row.scanned_through_block, null); resumed = true; break; }
+    await indexOneIncomingWallet(new QieClient(chain(txs)), request);
+  }
+  assert.ok(resumed, 'the first walk stopped at the page budget and saved its place');
+  // Later passes continue from the saved page and find the deposit.
+  await drain(new QieClient(chain(txs)), request, address);
+  assert.equal((await pool.query('SELECT amount_atomic::text a FROM chain_incoming_transfers WHERE tx_hash=$1', [real])).rows[0]?.a, '9000000000000000000');
+  assert.ok(calls.some((url) => url.includes('page=14')));
+  const done = (await pool.query("SELECT scanned_through_block::text b,resume_params FROM chain_incoming_cursors WHERE address=$1 AND asset='QIEV3'", [address])).rows[0];
+  assert.deepEqual(done, { b: String(HEAD - 12n), resume_params: null });
+});

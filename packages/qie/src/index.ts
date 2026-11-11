@@ -19,6 +19,8 @@ const addressPattern = /^0x[a-fA-F0-9]{40}$/;
 const hashPattern = /^0x[a-fA-F0-9]{64}$/;
 
 export class QieRpcError extends Error {}
+/** match: proven; mismatch: provably not this transfer; retry: the node cannot tell yet. */
+export type IncomingCheck = { status: 'match'; evidence: IncomingEvidence } | { status: 'mismatch' } | { status: 'retry' };
 export interface IncomingEvidence {
   from: string;
   amount_atomic: string;
@@ -152,10 +154,11 @@ export class QieClient implements ChainSettlementAdapter {
    * Verifies an incoming transfer straight from the node: the explorer only suggests
    * candidates. Native transfers must be a successful top-level transaction to the
    * address; QUSDC transfers must be the exact Transfer log from the allowlisted
-   * contract. Returns null while the transfer is not final or does not match.
+   * contract. A transfer the node cannot see or finalise yet is "retry", never "mismatch",
+   * so the indexer does not skip it.
    */
   async incomingEvidence(hash: string, to: string, asset: 'QIEV3' | 'QUSDC', logIndex: number,
-    confirmations = this.requiredConfirmations): Promise<IncomingEvidence | null> {
+    confirmations = this.requiredConfirmations): Promise<IncomingCheck> {
     if (!hashPattern.test(hash) || !addressPattern.test(to) || !Number.isSafeInteger(logIndex))
       throw new QieRpcError('Invalid incoming transfer input');
     await this.assertMainnet();
@@ -164,14 +167,15 @@ export class QieClient implements ChainSettlementAdapter {
       this.rpc<{ status: string; blockNumber: string; blockHash?: string; logs?: { address: string; topics: string[]; data: string; logIndex: string }[] } | null>('eth_getTransactionReceipt', [hash]),
       this.rpc<string>('eth_blockNumber'),
     ]);
-    if (!tx || !receipt || receipt.status !== '0x1' || !receipt.blockHash || !hashPattern.test(receipt.blockHash)) return null;
+    if (!tx || !receipt || !receipt.blockHash || !hashPattern.test(receipt.blockHash)) return { status: 'retry' };
+    if (receipt.status !== '0x1') return { status: 'mismatch' };
     const block = BigInt(receipt.blockNumber);
-    if (BigInt(head) - block + 1n < confirmations) return null;
+    if (BigInt(head) - block + 1n < confirmations) return { status: 'retry' };
     const canonical = await this.rpc<{ hash: string; timestamp: string } | null>('eth_getBlockByNumber', [receipt.blockNumber, false]);
-    if (!canonical || canonical.hash.toLowerCase() !== receipt.blockHash.toLowerCase()) return null;
+    if (!canonical || canonical.hash.toLowerCase() !== receipt.blockHash.toLowerCase()) return { status: 'retry' };
     let from: string, amount: bigint;
     if (asset === 'QIEV3') {
-      if (logIndex !== -1 || tx.to?.toLowerCase() !== to.toLowerCase()) return null;
+      if (logIndex !== -1 || tx.to?.toLowerCase() !== to.toLowerCase()) return { status: 'mismatch' };
       from = tx.from;
       amount = BigInt(tx.value);
     } else {
@@ -179,15 +183,15 @@ export class QieClient implements ChainSettlementAdapter {
       const padded = `0x${to.slice(2).toLowerCase().padStart(64, '0')}`;
       if (!log || log.address.toLowerCase() !== QIE_QUSDC_CONTRACT.toLowerCase() || log.topics.length !== 3 ||
           log.topics[0].toLowerCase() !== TRANSFER_TOPIC || log.topics[2].toLowerCase() !== padded ||
-          !/^0x[0-9a-f]{64}$/i.test(log.data)) return null;
+          !/^0x[0-9a-f]{64}$/i.test(log.data)) return { status: 'mismatch' };
       from = `0x${log.topics[1].slice(-40)}`;
       amount = BigInt(log.data);
     }
-    if (amount <= 0n || !addressPattern.test(from)) return null;
-    return {
+    if (amount <= 0n || !addressPattern.test(from)) return { status: 'mismatch' };
+    return { status: 'match', evidence: {
       from: from.toLowerCase(), amount_atomic: amount.toString(), block_number: block.toString(),
       block_hash: receipt.blockHash.toLowerCase(), block_time: new Date(Number(BigInt(canonical.timestamp)) * 1000).toISOString(),
-    };
+    } };
   }
 
   /**

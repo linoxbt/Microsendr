@@ -5,7 +5,10 @@ import { QieClient, QIE_EXPLORER, QIE_NETWORK, QIE_QUSDC_CONTRACT } from '../../
 export type IncomingAsset = 'QIEV3' | 'QUSDC';
 const ASSETS: IncomingAsset[] = ['QIEV3', 'QUSDC'];
 const EXPLORER_API = `${QIE_EXPLORER}api/v2`;
-const MAX_PAGES = 20;
+// Pages per pass. A longer walk saves its place and continues on the next pass.
+const MAX_PAGES = 10;
+// A candidate the node still cannot prove after a day is treated as not ours.
+const RETRY_WINDOW_MS = 24 * 3_600_000;
 const POLL_SECONDS = 60;
 
 const party = z.object({ hash: z.string() }).nullable();
@@ -26,8 +29,9 @@ export interface Candidate { hash: string; logIndex: number; block: bigint; time
  * Candidate incoming transfers for an address, newest first, from the public explorer.
  * The explorer is only an index; every candidate is verified on chain before use.
  */
-export async function* explorerCandidates(address: string, asset: IncomingAsset, request: typeof fetch = fetch) {
-  let params: Record<string, unknown> | null | undefined = {};
+export async function* explorerCandidates(address: string, asset: IncomingAsset, request: typeof fetch = fetch,
+  start: Record<string, unknown> = {}): AsyncGenerator<Candidate, { complete: boolean; next: Record<string, unknown> | null }> {
+  let params: Record<string, unknown> | null | undefined = start;
   for (let pageNo = 0; params && pageNo < MAX_PAGES; pageNo++) {
     const query = new URLSearchParams({ filter: 'to', ...(asset === 'QUSDC' ? { token: QIE_QUSDC_CONTRACT } : {}) });
     for (const [key, value] of Object.entries(params)) query.set(key, String(value));
@@ -51,6 +55,8 @@ export async function* explorerCandidates(address: string, asset: IncomingAsset,
     }
     params = body.next_page_params;
   }
+  // Out of page budget with more pages left: the caller resumes from `next`.
+  return params ? { complete: false, next: params } : { complete: true, next: null };
 }
 
 /**
@@ -81,24 +87,48 @@ export async function indexOneIncomingWallet(client = new QieClient(), request: 
     const head = await client.headBlock();
     const safe = head - client.requiredConfirmations;
     const cursor = due.scanned_through_block === null ? null : BigInt(due.scanned_through_block);
-    let recorded = 0;
-    for await (const candidate of explorerCandidates(address, asset, request)) {
-      if (candidate.block > safe) continue;
-      if (cursor !== null && candidate.block <= cursor) break;
+    // A walk that stopped early continues from its saved page, still bounded by the
+    // height it started at; anything newer is picked up by the next fresh walk.
+    const resuming = due.resume_params !== null;
+    const upper = resuming ? BigInt(due.resume_through_block) : safe;
+    let pending: bigint | null = due.pending_block === null ? null : BigInt(due.pending_block);
+    const walk = explorerCandidates(address, asset, request, resuming ? due.resume_params : {});
+    let complete = false, next: Record<string, unknown> | null = null;
+    for (;;) {
+      const step = await walk.next();
+      if (step.done) { complete = step.value.complete; next = step.value.next; break; }
+      const candidate = step.value;
+      if (candidate.block > upper) continue;
+      if (cursor !== null && candidate.block <= cursor) { complete = true; break; }
       // Allow an hour of clock skew around the moment the address joined an account.
-      if (candidate.time.getTime() < since.getTime() - 3_600_000) break;
-      const evidence = await client.incomingEvidence(candidate.hash, address, asset, candidate.logIndex);
-      if (!evidence) continue;
-      const inserted = await pool.query(`INSERT INTO chain_incoming_transfers
+      if (candidate.time.getTime() < since.getTime() - 3_600_000) { complete = true; break; }
+      const check = await client.incomingEvidence(candidate.hash, address, asset, candidate.logIndex);
+      if (check.status === 'retry' && Date.now() - candidate.time.getTime() < RETRY_WINDOW_MS) {
+        // Not provable yet: the cursor must stay below it so it is checked again.
+        pending = pending === null || candidate.block < pending ? candidate.block : pending;
+        continue;
+      }
+      if (check.status !== 'match') continue;
+      const evidence = check.evidence;
+      await pool.query(`INSERT INTO chain_incoming_transfers
         (id,network,asset,address,from_address,amount_atomic,tx_hash,log_index,block_number,block_hash,block_time)
         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT DO NOTHING`,
         [id('rcv'), QIE_NETWORK, asset, address, evidence.from, evidence.amount_atomic, candidate.hash,
           candidate.logIndex, evidence.block_number, evidence.block_hash, evidence.block_time]);
-      recorded += inserted.rowCount ?? 0;
     }
-    await pool.query(`UPDATE chain_incoming_cursors SET scanned_through_block=$4,failures=0,last_error=NULL,
+    if (!complete) {
+      // Save the place; the cursor does not move until the walk reaches it.
+      await pool.query(`UPDATE chain_incoming_cursors SET resume_params=$4,resume_through_block=$5,pending_block=$6,
+        failures=0,last_error=NULL,next_poll_at=now() WHERE network=$1 AND address=$2 AND asset=$3`,
+        [QIE_NETWORK, address, asset, JSON.stringify(next), upper.toString(), pending === null ? null : pending.toString()]);
+      return true;
+    }
+    // Everything down to the cursor was seen: advance, but never past an unproven candidate.
+    const through = pending !== null && pending - 1n < upper ? pending - 1n : upper;
+    await pool.query(`UPDATE chain_incoming_cursors SET scanned_through_block=GREATEST(COALESCE(scanned_through_block,$4::bigint),$4::bigint),
+      resume_params=NULL,resume_through_block=NULL,pending_block=NULL,failures=0,last_error=NULL,
       next_poll_at=now()+($5::integer*interval '1 second') WHERE network=$1 AND address=$2 AND asset=$3`,
-      [QIE_NETWORK, address, asset, safe.toString(), POLL_SECONDS]);
+      [QIE_NETWORK, address, asset, through.toString(), POLL_SECONDS]);
     return true;
   } catch (error) {
     // Back off this address only; other addresses keep being scanned.
