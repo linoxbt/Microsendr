@@ -18,7 +18,9 @@ export function PersonalLogin({
 }) {
   const [legacyConfig, setLegacyConfig] = useState<AuthConfig>();
   const [restoring, setRestoring] = useState(false);
-  const [mode, setMode] = useState<'login' | 'register' | 'recover'>('login');
+  // /personal/register (from Get started) opens sign-up; everything else opens sign-in.
+  const [mode, setMode] = useState<'login' | 'register' | 'recover'>(() =>
+    window.location.pathname.startsWith('/personal/register') ? 'register' : 'login');
   const [step, setStep] = useState(0),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');

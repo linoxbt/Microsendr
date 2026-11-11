@@ -7,7 +7,7 @@ const sections = [
   ['FAQs', 'questions', 'Questions, answered.'],
 ] as const;
 
-test('landing hero has one h1 and its CTA opens Personal sign-in', async ({ page }) => {
+test('landing hero has one h1; Get started opens sign-up and Sign in opens sign-in', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('h1')).toHaveCount(1);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Money for the life you’re building.');
@@ -18,6 +18,10 @@ test('landing hero has one h1 and its CTA opens Personal sign-in', async ({ page
     'Illustrative preview',
   );
   await page.locator('.lp-hero-actions').getByRole('button', { name: 'Get started' }).click();
+  await expect(page).toHaveURL(/\/personal\/register$/);
+  await expect(page.getByRole('heading', { name: 'Make your next move.' })).toBeVisible();
+  await page.goto('/');
+  await page.locator('.lp-header-actions').getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/personal\/login$/);
   await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
 });
@@ -90,15 +94,15 @@ test('planned features are clearly labelled Coming soon', async ({ page }) => {
   await page.goto('/');
   const table = page.locator('#availability table');
   for (const feature of [
-    'Roots account wallet deposits & sends',
     'Bank deposits & withdrawals',
-    'Currency conversion',
+    'Buy digital dollars with naira',
     'P2P trading marketplace',
   ])
     await expect(table.getByRole('row', { name: new RegExp(feature) })).toContainText('Coming soon');
   for (const feature of [
     'Personal account & profile',
-    'Send and receive QIE',
+    'Roots account wallet',
+    'Send and receive QIE and QUSDC',
     'Pay Roots users by @username',
   ])
     await expect(table.getByRole('row', { name: new RegExp(feature) })).toContainText('Available');

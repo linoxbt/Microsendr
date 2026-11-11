@@ -331,7 +331,7 @@ export function PersonalPage({
         </button>
         {session?.authenticated && <button className="fin-text" onClick={logout}>Sign out</button>}
       </div>
-    ) : path.startsWith('/personal/login') || path === '/personal' ? (
+    ) : path.startsWith('/personal/login') || path.startsWith('/personal/register') || path === '/personal' ? (
       <PersonalLoading />
     ) : (
       <PersonalSkeleton />

@@ -6,7 +6,10 @@ dotenv.config({ path: '.env.local', quiet: true });
 const key = process.env.DIDIT_API_KEY;
 if (!key) throw new Error('Configure DIDIT_API_KEY in .env.local first');
 const base = 'https://verification.didit.me/v3';
-const url = 'https://kora-api.13-140-188-185.sslip.io/personal/api/webhooks/didit';
+// The public address Didit can reach (the web origin proxies /personal/api to the API).
+const publicBase = (process.env.KORA_PUBLIC_API_URL || 'https://microsendr.xyz').replace(/\/+$/, '');
+if (!/^https:\/\/[a-z0-9.-]+$/i.test(publicBase)) throw new Error('KORA_PUBLIC_API_URL must be an https origin');
+const url = `${publicBase}/personal/api/webhooks/didit`;
 async function api(path, method = 'GET', body) {
   const response = await fetch(base + path, {
     method,

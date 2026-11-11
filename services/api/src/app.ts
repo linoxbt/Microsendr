@@ -59,7 +59,7 @@ import { registerProduct } from './product.js';
 import { registerPersonal, type PersonalOptions } from './personal.js';
 import { registerDidit } from './didit.js';
 import { proxyCheck, trustedProxies } from './client-ip.js';
-import { legacyPlatformEnabled, legacyPlatformPath } from './config.js';
+import { configReport, legacyPlatformEnabled, legacyPlatformPath, production, proxyExemptPath, proxySignatureRequired } from './config.js';
 // Keep in step with the [[headers]] block in netlify.toml, which serves production.
 export const contentSecurityPolicy =
   "default-src 'self'; script-src 'self' https://challenges.cloudflare.com https://js.hcaptcha.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://auth.privy.io https://*.hcaptcha.com; font-src 'self'; connect-src 'self' https://auth.privy.io https://api.privy.io https://challenges.cloudflare.com https://*.hcaptcha.com https://verification.didit.me https://rpc1mainnet.qie.digital; frame-src https://auth.privy.io https://challenges.cloudflare.com https://*.hcaptcha.com https://verify.didit.me; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'";
@@ -139,6 +139,8 @@ export async function buildApi(options: ApiOptions = {}) {
     const proxy = await proxyCheck(request);
     request.clientIp = proxy.ip;
     request.proxySigned = proxy.signed;
+    if (!proxy.signed && request.url.startsWith('/personal/api/') && !proxyExemptPath.test(request.url) && proxySignatureRequired())
+      throw new PaymentError(403, 'proxy_required', 'Use the Roots app');
   });
   await app.register(rateLimit, {
     max: options.rateLimitMax ?? 300,
@@ -257,6 +259,7 @@ export async function buildApi(options: ApiOptions = {}) {
       .header('x-content-type-options', 'nosniff')
       .header('x-frame-options', 'DENY')
       .header('referrer-policy', 'same-origin');
+    if (production()) reply.header('strict-transport-security', 'max-age=31536000; includeSubDomains');
     if (request.routeOptions.url?.startsWith('/v1/')) {
       reply.header('cache-control', 'no-store');
       if (request.headers.authorization)
@@ -417,7 +420,8 @@ export async function buildApi(options: ApiOptions = {}) {
   }
   app.get('/health', async () => {
     await pool.query('SELECT 1');
-    return { status: 'ok', service: 'roots-api' };
+    const config = configReport();
+    return { status: config.ready ? 'ok' : 'degraded', service: 'roots-api', missing: config.missing };
   });
   // Reached through the web proxy: reports whether the proxy's signature checked out.
   app.get('/personal/api/health', async (request, reply) => {

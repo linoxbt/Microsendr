@@ -71,9 +71,13 @@ function publicSession(row: Awaited<ReturnType<typeof required>>) {
     residence_country: row.residence_country, display_currency: row.display_currency,
     kyc_state: row.kyc_state, account_id: row.account_id, privy_subject: row.privy_subject ?? null };
 }
+// The session cookie is sent only to the API (never with page or asset requests), is
+// unreadable by scripts, same-site only and HTTPS-only outside local development.
+// Sessions issued before this lived at path '/'; that copy is removed when a new one is set.
 function setCookie(request: FastifyRequest, reply: FastifyReply, token: string) {
-  reply.setCookie('kora_personal', token, { httpOnly: true, sameSite: 'strict',
-    secure: secureCookie(origin(request)), path: '/', maxAge: 86400 });
+  const secure = secureCookie(origin(request));
+  reply.setCookie('kora_personal', token, { httpOnly: true, sameSite: 'strict', secure, path: '/personal/api', maxAge: 86400, priority: 'high' } as Parameters<FastifyReply['setCookie']>[2]);
+  reply.clearCookie('kora_personal', { path: '/', httpOnly: true, sameSite: 'strict', secure });
 }
 
 export async function registerPersonal(app: FastifyInstance, options: PersonalOptions = {}, privyConfig: PrivyConfig = privyConfiguration(), paystackClient?: PaystackClient) {
@@ -222,6 +226,7 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
     const token = request.cookies.kora_personal;
     if (token && /^[a-f0-9]{64}$/.test(token))
       await pool.query('DELETE FROM personal_sessions WHERE token_hash=$1', [hashKey(token)]);
+    reply.clearCookie('kora_personal', { path: '/personal/api' });
     reply.clearCookie('kora_personal', { path: '/' });
     return { authenticated: false };
   });

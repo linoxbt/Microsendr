@@ -45,17 +45,17 @@ const tour = {
   Send: {
     status: 'available',
     title: 'Pay people, not long addresses.',
-    text: 'Send native QIE on QIE Mainnet from a self-custody wallet you link to Roots, or pay another Roots user by their @username. You approve every transfer in your own wallet.',
+    text: 'Send QIE or QUSDC on QIE Mainnet to another Roots user by their @username, or to any QIE address. Every send from your Roots account is approved with your PIN or a passkey.',
     points: [
       'Look up a Roots user by @username and see their name before you pay',
       'Or paste any QIE Mainnet wallet address',
-      'Your wallet signs the transfer; Roots never holds its keys',
+      'Send from your Roots account, or from a wallet you link',
     ],
   },
   Receive: {
     status: 'available',
     title: 'Payments that show up on their own.',
-    text: 'Incoming QIE and QUSDC payments to your linked wallet appear in Activity automatically, checked against the QIE network, with a receipt for each one.',
+    text: 'Incoming QIE and QUSDC payments appear in Activity automatically, checked against the QIE network, with a receipt for each one.',
     points: [
       'QIE and QUSDC (digital dollars on QIE) supported',
       'Every incoming payment verified on chain',
@@ -65,8 +65,8 @@ const tour = {
   Exchange: {
     status: 'soon',
     title: 'Know what you’ll get.',
-    text: 'Currency conversion between naira and US dollars is coming soon. When it launches, you will see the amount you will receive before you confirm.',
-    points: ['NGN and USD conversion inside Roots', 'Not available yet'],
+    text: 'Buying digital dollars with naira is coming soon. You will see every fee and the exact amount you receive before you confirm.',
+    points: ['Naira to digital dollars, every fee shown', 'Not available yet'],
   },
   Withdraw: {
     status: 'soon',
@@ -86,8 +86,8 @@ const pillars = [
   },
   {
     icon: KeyRound,
-    title: 'Your keys stay yours',
-    text: 'Link a self-custody EVM wallet. Roots never holds its keys.',
+    title: 'An account wallet, ready to use',
+    text: 'Every account gets its own QIE address. Prefer self-custody? Link your own wallet too.',
   },
   {
     icon: BadgeCheck,
@@ -104,23 +104,23 @@ const pillars = [
 const steps = [
   {
     title: 'Create your free account',
-    text: 'Sign up with your email and a password. You don’t need a crypto wallet to get started.',
+    text: 'Sign up with your email and a password. Your account comes with its own wallet address.',
   },
   {
     title: 'Set up your profile',
-    text: 'Choose a username, link a self-custody wallet, and verify your identity if you choose to.',
+    text: 'Choose a username, set a payment PIN or passkey, and verify your identity.',
   },
   {
     title: 'Send, receive and track',
-    text: 'Pay people by @username, send QIE, and watch incoming payments arrive in Activity.',
+    text: 'Pay people by @username, send QIE or QUSDC, and watch incoming payments arrive in Activity.',
   },
 ];
 
 const security = [
   {
     icon: KeyRound,
-    title: 'Self-custody by default',
-    text: 'The wallet you link stays yours. You approve each transfer in that wallet, and Roots never sees or stores its keys.',
+    title: 'Every send approved by you',
+    text: 'Sends from your Roots account need your payment PIN or a passkey, with limits per transfer and per day. A wallet you link stays yours; Roots never sees its keys.',
   },
   {
     icon: BadgeCheck,
@@ -134,29 +134,29 @@ const security = [
   },
   {
     icon: Fingerprint,
-    title: 'Optional identity checks',
-    text: 'Verify your identity with our provider Didit when you’re ready. It’s optional for what Roots offers today.',
+    title: 'Identity checks',
+    text: 'Verify your identity with our provider Didit before you send from your Roots account. Your document is matched to your profile.',
   },
 ];
 
 const availability: { name: string; detail: string; soon?: boolean }[] = [
   { name: 'Personal account & profile', detail: 'Free account with email and password, profile and security settings' },
-  { name: 'Identity verification', detail: 'Optional, provided by Didit' },
+  { name: 'Identity verification', detail: 'Provided by Didit; needed to send from your Roots account' },
   { name: 'Linked self-custody wallet', detail: 'Any EVM wallet you control, on QIE Mainnet' },
-  { name: 'Send and receive QIE', detail: 'Native QIE on QIE Mainnet, from your linked wallet' },
+  { name: 'Roots account wallet', detail: 'Your own QIE address, sends approved with a PIN or passkey' },
+  { name: 'Send and receive QIE and QUSDC', detail: 'On QIE Mainnet, from your account or a linked wallet' },
   { name: 'Incoming QIE & QUSDC in Activity', detail: 'Verified on chain, with receipts' },
   { name: 'Pay Roots users by @username', detail: 'Recipients opt in to be payable by username' },
   { name: 'Live balances', detail: 'With an approximate USD value' },
-  { name: 'Roots account wallet deposits & sends', detail: 'A wallet held by Roots for you', soon: true },
   { name: 'Bank deposits & withdrawals', detail: 'Move money to and from your bank', soon: true },
-  { name: 'Currency conversion', detail: 'Naira (NGN) and US dollars (USD)', soon: true },
+  { name: 'Buy digital dollars with naira', detail: 'By bank transfer, every fee shown first', soon: true },
   { name: 'P2P trading marketplace', detail: 'Trade with other Roots users', soon: true },
 ];
 
 const questions: [string, string][] = [
   [
     'What can I do on Roots today?',
-    'You can open a free Roots account, complete your profile and link a self-custody EVM wallet you control. With it you can send and receive native QIEV3 on QIE Mainnet, pay other Roots users by @username, and see incoming QIE and QUSDC payments in Activity with receipts. Roots account wallet deposits and sends, bank deposits and withdrawals, currency conversion and the P2P trading marketplace are coming soon.',
+    'You can open a free Roots account with its own QIE address, send and receive QIE and QUSDC on QIE Mainnet, pay other Roots users by @username, and see incoming payments in Activity with receipts. You can also link a self-custody wallet you control. Bank deposits and withdrawals, buying digital dollars with naira and the P2P marketplace are coming soon.',
   ],
   [
     'Is Roots a bank?',
@@ -164,23 +164,23 @@ const questions: [string, string][] = [
   ],
   [
     'Do I need a crypto wallet to sign up?',
-    'No. You create your Roots account with an email address and a password. You only need a self-custody wallet when you want to send or receive QIE.',
+    'No. You create your Roots account with an email address and a password, and it comes with its own QIE address. Linking a self-custody wallet is optional.',
   ],
   [
     'Who holds the keys to my wallet?',
-    'You do. When you link a self-custody wallet, its keys stay in that wallet and you approve every transfer there. Roots never holds them.',
+    'Your Roots account wallet is held for you by our wallet provider, Privy, and every send needs your payment PIN or a passkey. A self-custody wallet you link is different: its keys stay with you and Roots never holds them.',
   ],
   [
     'How does paying by @username work?',
-    'Search for a Roots user by their username and check their name before you send QIE. People can only be paid this way after they choose to be payable by username in their settings.',
+    'Search for a Roots user by their username and check their name before you send. People can only be paid this way after they choose to be payable by username in their settings.',
   ],
   [
     'What is QUSDC?',
-    'QUSDC is a digital dollar on the QIE network. Incoming QUSDC payments to your linked wallet appear in your Activity alongside QIE.',
+    'QUSDC is a digital dollar on the QIE network. You can hold, send and receive it in Roots alongside QIE.',
   ],
   [
     'Do I have to verify my identity?',
-    'Not for what Roots offers today. You can verify with our identity provider, Didit, from your account whenever you’re ready. Some services may require it once they become available.',
+    'To send from your Roots account, yes. You verify with our identity provider, Didit, from your account, and the document must match the name and date of birth on your profile.',
   ],
   [
     'Can a payment be reversed?',
@@ -553,7 +553,9 @@ export function LandingPage({ brand, go }: Props) {
     }
   };
 
-  const start = () => go(authenticated ? '/personal/home' : '/personal/login');
+  // Get started opens sign-up; Sign in opens sign-in.
+  const start = () => go(authenticated ? '/personal/home' : '/personal/register');
+  const signIn = () => go(authenticated ? '/personal/home' : '/personal/login');
   const startLabel = authenticated ? 'Open your account' : 'Get started';
   const current = tour[active];
 
@@ -584,7 +586,7 @@ export function LandingPage({ brand, go }: Props) {
             </button>
           </div>
           <div className="lp-header-actions">
-            <button className="lp-signin" onClick={start}>
+            <button className="lp-signin" onClick={signIn}>
               {authenticated ? 'My account' : 'Sign in'}
             </button>
             {!authenticated && (
@@ -986,7 +988,7 @@ export function LandingPage({ brand, go }: Props) {
                 <a href="#questions" onClick={jump}>
                   FAQs
                 </a>
-                <button onClick={start}>{authenticated ? 'My account' : 'Sign in'}</button>
+                <button onClick={signIn}>{authenticated ? 'My account' : 'Sign in'}</button>
               </div>
             </nav>
           </div>

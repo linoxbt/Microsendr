@@ -84,7 +84,12 @@ const privateIdentityFields = [
 const CURRENT_N = 131072, LEGACY_N = 32768;
 let deriving = 0;
 const waiting: (() => void)[] = [];
+// Two derivations run at once; a bounded queue waits behind them. Past that, a request is
+// refused quickly rather than piling up memory and latency for everyone.
+const MAX_WAITING = 64;
 async function derive(value: string, salt: string, N = CURRENT_N) {
+  if (deriving >= 2 && waiting.length >= MAX_WAITING)
+    throw new PaymentError(503, 'busy', 'Roots is busy. Try again in a moment.');
   while (deriving >= 2) await new Promise<void>((resolve) => waiting.push(resolve));
   deriving++;
   try {

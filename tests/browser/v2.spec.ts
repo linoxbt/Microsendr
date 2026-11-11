@@ -11,7 +11,9 @@ test('landing presents Roots Personal and routes prompts', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Switch to dark theme' })).toHaveCount(0);
   await expect(page.locator('.lp-photo img')).toBeVisible();
   await page.locator('.lp-hero-actions').getByRole('button', { name: 'Get started' }).click();
-  await expect(page).toHaveURL(/\/personal\/login$/);
+  await expect(page).toHaveURL(/\/personal\/register$/);
+  await expect(page).toHaveTitle('Create your account | Roots');
+  await page.goto('/personal/login');
   await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
   await expect(page.getByLabel('Email address')).toBeEnabled();
   await expect(page.getByLabel('Password', { exact: true })).toBeEnabled();
@@ -39,7 +41,7 @@ test('landing product tour, FAQs and mobile navigation work', async ({ page }) =
   await expect(page.getByRole('tab', { name: 'Withdraw', exact: true })).toBeFocused();
   await expect(page.getByRole('tabpanel')).toContainText('From your screen to real life.');
   await page.getByText('What can I do on Roots today?', { exact: true }).click();
-  await expect(page.locator('details[open]')).toContainText('native QIEV3 on QIE Mainnet');
+  await expect(page.locator('details[open]')).toContainText('send and receive QIE and QUSDC on QIE Mainnet');
   await expect(page.locator('#availability')).toContainText('Personal account & profile');
   await page.screenshot({ path: '/tmp/roots-landing-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });

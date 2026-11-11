@@ -97,7 +97,9 @@ test('Privy Personal requires a matching signed identity token with verified ema
     const first = await login(identity_token);
     assert.equal(first.statusCode, 200, first.body);
     assert.equal(first.json().email, email);
-    assert.match(String(first.headers['set-cookie']), /HttpOnly/);
+    const cookies = [first.headers['set-cookie']].flat().map(String);
+    assert.match(cookies[0], /^kora_personal=[a-f0-9]{64}; .*Path=\/personal\/api; HttpOnly; .*SameSite=Strict/);
+    assert.match(cookies[1], /^kora_personal=; .*Path=\/;/);
     assert.equal((await pool.query('SELECT privy_subject FROM personal_users WHERE id=$1', [existingId])).rows[0].privy_subject, subject);
     const previousFetch = globalThis.fetch;
     try {
