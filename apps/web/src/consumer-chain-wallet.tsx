@@ -212,7 +212,7 @@ export function ConsumerChainWallet({
           : <><i className="fin-sk fin-sk-field" /><i className="fin-sk fin-sk-field" /><i className="fin-sk fin-sk-button" /></>}
       </div>
       : !source ? <div className="fin-chain-empty">
-        {mode === 'receive' && <h1>Your address</h1>}
+        {mode === 'receive' && <h1 className="fin-sr-only">Your address</h1>}
         <p>Link a wallet you control to {mode === 'receive' ? 'receive' : 'send'} QIE.</p>
         <button className="fin-primary" type="button" onClick={() => void linkWallet()} disabled={busy}>
           <Link2 size={17} /> {busy ? 'Connecting…' : 'Link QIE wallet'}
@@ -244,8 +244,8 @@ function ReceiveCard({ source, token }: { source: Source; token: Token }) {
   }
   const canShare = typeof navigator !== 'undefined' && 'share' in navigator;
   return <div className="fin-receive" role="group" aria-label={source.managed ? 'Roots account wallet' : 'Linked wallet'}>
-    <h1>Your address</h1>
-    <p>Send only {token} on QIE Mainnet to this address, or you might lose your funds.</p>
+    <h1 className="fin-sr-only">Your address</h1>
+    <p className="fin-receive-warning">Only send {token} on QIE Mainnet.</p>
     <div className="fin-chain-receive">
       <div className="fin-qr">
         {qr && <img src={qr} width="240" height="240"

@@ -53,7 +53,7 @@ test('paying @username resolves the recipient and sends to their address', async
     posts.push(route.request().postDataJSON());
     return route.fulfill(json({ id: 'stl_' + 'e'.repeat(32), tx_hash: '0x' + 'f'.repeat(64), status: 'submitted', custody: 'managed' }));
   });
-  await page.goto('/personal/send');
+  await page.goto('/personal/send/address');
   const panel = page.getByRole('region', { name: 'QIE wallet' });
   const recipient = panel.getByLabel('Recipient');
   await recipient.fill('@nobody_here');
@@ -94,7 +94,7 @@ test('being payable by username is an explicit opt-in on the Security page', asy
   expect(posts).toEqual([{ payable_by_username: true }]);
 });
 
-test('home leads with paying people: recent payees come from real sends and prefill the send form', async ({ page }) => {
+test('home is the balance card, shortcuts and activity; recent payees wait on the Roots user send page', async ({ page }) => {
   const now = new Date().toISOString();
   const sent = (id: string, to_username: string | null, status = 'confirmed') => ({
     id: 'stl_' + id.repeat(32), direction: 'sent', status, from: accountAddress, to: payeeAddress, to_username,
@@ -112,25 +112,27 @@ test('home leads with paying people: recent payees come from real sends and pref
     route.fulfill(json({ username: 'ada_okafor', display_name: 'Ada O.', address: payeeAddress, network: 'qie-mainnet', asset: 'QIEV3' })));
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/personal/home');
-  const card = page.getByRole('region', { name: 'Pay anyone on Roots' });
-  await expect(card).toBeVisible();
-  // One entry per username; failed sends and address-only sends add nobody.
-  await expect(page.getByRole('list', { name: 'People you paid recently' }).getByRole('listitem')).toHaveCount(1);
+  await expect(page.getByRole('region', { name: 'Your wallet overview' })).toContainText('$12.50');
+  await expect(page.getByRole('group', { name: 'Money actions' }).getByRole('button')).toHaveText(['Add money', 'Send']);
+  await expect(page.getByRole('navigation', { name: 'Shortcuts' }).getByRole('button')).toHaveText(['Receive', 'Convert', 'Assets', 'Withdraw']);
   const feed = page.getByRole('region', { name: 'Activity' });
   await expect(feed.getByRole('heading', { name: 'Today' })).toBeVisible();
   await expect(feed).toContainText('To @ada_okafor');
   await expect(feed).toContainText('−1.5');
-  await expect(page.getByRole('region', { name: 'Your wallet overview' })).toContainText('$12.50');
   await page.screenshot({ path: '/tmp/roots-home-phone.png', fullPage: true });
-  await page.getByRole('button', { name: 'Pay @ada_okafor again' }).click();
-  await expect(page).toHaveURL(/\/personal\/send\?to=%40ada_okafor$/);
-  await page.goto('/personal/home');
-  await card.getByLabel('Pay a Roots @username or QIE address').fill('not a name!');
-  await card.getByRole('button', { name: 'Continue to payment' }).click();
+  // Send → Roots user lists people paid before; one entry per username, failed and address-only sends add nobody.
+  await page.getByRole('group', { name: 'Money actions' }).getByRole('button', { name: 'Send' }).click();
   await expect(page).toHaveURL(/\/personal\/send$/);
+  await page.getByRole('listitem').filter({ hasText: 'Roots user' }).click();
+  await expect(page).toHaveURL(/\/personal\/send\/user$/);
+  await expect(page.getByRole('list', { name: 'People you paid recently' }).getByRole('listitem')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Pay @ada_okafor again' }).click();
+  await expect(page).toHaveURL(/\/personal\/send\/user\?to=%40ada_okafor$/);
+  // Bank sends are shown as coming soon and cannot be opened.
+  await page.goto('/personal/send');
+  await expect(page.getByRole('listitem').filter({ hasText: 'Bank account' })).toBeDisabled();
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/personal/home');
-  await expect(card).toBeVisible();
   await page.screenshot({ path: '/tmp/roots-home-desktop.png', fullPage: true });
 });
 
@@ -147,7 +149,7 @@ test('with a payment PIN set, the review step asks for the PIN instead of the pa
     posts.push(route.request().postDataJSON());
     return route.fulfill(json({ id: 'stl_' + 'e'.repeat(32), tx_hash: '0x' + 'f'.repeat(64), status: 'submitted', custody: 'managed' }));
   });
-  await page.goto('/personal/send');
+  await page.goto('/personal/send/address');
   const panel = page.getByRole('region', { name: 'QIE wallet' });
   await panel.getByLabel('Recipient').fill(payeeAddress);
   await panel.getByLabel('Amount').fill('3');
@@ -188,16 +190,15 @@ test('Security sets a payment PIN with the password', async ({ page }) => {
   expect(bodies).toEqual([{ pin: '402913', password: 'my-account-password' }]);
 });
 
-test('a new account sees a get-started checklist instead of an empty activity list', async ({ page }) => {
+test('a new account sees a simple empty activity state', async ({ page }) => {
   await signedIn(page);
   await page.route('**/personal/api/payment-settings', (route) => route.fulfill(json({ username: 'tobi_mock', payable_by_username: false, receiving_address: null })));
   await page.goto('/personal/home');
   const feed = page.getByRole('region', { name: 'Activity' });
-  await expect(feed).toContainText('Get started');
-  await expect(feed).toContainText('1 of 3');
-  await expect(feed.getByRole('button', { name: 'Verify your email' })).toBeDisabled();
-  await feed.getByRole('button', { name: 'Set up a passkey or PIN' }).click();
-  await expect(page).toHaveURL(/\/personal\/security$/);
+  await expect(feed).toContainText('No transactions');
+  await page.getByRole('navigation', { name: 'Shortcuts' }).getByRole('button', { name: 'Receive' }).click();
+  await expect(page).toHaveURL(/\/personal\/deposit\/crypto$/);
+  await expect(page.getByRole('list', { name: 'Choose a token' }).getByRole('listitem')).toHaveCount(2);
 });
 
 test('each token has its own receive screen, and QUSDC sends from the Roots wallet as QUSDC', async ({ page }) => {
@@ -221,10 +222,10 @@ test('each token has its own receive screen, and QUSDC sends from the Roots wall
   await page.getByRole('button', { name: 'Receive QUSDC' }).click();
   const tokens = page.getByRole('group', { name: 'Token' });
   await expect(tokens.getByRole('button', { name: 'QUSDC' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByText('Send only QUSDC on QIE Mainnet to this address')).toBeVisible();
+  await expect(page.getByText('Only send QUSDC on QIE Mainnet.')).toBeVisible();
   await expect(page.locator('.fin-chain-receive code')).toHaveText(accountAddress);
   await tokens.getByRole('button', { name: 'QIE' }).click();
-  await expect(page.getByText('Send only QIE on QIE Mainnet to this address')).toBeVisible();
+  await expect(page.getByText('Only send QIE on QIE Mainnet.')).toBeVisible();
   await expect(page.locator('.fin-chain-receive code')).toHaveText(accountAddress);
   // Sending QUSDC uses six decimals and names the asset.
   await page.goto('/personal/assets/qusdc');
@@ -260,7 +261,7 @@ test('a failed or expired account-wallet send is never shown as sent, and a clea
     const reply = replies.shift()!;
     return route.fulfill(json(reply.body, reply.status));
   });
-  await page.goto('/personal/send');
+  await page.goto('/personal/send/address');
   const panel = page.getByRole('region', { name: 'QIE wallet' });
   await panel.getByLabel('Recipient').fill(payeeAddress);
   await panel.getByLabel('Amount').fill('1');
@@ -293,7 +294,7 @@ test('if balances fail to load the rest of the app still works, with a retry', a
     : route.fulfill(json(overview)));
   await page.goto('/personal/home');
   await expect(page.getByRole('heading', { name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
-  await expect(page.getByRole('alert')).toContainText('Balances and activity could not load');
+  await expect(page.getByRole('alert')).toContainText('Balances could not load');
   fail = false;
   await page.getByRole('button', { name: 'Try again' }).click();
   await expect(page.getByRole('alert')).toHaveCount(0);

@@ -56,7 +56,7 @@ export function AssetDetail({ asset, activity, go, hidden, refresh, refreshing }
     (asset.code === 'QIE' && item.asset === 'QIEV3')).slice(0, 4);
   return <div className={`fin-asset-detail fin-asset-detail-${asset.code.toLowerCase()}`}>
     <div className="fin-asset-detail-nav">
-      <button className="fin-asset-back" onClick={() => go('/personal/home')}><ArrowLeft size={17} /> All assets</button>
+      <button className="fin-asset-back" onClick={() => go('/personal/assets')}><ArrowLeft size={17} /> All assets</button>
       <button className="fin-asset-refresh" disabled={refreshing} onClick={refresh} aria-label={`Refresh ${asset.code} balance`}>
         <RefreshCw size={17} className={refreshing ? 'fin-spin' : ''} /> <span>Refresh</span>
       </button>

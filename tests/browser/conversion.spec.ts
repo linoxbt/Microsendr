@@ -111,7 +111,7 @@ test('an expired quote asks for a new one before buying', async ({ page }) => {
   await expect.poll(() => quotes).toBe(2);
 });
 
-test('Add money offers Crypto or Bank / card; Bank / card buys with naira when Fonbnk is on', async ({ page }) => {
+test('Add money offers naira or crypto; naira buys with Fonbnk when it is on', async ({ page }) => {
   await page.route('**/personal/api/session', (r) => r.fulfill(json({ authenticated: true, csrf_token: csrf, email: profile.email })));
   await page.route('**/personal/api/profile', (r) => r.fulfill(json(profile)));
   await page.route('**/personal/api/payment-auth', (r) => r.fulfill(json({ pin_set: false, pin_locked_until: null, passkeys: [] })));
@@ -124,8 +124,13 @@ test('Add money offers Crypto or Bank / card; Bank / card buys with naira when F
   await page.route('**/personal/api/conversion/limits*', (r) => r.fulfill(json({ supported: true, min: 1000, max: 500000, currency: 'NGN' })));
   await page.route('**/personal/api/conversion/kyc', (r) => r.fulfill(json({ ready: true, support_required: false, kyc_url: null })));
   await page.goto('/personal/deposit');
-  await expect(page.getByRole('heading', { name: 'Your address' })).toBeVisible();
-  await page.getByRole('button', { name: 'Bank / card', exact: true }).click();
+  const choices = page.getByRole('list', { name: 'Add money with' });
+  await expect(choices.getByRole('listitem')).toHaveText([/Naira deposit/, /Crypto deposit/]);
+  await choices.getByRole('listitem').filter({ hasText: 'Crypto deposit' }).click();
+  await page.getByRole('list', { name: 'Choose a token' }).getByRole('listitem').filter({ hasText: 'QIE' }).first().click();
+  await expect(page.getByRole('heading', { name: 'Your address' })).toBeAttached();
+  await page.goto('/personal/deposit');
+  await choices.getByRole('listitem').filter({ hasText: 'Naira deposit' }).click();
   const bank = page.getByRole('region', { name: 'Add money by bank' });
   await expect(bank.getByRole('heading', { name: 'Buy with naira' })).toBeVisible();
   await expect(bank.getByLabel('Amount in naira (NGN)')).toBeVisible();

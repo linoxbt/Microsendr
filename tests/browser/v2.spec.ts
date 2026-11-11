@@ -146,6 +146,7 @@ test('custom registration, optional identity, profile editing and mobile money n
   await page.getByRole('button', { name: 'Do this later' }).click();
   await expect(page.getByRole('heading', { name: /^Good (morning|afternoon|evening), Ada$/ })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Your wallet overview' })).toContainText(`@ada_${unique}`);
+  await page.getByRole('navigation', { name: 'Shortcuts' }).getByRole('button', { name: 'Assets' }).click();
   await expect(page.getByRole('heading', { name: 'Assets' })).toBeVisible();
   await expect(page.locator('.fin-asset-row')).toHaveCount(3);
   await expect(page.locator('.fin-asset-row')).toContainText(['QIE', 'QUSDC', 'NGN']);
@@ -171,13 +172,14 @@ test('custom registration, optional identity, profile editing and mobile money n
     await route.fulfill({ response, body: JSON.stringify(body) });
   };
   await page.route('**/personal/api/overview', fundedOverview);
-  await page.reload();
+  await page.goto('/personal/home');
   await expect(page.locator('.fin-wallet-amount strong')).toHaveText('$2.73');
   await expect(page.getByRole('region', { name: 'Your wallet overview' })).not.toContainText('QIE');
   await expect(page.getByRole('region', { name: 'Your wallet overview' })).not.toContainText('QUSDC');
+  await page.goto('/personal/assets');
   await expect(page.locator('.fin-asset-row').first()).toContainText('1.25');
   await expect(page.locator('.fin-asset-row').nth(1)).toContainText('2.5');
-  await expect(page.locator('.fin-asset-row').nth(2)).toContainText('Unavailable');
+  await expect(page.locator('.fin-asset-row').nth(2)).toContainText('Soon');
   expect(await page.locator('.fin-asset-icon img').evaluateAll(images => images.every(image => (image as HTMLImageElement).naturalWidth > 0))).toBe(true);
   await page.getByRole('button', { name: 'View QIE details' }).click();
   await expect(page).toHaveURL(/\/personal\/assets\/qie$/);
@@ -202,6 +204,7 @@ test('custom registration, optional identity, profile editing and mobile money n
   await expect(page.getByText('From digital to')).toHaveCount(0);
   await expect(page.getByText('sandbox', { exact: false })).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'QIE wallet' })).toHaveCount(0);
+  await page.goto('/personal/home');
   await page.screenshot({ path: '/tmp/roots-dashboard-desktop.png', fullPage: true });
   await page.getByRole('button', { name: 'Switch to dark theme' }).click();
   await expect(page.locator('.fin-app')).toHaveCSS('background-color', 'rgb(9, 9, 9)');
@@ -209,6 +212,8 @@ test('custom registration, optional identity, profile editing and mobile money n
   await page.getByRole('button', { name: 'Hide balance' }).click();
   await expect(page.getByRole('button', { name: 'Show balance' })).toBeVisible();
   await page.getByRole('button', { name: 'Open your profile' }).click();
+  await expect(page.getByRole('heading', { name: 'Account' })).toBeVisible();
+  await page.getByRole('listitem').filter({ hasText: 'My profile' }).click();
   const profileSection = page.getByRole('region', { name: 'Profile', exact: true });
   await expect(profileSection).toContainText('1995');
   await profileSection.getByRole('button', { name: 'Edit' }).click();
@@ -219,6 +224,7 @@ test('custom registration, optional identity, profile editing and mobile money n
   await expect(page.getByLabel('First name')).toHaveCount(0);
   await page.reload();
   await expect(profileSection).toContainText('Amara');
+  await page.getByRole('button', { name: 'Back' }).click();
   await page.getByRole('button', { name: 'Sign out', exact: true }).last().click();
   await page.getByLabel('Email address').fill(email);
   await page.getByLabel('Password', { exact: true }).fill(password);
@@ -252,13 +258,15 @@ test('custom registration, optional identity, profile editing and mobile money n
   await page.goto('/personal/convert');
   await expect(page.getByText('First, make it official.')).toHaveCount(0);
   await expect(page.getByLabel('You exchange', { exact: true })).toHaveCount(0);
-  await expect(page.locator('.fin-method-detail')).toContainText('Not available');
+  await expect(page.locator('.rt-empty')).toContainText('Coming soon');
+  // Add money: a choice of naira or crypto, each its own step.
   await page.goto('/personal/deposit');
-  await expect(page.getByRole('button', { name: 'Crypto', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await page.getByRole('button', { name: 'Bank / card', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Bank / card', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('.fin-add-bank')).toContainText('Not available');
-  await page.getByRole('button', { name: 'Crypto', exact: true }).click();
+  await page.getByRole('listitem').filter({ hasText: 'Naira deposit' }).click();
+  await expect(page).toHaveURL(/\/personal\/deposit\/bank$/);
+  await expect(page.getByLabel('Add money by bank')).toContainText('Coming soon');
+  await page.getByRole('button', { name: 'Back' }).click();
+  await page.getByRole('listitem').filter({ hasText: 'Crypto deposit' }).click();
+  await expect(page).toHaveURL(/\/personal\/deposit\/crypto$/);
   const wallet = privateKeyToAccount(generatePrivateKey());
   await page.route('**/personal/api/wallets', route => route.fulfill({
     status: 200, contentType: 'application/json', body: JSON.stringify({
@@ -272,7 +280,7 @@ test('custom registration, optional identity, profile editing and mobile money n
       explorer_url: `https://mainnet.qie.digital/address/${wallet.address}`,
     }),
   }));
-  await page.goto('/personal/deposit');
+  await page.goto('/personal/deposit/crypto/qie');
   // A managed (custodial) wallet cannot send yet, so it is never offered as a deposit address.
   await expect(page.getByRole('group', { name: 'Roots account wallet' })).toContainText('not open yet');
   await expect(page.getByRole('button', { name: 'Link QIE wallet' })).toBeVisible();
@@ -343,7 +351,7 @@ test('Personal activity labels sends from data and the landing uses the Personal
   await expect(page.locator('.fin-transaction').first()).not.toContainText('Wallet transfer');
   await page.locator('.fin-transaction').first().click();
   await expect(page.locator('.fin-receipt')).toContainText('250000000000000000 base units of QIE');
-  await page.goto('/personal/home');
+  await page.goto('/personal/assets');
   await expect(page.getByRole('button', { name: 'View QIE details, QIE, balance 1.50 QIE' })).toBeVisible();
   await page.getByRole('button', { name: /View QIE details/ }).click();
   await expect(page.getByRole('region', { name: 'QIE activity' })).toContainText('Sent QIE');
@@ -366,7 +374,7 @@ test('managed account wallet never shows a receive address or QR, and can be che
     managedCreated = true;
     return route.fulfill(json({ id: managedRecord.id, address: managedAddress, network: 'qie-mainnet', custody: 'managed' }));
   });
-  await page.goto('/personal/deposit');
+  await page.goto('/personal/deposit/crypto/qie');
   const account = page.getByRole('group', { name: 'Roots account wallet' });
   await expect(account).toContainText("isn't set up yet");
   await account.getByRole('button', { name: 'Check wallet' }).click();
@@ -375,7 +383,7 @@ test('managed account wallet never shows a receive address or QR, and can be che
   await expect(page.getByRole('img', { name: /QR code/ })).toHaveCount(0);
   await expect(page.locator('body')).not.toContainText(managedAddress);
   await expect(page.locator('body')).not.toContainText(managedAddress.toLowerCase());
-  await page.goto('/personal/send');
+  await page.goto('/personal/send/address');
   await expect(page.getByLabel('Recipient', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Link QIE wallet' })).toBeVisible();
   await expect(page.locator('body')).not.toContainText(managedAddress);
@@ -422,7 +430,7 @@ test('links a self-custody wallet by signature, receives to it, and unlinks it',
     linked = false;
     return route.fulfill(json({ removed: true }));
   });
-  await page.goto('/personal/deposit');
+  await page.goto('/personal/deposit/crypto/qie');
   await page.getByRole('button', { name: 'Link QIE wallet' }).click();
   await expect(page.getByText('QIE wallet linked to your account.')).toBeVisible();
   expect(posted).toEqual([{ challenge_id: 'cwc_' + 'b'.repeat(32), signature: '0x' + 'ab'.repeat(65) }]);
@@ -432,7 +440,7 @@ test('links a self-custody wallet by signature, receives to it, and unlinks it',
   await expect(page.locator('.fin-chain-receive')).not.toContainText('Roots manages');
   await expect(page.locator('body')).not.toContainText(managedAddress);
   await page.screenshot({ path: '/tmp/roots-linked-wallet-receive.png', fullPage: true });
-  await page.goto('/personal/send');
+  await page.goto('/personal/send/address');
   await expect(page.getByLabel('Recipient', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Continue' })).toBeEnabled();
   await page.getByRole('button', { name: 'Unlink wallet' }).click();
@@ -444,8 +452,7 @@ test('links a self-custody wallet by signature, receives to it, and unlinks it',
 test('Convert shows unavailable without calling the quote API', async ({ page }) => {
   const calls = await signedIn(page);
   await page.goto('/personal/convert');
-  await expect(page.locator('.fin-method-detail')).toContainText('No exchange route is available');
-  await expect(page.locator('.fin-method-detail')).toContainText('Not available');
+  await expect(page.locator('.rt-empty')).toContainText('Coming soon');
   await expect(page.getByRole('main')).not.toContainText(/exchange rate|fees/i);
   await expect(page.getByRole('button', { name: /exchange availability/ })).toHaveCount(0);
   expect(calls.filter((call) => call.includes('conversion'))).toEqual([]);
@@ -473,7 +480,7 @@ test('sign out clears local state even when the server call fails', async ({ pag
     return route.fulfill(json({ error: { code: 'internal_error', message: 'The request could not be completed' } }, 500));
   });
   await page.goto('/personal/profile');
-  await expect(page.getByRole('region', { name: 'Profile', exact: true })).toContainText('Ada');
+  await expect(page.locator('.rt-account-head')).toContainText('Ada');
   await page.getByRole('button', { name: 'Sign out', exact: true }).last().click();
   await expect(page).toHaveURL(/\/personal\/login$/);
   await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
@@ -543,11 +550,11 @@ test('when account wallet sends are enabled it can receive and send with the pas
     posts.push({ body: route.request().postDataJSON(), key: route.request().headers()['idempotency-key'] });
     return route.fulfill(json({ id: 'stl_' + 'b'.repeat(32), tx_hash: '0x' + 'd'.repeat(64), status: 'submitted', custody: 'managed' }));
   });
-  await page.goto('/personal/deposit');
+  await page.goto('/personal/deposit/crypto/qie');
   const panel = page.getByRole('group', { name: 'Roots account wallet' });
   await expect(panel.locator('code')).toHaveText(managedAddress);
   await expect(panel.getByAltText(/QR code for your account wallet/)).toBeVisible();
-  await page.goto('/personal/send');
+  await page.goto('/personal/send/address');
   const send = page.getByRole('region', { name: 'QIE wallet' });
   // The password belongs to the review step, not the form.
   await expect(send.getByLabel('Password')).toHaveCount(0);

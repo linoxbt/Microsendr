@@ -93,6 +93,8 @@ function App() {
           path={path}
           brand={<RootsWordmark />}
           themeToggle={themeToggle}
+          theme={theme}
+          onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
           onAuthChange={setPersonalAuthenticated}
         />
       </Suspense>

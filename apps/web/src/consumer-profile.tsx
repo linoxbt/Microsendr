@@ -71,19 +71,6 @@ export function ConsumerProfileForm({
     ? new Date(`${profile.date_of_birth}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
   return (
     <>
-      <div className="fin-profile-banner">
-        <div className="fin-avatar large">
-          {(profile.first_name?.[0] ?? 'R') + (profile.last_name?.[0] ?? '')}
-        </div>
-        <div>
-          <h2>{profile.first_name ? `${profile.first_name} ${profile.last_name}` : 'Your account'}</h2>
-          <p>{profile.username ? `@${profile.username}` : 'No username yet'}</p>
-        </div>
-        <span className={`fin-status ${profile.identity_status === 'Approved' ? 'verified' : ''}`}>
-          <ShieldCheck size={14} />
-          {profile.identity_status === 'Approved' ? 'Verified' : 'Not verified'}
-        </span>
-      </div>
       <div className="fin-settings">
         <ProfileSection title="Profile" section="identity" profile={profile} csrf={csrf} onSaved={onSaved} note={locked} rows={[
           ['Name', `${shown(profile.first_name)} ${profile.last_name ?? ''}`.trim()],
@@ -98,23 +85,6 @@ export function ConsumerProfileForm({
           ['Occupation', shown(profile.occupation)],
           ['Nationality', profile.nationality ? countryName(profile.nationality) : '—'],
         ]} />
-        <section className="fin-panel fin-settings-section" aria-label="Sign-in and verification">
-          <div className="fin-settings-head"><h2>Sign-in & verification</h2></div>
-          <button className="fin-settings-link" onClick={() => go('/personal/security')}>
-            <Mail size={18} /><span><b>Email</b><small>{profile.email ?? 'No email linked'}</small></span>
-            <em className={`fin-status ${profile.email_verified_at ? 'verified' : ''}`}>{profile.email_verified_at ? 'Verified' : 'Not verified'}</em>
-            <ChevronRight size={16} />
-          </button>
-          <button className="fin-settings-link" onClick={() => go('/personal/identity')}>
-            <ShieldCheck size={18} /><span><b>Identity</b><small>Didit verification</small></span>
-            <em className={`fin-status ${profile.identity_status === 'Approved' ? 'verified' : ''}`}>{profile.identity_status === 'Approved' ? 'Verified' : 'Not verified'}</em>
-            <ChevronRight size={16} />
-          </button>
-          <button className="fin-settings-link" onClick={() => go('/personal/security')}>
-            <LockKeyhole size={18} /><span><b>Password, PIN & passkeys</b><small>How you sign in and approve payments</small></span>
-            <ChevronRight size={16} />
-          </button>
-        </section>
       </div>
     </>
   );

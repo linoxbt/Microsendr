@@ -25,6 +25,14 @@ import {
   Circle,
   ArrowLeft,
   Copy,
+  QrCode,
+  Coins,
+  Landmark,
+  Inbox,
+  AtSign,
+  LockKeyhole,
+  Moon,
+  Sun,
 } from 'lucide-react';
 import { PersonalLogin } from './personal-login.js';
 import { PersonalKyc } from './personal-kyc.js';
@@ -132,13 +140,11 @@ function PersonalSkeleton() {
         <i className="fin-sk fin-sk-circle" />
       </header>
       <main className="fin-content fin-home-content" aria-hidden="true">
-        <i className="fin-sk fin-sk-title" />
-        <i className="fin-sk fin-sk-line" />
-        <div className="fin-home-grid">
-          <div className="fin-skeleton-balance"><i className="fin-sk fin-sk-line" /><i className="fin-sk fin-sk-amount" /></div>
-          <i className="fin-sk fin-sk-card" />
+        <div className="rt-home">
+          <i className="fin-sk rt-sk-balance" />
+          <div className="rt-shortcuts">{[0, 1, 2, 3].map((n) => <i key={n} className="fin-sk rt-sk-shortcut" />)}</div>
           <div className="fin-skeleton-rows">
-            {[0, 1, 2, 3].map((row) => <span key={row}><i className="fin-sk fin-sk-circle" /><i className="fin-sk fin-sk-line" /></span>)}
+            {[0, 1, 2].map((row) => <span key={row}><i className="fin-sk fin-sk-circle" /><i className="fin-sk fin-sk-line" /></span>)}
           </div>
         </div>
       </main>
@@ -151,10 +157,12 @@ const actions = [
   ['convert', 'Convert', ArrowLeftRight],
   ['withdraw', 'Withdraw', ArrowDownLeft],
 ] as const;
-const quickActions = [
-  ['deposit', 'Add money', Plus],
-  ['convert', 'Convert', ArrowLeftRight],
-  ['withdraw', 'Withdraw', ArrowDownLeft],
+// Home shortcuts: round icons under the balance card.
+const shortcuts = [
+  ['/personal/deposit/crypto', 'Receive', QrCode, 'blue'],
+  ['/personal/convert', 'Convert', ArrowLeftRight, 'amber'],
+  ['/personal/assets', 'Assets', Coins, 'green'],
+  ['/personal/withdraw', 'Withdraw', Landmark, 'slate'],
 ] as const;
 
 export function PersonalPage({
@@ -162,12 +170,16 @@ export function PersonalPage({
   path,
   brand,
   themeToggle,
+  theme = 'light',
+  onToggleTheme,
   onAuthChange,
 }: {
   go: (path: string) => void;
   path: string;
   brand: React.ReactNode;
   themeToggle: React.ReactNode;
+  theme?: 'light' | 'dark';
+  onToggleTheme?: () => void;
   onAuthChange: (authenticated: boolean) => void;
 }) {
   const [session, setSession] = useState<Session>(),
@@ -180,8 +192,7 @@ export function PersonalPage({
   const [selected, setSelected] = useState<string | null>(null),
     [refreshing, setRefreshing] = useState(false),
     [signInNotice, setSignInNotice] = useState('');
-  const [payTo, setPayTo] = useState(''),
-    [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState(false);
   const toastRef = useRef<(message: string) => void>(() => undefined);
   const toast = (message: string) => toastRef.current(message);
   const rawTab = path.split('/')[2]?.split('?')[0] || 'home';
@@ -540,119 +551,57 @@ export function PersonalPage({
           )}
           {tab === 'home' && (
             <>
-              <div className="fin-home-heading">
-                <div>
-                  <h1>{greeting()}{p.first_name ? `, ${p.first_name}` : ''}</h1>
-                  <p>{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</p>
-                </div>
-                <button
-                  className="fin-icon-button"
-                  onClick={retry}
-                  disabled={refreshing}
-                  aria-label="Refresh account"
-                >
-                  <RefreshCw size={18} className={refreshing ? 'fin-spin' : ''} />
-                </button>
-              </div>
               {overviewError && (
                 <div className="fin-error fin-inline-retry" role="alert">
-                  <span>Balances and activity could not load. {overviewError}</span>
+                  <span>Balances could not load.</span>
                   <button className="fin-text" onClick={() => void loadOverview().catch(() => undefined)}>Try again</button>
                 </div>
               )}
-              <div className="fin-home-grid">
-                <section className="fin-wallet-overview" aria-label="Your wallet overview">
-                  <div className="fin-wallet-overview-top">
-                    <span>Your balance</span>
+              <div className="rt-home">
+                <h1 className="fin-sr-only">{greeting()}{p.first_name ? `, ${p.first_name}` : ''}</h1>
+                <section className="rt-balance" aria-label="Your wallet overview">
+                  <RootsWatermark />
+                  <div className="rt-balance-top">
+                    <button className="rt-balance-avatar" onClick={() => go('/personal/profile')} aria-label="Open your account">
+                      {(p.first_name?.[0] ?? 'R') + (p.last_name?.[0] ?? '')}
+                    </button>
                     {p.username && (
-                      <button
-                        className="fin-wallet-username"
-                        onClick={() => void copyUsername()}
-                        aria-label={`Copy your username @${p.username}`}
-                      >
-                        @{p.username} {copied ? <Check size={14} /> : <Copy size={14} />}
+                      <button className="rt-id" onClick={() => void copyUsername()} aria-label={`Copy your username @${p.username}`}>
+                        @{p.username} {copied ? <Check size={15} /> : <Copy size={15} />}
                       </button>
                     )}
                   </div>
-                  <div className="fin-wallet-amount">
-                    <div>
-                      <strong className={formattedWalletValue.length > 13 ? 'fin-amount-xlong' : formattedWalletValue.length > 10 ? 'fin-amount-long' : undefined}>{hidden ? '••••' : formattedWalletValue}</strong>
-                      <button
-                        aria-label={hidden ? 'Show balance' : 'Hide balance'}
-                        onClick={() => setHidden(!hidden)}
-                      >
+                  <div className="rt-balance-main">
+                    <span>
+                      Total balance
+                      <button aria-label={hidden ? 'Show balance' : 'Hide balance'} onClick={() => setHidden(!hidden)}>
                         {hidden ? <EyeOff size={17} /> : <Eye size={17} />}
                       </button>
+                    </span>
+                    <div className="fin-wallet-amount">
+                      <strong className={formattedWalletValue.length > 13 ? 'fin-amount-xlong' : formattedWalletValue.length > 10 ? 'fin-amount-long' : undefined}>
+                        {hidden ? '••••' : !overview ? '…' : formattedWalletValue}
+                      </strong>
                     </div>
-                    <p>{hidden ? 'Your balances are hidden' : !overview ? 'Loading balances…' : walletValue === null
-                      ? 'Wallet value temporarily unavailable' : o.wallet_value_usd?.checked_at
-                        ? `Estimated in USD · Price checked ${new Date(o.wallet_value_usd.checked_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
-                        : 'Estimated in USD · See each balance below'}</p>
                   </div>
-                  <button
-                    className="fin-assets-pill"
-                    onClick={() => document.getElementById('home-assets')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                  >
-                    {assets.length} assets <ChevronRight size={14} />
-                  </button>
+                  <div className="rt-balance-actions" role="group" aria-label="Money actions">
+                    <button onClick={() => go('/personal/deposit')}><Plus size={18} /> Add money</button>
+                    <button onClick={() => go('/personal/send')}>Send <ArrowUpRight size={18} /></button>
+                  </div>
                 </section>
-                <section className="fin-pay-card" aria-labelledby="pay-card-title">
-                  <RootsWatermark />
-                  <h2 id="pay-card-title">Pay anyone on Roots</h2>
-                  <form
-                    className="fin-pay-search"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      const value = payTo.trim();
-                      go(value && payeePattern.test(value) ? `/personal/send?to=${encodeURIComponent(value)}` : '/personal/send');
-                    }}
-                  >
-                    <Search size={18} aria-hidden="true" />
-                    <input
-                      value={payTo}
-                      onChange={(e) => setPayTo(e.target.value)}
-                      placeholder="@username or 0x…"
-                      aria-label="Pay a Roots @username or QIE address"
-                      autoComplete="off"
-                      autoCapitalize="none"
-                      spellCheck={false}
-                    />
-                    <button aria-label="Continue to payment">
-                      <ArrowRight size={18} />
-                    </button>
-                  </form>
-                  {payees.length ? (
-                    <ul className="fin-payees" aria-label="People you paid recently">
-                      {payees.map((name) => (
-                        <li key={name}>
-                          <button onClick={() => go(`/personal/send?to=${encodeURIComponent('@' + name)}`)} aria-label={`Pay @${name} again`}>
-                            <span className={`fin-payee-avatar fin-payee-tone-${tone(name)}`} aria-hidden="true">
-                              {name.slice(0, 2).toUpperCase()}
-                            </span>
-                            <small>@{name}</small>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="fin-payees-empty">People you pay appear here.</p>
-                  )}
-                </section>
-                <div className="fin-quick-actions" aria-label="Money actions" role="group">
-                  {quickActions.map(([key, label, Icon]) => (
-                    <button key={key} onClick={() => go('/personal/' + key)}>
-                      <Icon size={18} />
-                      <b>{label}</b>
+                <nav className="rt-shortcuts" aria-label="Shortcuts">
+                  {shortcuts.map(([path, label, Icon, tone]) => (
+                    <button key={label} onClick={() => go(path)}>
+                      <span className={`rt-shortcut-icon rt-tone-${tone}`}><Icon size={22} /></span>
+                      {label}
                     </button>
                   ))}
-                </div>
-                <section className="fin-home-activity" aria-labelledby="home-activity-title">
-                  <div className="fin-section-head">
+                </nav>
+                <section className="rt-activity" aria-labelledby="home-activity-title">
+                  <div className="rt-activity-head">
                     <h2 id="home-activity-title">Activity</h2>
                     {o.activity.length > 0 && (
-                      <button className="fin-text" onClick={() => go('/personal/activity')}>
-                        See all <ChevronRight size={14} />
-                      </button>
+                      <button className="fin-text" onClick={() => go('/personal/activity')}>See all</button>
                     )}
                   </div>
                   {recentDays.length ? recentDays.map(([day, items]) => (
@@ -691,50 +640,45 @@ export function PersonalPage({
                       {[0, 1, 2].map((row) => <span key={row}><i className="fin-sk fin-sk-circle" /><i className="fin-sk fin-sk-line" /></span>)}
                     </div>
                   ) : (
-                    <GetStarted profile={p} go={go} />
+                    <div className="rt-empty">
+                      <span><Inbox size={30} /></span>
+                      <p>No transactions</p>
+                    </div>
                   )}
-                </section>
-                <section className="fin-panel fin-home-assets" id="home-assets">
-                  <div className="fin-section-head">
-                    <h2>Assets</h2>
-                  </div>
-                  <div className="fin-assets-list">
-                    {assets.map(asset => <button className="fin-asset-row" key={asset.code} onClick={() => go(`/personal/assets/${asset.code.toLowerCase()}`)} aria-label={`View ${asset.code} details, ${asset.name}, balance ${hidden ? 'hidden' : asset.amount_atomic === null ? 'unavailable' : `${assetAmount(asset)} ${asset.code}`}`}>
-                      <AssetIcon code={asset.code} />
-                      <span className="fin-asset-name"><b>{asset.code}</b><small>{asset.name}</small></span>
-                      <span className="fin-asset-value"><b>{hidden ? '••••' : assetAmount(asset)}</b><small>{asset.status === 'ready' ? 'Onchain' : 'Unavailable'}</small></span>
-                      <ChevronRight className="fin-asset-chevron" size={17} />
-                    </button>)}
-                  </div>
                 </section>
               </div>
             </>
           )}
-          {tab === 'assets' && (detailAsset
+          {tab === 'assets' && !assetCode && (
+            <div className="rt-page">
+              <PageBar title="Assets" back={() => go('/personal/home')} />
+              <section className="rt-list" aria-label="Your assets">
+                {assets.map(asset => <button className="fin-asset-row rt-row" key={asset.code} onClick={() => go(`/personal/assets/${asset.code.toLowerCase()}`)} aria-label={`View ${asset.code} details, ${asset.name}, balance ${hidden ? 'hidden' : asset.amount_atomic === null ? 'unavailable' : `${assetAmount(asset)} ${asset.code}`}`}>
+                  <AssetIcon code={asset.code} />
+                  <span className="fin-asset-name"><b>{asset.code}</b><small>{asset.name}</small></span>
+                  <span className="fin-asset-value"><b>{hidden ? '••••' : assetAmount(asset)}</b>{asset.status !== 'ready' && <small>Soon</small>}</span>
+                  <ChevronRight className="fin-asset-chevron" size={17} />
+                </button>)}
+              </section>
+            </div>
+          )}
+          {tab === 'assets' && assetCode && (detailAsset
             ? <AssetDetail asset={detailAsset} activity={o.activity} go={go} hidden={hidden} refresh={() => void retry()} refreshing={refreshing} />
-            : <div className="fin-panel"><h1>Asset not found</h1><button className="fin-secondary" onClick={() => go('/personal/home')}>Back to assets</button></div>)}
+            : <div className="fin-panel"><h1>Asset not found</h1><button className="fin-secondary" onClick={() => go('/personal/assets')}>All assets</button></div>)}
           {tab === 'payments' && (
-            <>
-              <PageHeading
-                title="Payments"
-              />
-              <div className="fin-payment-tiles">
-                {actions.map(([key, label, Icon]) => (
-                  <button key={key} onClick={() => go('/personal/' + key)}>
-                    <span>
-                      <Icon size={25} />
-                    </span>
-                    <h2>{label}</h2>
-                    <ArrowRight size={19} />
-                  </button>
-                ))}
-              </div>
-            </>
+            <div className="rt-page">
+              <h1 className="rt-account-title">Payments</h1>
+              <OptionList label="Payments" options={actions.map(([key, label, Icon]) => ({
+                key, title: label, icon: <Icon size={22} />, onClick: () => go('/personal/' + key),
+              }))} />
+            </div>
           )}
           {['deposit', 'send', 'withdraw', 'convert'].includes(tab) && (
             <MoneyFlow
               key={tab}
               kind={tab}
+              path={path}
+              payees={payees}
               capabilities={o.capabilities}
               csrf={csrf}
               go={go}
@@ -825,61 +769,53 @@ export function PersonalPage({
               )}
             </>
           )}
-          {tab === 'profile' && (
-            <>
-              <PageHeading
-                title="Account"
-              />
+          {tab === 'profile' && assetCode !== 'DETAILS' && (
+            <div className="rt-page rt-account">
+              <h1 className="rt-account-title">Account</h1>
+              <div className="rt-account-head">
+                <span className="rt-account-avatar">{(p.first_name?.[0] ?? 'R') + (p.last_name?.[0] ?? '')}</span>
+                <h2>{p.first_name ? `${p.first_name} ${p.last_name ?? ''}`.trim() : 'Your account'}</h2>
+                {p.username && <p>@{p.username}</p>}
+                <span className={`rt-badge ${p.identity_status === 'Approved' ? 'rt-badge-green' : 'rt-badge-grey'}`}>
+                  {p.identity_status === 'Approved' ? 'Verified' : 'Not verified'}
+                </span>
+              </div>
+              <OptionList label="Account settings" options={[
+                { key: 'profile', title: 'My profile', text: 'Your details', icon: <UserRound size={21} />, onClick: () => go('/personal/profile/details') },
+                { key: 'activity', title: 'Transactions', text: 'All your payments', icon: <ReceiptText size={21} />, onClick: () => go('/personal/activity') },
+                { key: 'identity', title: 'Identity', text: p.identity_status === 'Approved' ? 'Verified' : 'Verify your account', icon: <ShieldCheck size={21} />, onClick: () => go('/personal/identity') },
+                { key: 'security', title: 'Security', text: 'Password, PIN and passkeys', icon: <LockKeyhole size={21} />, onClick: () => go('/personal/security') },
+                { key: 'theme', title: 'Theme', text: theme === 'dark' ? 'Dark' : 'Light', icon: theme === 'dark' ? <Moon size={21} /> : <Sun size={21} />, onClick: onToggleTheme },
+              ]} />
+              <button className="rt-logout" onClick={logout}>Sign out</button>
+            </div>
+          )}
+          {tab === 'profile' && assetCode === 'DETAILS' && (
+            <div className="rt-page">
+              <PageBar title="My profile" back={() => go('/personal/profile')} />
               <ConsumerProfileForm profile={p} csrf={csrf} onSaved={refresh} go={go} />
-              <button className="fin-secondary fin-profile-logout" onClick={logout}>
-                <LogOut size={16} /> Sign out
-              </button>
-            </>
+            </div>
           )}
           {tab === 'security' && (
-            <>
-              <PageHeading
-                title="Security"
-              />
+            <div className="rt-page">
+              <PageBar title="Security" back={() => go('/personal/profile')} />
               <ConsumerSecurity profile={p} csrf={csrf} onSaved={refresh} />
-            </>
+            </div>
           )}
           {['identity', 'onboarding'].includes(tab) && (
-            <>
-              <PageHeading
-                kicker={tab === 'onboarding' ? 'WELCOME TO ROOTS' : 'ACCOUNT VERIFICATION'}
-                title={
-                  tab === 'onboarding'
-                    ? `You’re in${p.first_name ? `, ${p.first_name}` : ''}.`
-                    : 'Let’s make it official.'
-                }
-                text="Verify your identity now, or return to this step when you’re ready."
-              />
+            <div className="rt-page">
+              {tab === 'identity'
+                ? <PageBar title="Identity" back={() => go('/personal/profile')} />
+                : <h1 className="rt-welcome">You’re in{p.first_name ? `, ${p.first_name}` : ''}.</h1>}
               <div className="fin-verification">
-                <section className="fin-panel">
-                  <span className="fin-verification-icon">
-                    <ShieldCheck size={35} />
-                  </span>
-                  <h2>Your account, verified.</h2>
-                  <p>
-                    Have a valid identity document ready. You may also be asked to take a selfie.
-                  </p>
-                  <div className="fin-verification-points">
-                    <span>
-                      <Check size={16} /> Your documents stay with the verification provider.
-                    </span>
-                    <span>
-                      <Check size={16} /> You can explore your account before verification.
-                    </span>
-                  </div>
-                </section>
                 <PersonalKyc csrf={csrf} />
-                <button className="fin-text" onClick={() => go('/personal/home')}>
-                  {tab === 'onboarding' ? 'Do this later' : 'Back to overview'}{' '}
-                  <ArrowRight size={16} />
-                </button>
+                {tab === 'onboarding' && (
+                  <button className="fin-text" onClick={() => go('/personal/home')}>
+                    Do this later <ArrowRight size={16} />
+                  </button>
+                )}
               </div>
-            </>
+            </div>
           )}
           {![
             'home',
@@ -915,31 +851,30 @@ function ToastBridge({ target }: { target: React.MutableRefObject<(message: stri
 }
 
 /** New accounts: three steps in place of an empty activity list. */
-function GetStarted({ profile, go }: { profile: ConsumerProfile; go: (path: string) => void }) {
-  const [approval, setApproval] = useState<boolean>();
-  useEffect(() => {
-    void consumerRequest<PaymentAuthStatus>('payment-auth')
-      .then((status) => setApproval(status.pin_set || status.passkeys.length > 0))
-      .catch(() => setApproval(false));
-  }, []);
-  const steps = [
-    { label: 'Verify your email', done: !!profile.email_verified_at, path: '/personal/security' },
-    { label: 'Set up a passkey or PIN', done: !!approval, path: '/personal/security' },
-    { label: 'Add money', done: false, path: '/personal/deposit' },
-  ];
-  const done = steps.filter((step) => step.done).length;
+/** Mobile-style page header: back arrow, centred title. */
+function PageBar({ title, back }: { title: string; back: () => void }) {
   return (
-    <div className="fin-get-started">
-      <div className="fin-get-started-head">
-        <b>Get started</b>
-        <span>{done} of {steps.length}</span>
-      </div>
-      <i className="fin-get-started-bar"><i style={{ width: `${(done / steps.length) * 100}%` }} /></i>
-      {steps.map((step) => (
-        <button key={step.label} className={step.done ? 'done' : ''} onClick={() => go(step.path)} disabled={step.done}>
-          {step.done ? <CheckCircle2 size={20} /> : <Circle size={20} />}
-          <span>{step.label}</span>
-          {!step.done && <ChevronRight size={16} />}
+    <div className="rt-page-bar">
+      <button onClick={back} aria-label="Back"><ArrowLeft size={22} /></button>
+      <h1>{title}</h1>
+      <span aria-hidden="true" />
+    </div>
+  );
+}
+
+type Option = { key: string; title: string; text?: string; icon: React.ReactNode; badge?: string; badgeTone?: 'green' | 'blue' | 'grey'; onClick?: () => void };
+/** A list of large tappable choices, each with an icon, a title and one short line. */
+function OptionList({ label, options }: { label: string; options: Option[] }) {
+  return (
+    <div className="rt-options" role="list" aria-label={label}>
+      {options.map((option) => (
+        <button key={option.key} role="listitem" className="rt-option" onClick={option.onClick} disabled={!option.onClick}>
+          <span className="rt-option-icon">{option.icon}</span>
+          <span className="rt-option-text">
+            <b>{option.title}{option.badge && <em className={`rt-badge rt-badge-${option.badgeTone ?? 'grey'}`}>{option.badge}</em>}</b>
+            {option.text && <small>{option.text}</small>}
+          </span>
+          {option.onClick && <ChevronRight size={20} />}
         </button>
       ))}
     </div>
@@ -959,95 +894,128 @@ function PageHeading({ kicker, title, text }: { kicker?: string; title: string; 
 }
 function MoneyFlow({
   kind,
+  path,
+  payees,
   capabilities,
   csrf,
   go,
   onChanged,
 }: {
   kind: string;
+  path: string;
+  payees: string[];
   capabilities: Record<string, Capability>;
   csrf: string;
   go: (path: string) => void;
   onChanged: () => Promise<void>;
 }) {
-  // A recipient chosen on Home (?to=@name or ?to=0x…) prefills the send form.
+  const query = new URLSearchParams(window.location.search);
+  // A recipient chosen elsewhere (?to=@name or ?to=0x…) prefills the send form.
   const [initialRecipient] = useState(() => {
-    const to = new URLSearchParams(window.location.search).get('to')?.trim() ?? '';
+    const to = query.get('to')?.trim() ?? '';
     return payeePattern.test(to) ? to : '';
   });
-  // ?asset=qusdc opens Send or Receive on that token.
-  const [initialToken] = useState<'QIE' | 'QUSDC'>(() =>
-    new URLSearchParams(window.location.search).get('asset')?.toUpperCase() === 'QUSDC' ? 'QUSDC' : 'QIE');
   const capability = capabilities?.[kind === 'convert' ? 'conversion' : 'withdrawal'];
-  // Add money: crypto to a wallet address, or naira by bank (and card where the provider offers it).
-  const [method, setMethod] = useState<'crypto' | 'bank'>(() =>
-    new URLSearchParams(window.location.search).get('method') === 'bank' ? 'bank' : 'crypto');
-  const back = (
-    <button className="fin-text fin-back" onClick={() => go('/personal/payments')}>
-      <ArrowLeft size={16} /> Payments
-    </button>
-  );
-  if (kind === 'deposit' || kind === 'send')
-    return (
-      <div className={`fin-flow-narrow fin-flow-${kind}`}>
-        {back}
-        {kind === 'send' && <h1 className="fin-flow-title">Send</h1>}
-        {kind === 'deposit' && (
-          <div className="fin-add-method" role="group" aria-label="Add money with">
-            <button type="button" className={method === 'crypto' ? 'active' : ''} aria-pressed={method === 'crypto'} onClick={() => setMethod('crypto')}>
-              <Globe2 size={18} /> Crypto
-            </button>
-            <button type="button" className={method === 'bank' ? 'active' : ''} aria-pressed={method === 'bank'} onClick={() => setMethod('bank')}>
-              <CreditCard size={18} /> Bank / card
-            </button>
-          </div>
-        )}
-        {kind === 'deposit' && method === 'bank' ? (
-          capabilities?.conversion?.available ? (
+  // Steps live in the path (/personal/deposit/crypto/qusdc), so the back button walks back
+  // through them. Older links (?method=bank, ?asset=qusdc, ?to=…) still land on the right step.
+  const [, , , stepRaw, tokenRaw] = path.split('?')[0].split('/');
+  const legacyAsset = query.get('asset')?.toUpperCase();
+  const step = stepRaw ?? (query.get('method') === 'bank' ? 'bank' : legacyAsset || initialRecipient ? (kind === 'send' ? 'address' : 'crypto') : undefined);
+  const token = (tokenRaw ?? legacyAsset)?.toUpperCase() === 'QUSDC' ? 'QUSDC' : (tokenRaw ?? legacyAsset) ? 'QIE' : undefined;
+  const back = (to: string) => () => go(to);
+
+  if (kind === 'deposit') {
+    if (!step)
+      return (
+        <div className="rt-page">
+          <PageBar title="Add money" back={back('/personal/home')} />
+          <OptionList label="Add money with" options={[
+            { key: 'bank', title: 'Naira deposit', text: 'From your bank', icon: <Landmark size={22} />, onClick: back('/personal/deposit/bank') },
+            { key: 'crypto', title: 'Crypto deposit', text: 'From a crypto wallet', icon: <Coins size={22} />, onClick: back('/personal/deposit/crypto') },
+          ]} />
+        </div>
+      );
+    if (step === 'bank')
+      return (
+        <div className="rt-page">
+          <PageBar title="Naira deposit" back={back('/personal/deposit')} />
+          {capabilities?.conversion?.available ? (
             <section className="fin-panel fin-add-bank" aria-label="Add money by bank">
-              <h1>Buy with naira</h1>
+              <h2 className="fin-sr-only">Buy with naira</h2>
               <ConversionPanel csrf={csrf} buyOnly />
             </section>
           ) : (
-            <div className="fin-method-detail fin-add-bank">
-              <span className="fin-method-icon"><CreditCard size={30} /></span>
-              <h1>Bank and card</h1>
-              <p>{capabilities?.fiat_deposit?.reason ?? 'Not available yet.'}</p>
-              <span className="fin-status">Not available</span>
+            <div className="rt-empty rt-empty-page" aria-label="Add money by bank">
+              <span><Landmark size={30} /></span>
+              <p>Coming soon</p>
             </div>
-          )
-        ) : (
-          <ConsumerChainWallet
-            csrf={csrf}
-            mode={kind === 'send' ? 'send' : 'receive'}
-            onChanged={onChanged}
-            initialRecipient={kind === 'send' ? initialRecipient : ''}
-            initialToken={initialToken}
-            go={go}
-          />
+          )}
+        </div>
+      );
+    if (!token)
+      return (
+        <div className="rt-page">
+          <PageBar title="Select crypto" back={back('/personal/deposit')} />
+          <OptionList label="Choose a token" options={(['QIE', 'QUSDC'] as const).map((code) => ({
+            key: code, title: code, text: code === 'QUSDC' ? 'Digital dollars on QIE' : 'QIE Mainnet',
+            icon: <AssetIcon code={code} />, onClick: back(`/personal/deposit/crypto/${code.toLowerCase()}`),
+          }))} />
+        </div>
+      );
+    return (
+      <div className="rt-page fin-flow-narrow fin-flow-deposit">
+        <PageBar title="Receive" back={back('/personal/deposit/crypto')} />
+        <ConsumerChainWallet csrf={csrf} mode="receive" onChanged={onChanged} initialToken={token} go={go} />
+      </div>
+    );
+  }
+
+  if (kind === 'send') {
+    if (!step)
+      return (
+        <div className="rt-page">
+          <PageBar title="Send" back={back('/personal/home')} />
+          <OptionList label="Send to" options={[
+            { key: 'user', title: 'Roots user', badge: 'No fee', badgeTone: 'green', text: 'Send to an @username', icon: <AtSign size={22} />, onClick: back('/personal/send/user') },
+            { key: 'address', title: 'Wallet address', text: 'QIE or QUSDC to any address', icon: <Wallet size={22} />, onClick: back('/personal/send/address') },
+            { key: 'bank', title: 'Bank account', badge: 'Soon', badgeTone: 'blue', text: 'Send to a bank account', icon: <Landmark size={22} /> },
+          ]} />
+        </div>
+      );
+    return (
+      <div className="rt-page fin-flow-narrow fin-flow-send">
+        <PageBar title={step === 'user' ? 'Roots user' : 'Wallet address'} back={back('/personal/send')} />
+        <ConsumerChainWallet csrf={csrf} mode="send" onChanged={onChanged} initialRecipient={initialRecipient}
+          initialToken={token ?? 'QIE'} go={go} />
+        {step === 'user' && payees.length > 0 && (
+          <section className="rt-recent" aria-label="Pay again">
+            <h2>Recent</h2>
+            <ul className="fin-payees" aria-label="People you paid recently">
+              {payees.map((name) => (
+                <li key={name}>
+                  <button onClick={() => go(`/personal/send/user?to=${encodeURIComponent('@' + name)}`)} aria-label={`Pay @${name} again`}>
+                    <span className={`fin-payee-avatar fin-payee-tone-${tone(name)}`} aria-hidden="true">{name.slice(0, 2).toUpperCase()}</span>
+                    <small>@{name}</small>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
       </div>
     );
+  }
   return (
-    <>
-      {back}
-      <PageHeading title={kind === 'convert' ? 'Convert' : 'Withdraw'} />
-      <div className="fin-flow-layout">
-        <section className="fin-panel fin-flow">
-          {kind === 'convert' && capability?.available ? (
-            <ConversionPanel csrf={csrf} />
-          ) : (
-            <div className="fin-method-detail">
-              <span className="fin-method-icon">
-                {kind === 'convert' ? <ArrowLeftRight size={30} /> : <ArrowDownLeft size={30} />}
-              </span>
-              <h2>{kind === 'convert' ? 'Currency exchange' : 'Bank withdrawal'}</h2>
-              <p>{capability?.reason ?? 'Not available yet.'}</p>
-              <span className="fin-status">Not available</span>
-            </div>
-          )}
-        </section>
-      </div>
-    </>
+    <div className="rt-page">
+      <PageBar title={kind === 'convert' ? 'Convert' : 'Withdraw'} back={back('/personal/home')} />
+      {kind === 'convert' && capability?.available ? (
+        <section className="fin-panel fin-flow"><ConversionPanel csrf={csrf} /></section>
+      ) : (
+        <div className="rt-empty rt-empty-page">
+          <span>{kind === 'convert' ? <ArrowLeftRight size={30} /> : <Landmark size={30} />}</span>
+          <p>Coming soon</p>
+        </div>
+      )}
+    </div>
   );
 }
