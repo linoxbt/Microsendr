@@ -7,7 +7,8 @@ import { z } from 'zod';
  * `${timestamp}:${path-with-query}`)). The body is not signed.
  */
 export class FonbnkError extends Error {
-  constructor(readonly status: number, readonly code: string, message: string) { super(message); }
+  constructor(readonly status: number, readonly code: string, message: string,
+    readonly details: Record<string, unknown> = {}, readonly retryAfterMs?: number) { super(message); }
 }
 
 const fee = z.object({ id: z.string(), type: z.string().optional(), recipient: z.string(), amount: z.number() }).passthrough();
@@ -24,13 +25,21 @@ const leg = z.object({
 }).passthrough();
 export const quoteSchema = z.object({ quoteId: z.string(), quoteExpiresAt: z.string(), deposit: leg, payout: leg }).passthrough();
 const transferDetail = z.object({ id: z.string(), value: z.unknown().optional(), label: z.string().optional() }).passthrough();
+const field = z.object({ key: z.string(), label: z.string().optional(), type: z.string().optional(), required: z.boolean().optional() }).passthrough();
+export const kycSchema = z.object({
+  passedKycType: z.string().nullable().optional(), requiredKycType: z.string().nullable().optional(),
+  reachedKycLimit: z.boolean().optional(), currentKycStatus: z.string().nullable().optional(),
+  isNgBvnBlocked: z.boolean().optional(), isNgBvnSupportLocked: z.boolean().optional(),
+  kycUrls: z.object({ basic: z.string().optional(), advanced: z.string().optional() }).passthrough().nullable().optional(),
+}).passthrough();
+export type FonbnkKyc = z.infer<typeof kycSchema>;
 export const orderSchema = z.object({
   _id: z.string(), status: z.string(), expiresAt: z.string().optional().nullable(),
   deposit: z.object({
     transferInstructions: z.object({
       type: z.string(), transferDetails: z.array(transferDetail).default([]),
       instructionsText: z.string().optional().nullable(), warningText: z.string().optional().nullable(),
-      fieldsToConfirmOrder: z.array(z.unknown()).optional(), paymentUrl: z.string().optional().nullable(),
+      fieldsToConfirmOrder: z.array(field).optional(), paymentUrl: z.string().optional().nullable(),
     }).passthrough().optional(),
     cashout: cashout.optional(),
   }).passthrough().optional(),
@@ -45,8 +54,11 @@ export interface LegRequest {
   currencyCode: string;
   countryIsoCode?: string;
   amount?: number;
+  /** Quote requests only: Fonbnk's order legs are strict and refuse it. */
   transferType?: 'manual';
 }
+/** The same leg as an order accepts it. */
+const orderLeg = ({ transferType: _transferType, ...leg }: LegRequest) => leg;
 
 /** Order states Fonbnk documents as truly final. Expired/canceled can still turn into payment. */
 export const FINAL_STATUSES = new Set(['payout_successful', 'refund_successful']);
@@ -84,16 +96,25 @@ export class FonbnkClient {
     }
     const data: any = await response.json().catch(() => null);
     if (!response.ok) {
-      const code = typeof data?.code === 'string' ? data.code : typeof data?.error?.code === 'string' ? data.error.code : `provider_${response.status}`;
-      const message = typeof data?.message === 'string' ? data.message : typeof data?.error?.message === 'string' ? data.error.message : 'The exchange provider refused the request';
-      throw new FonbnkError(response.status, code, message);
+      // Fonbnk errors: { message, errorCode?, details?, validation? }; 429 adds Retry-After (seconds).
+      const code = typeof data?.errorCode === 'string' ? data.errorCode : `provider_${response.status}`;
+      const message = typeof data?.message === 'string' ? data.message : 'The exchange provider refused the request';
+      const retryAfter = Number(response.headers.get('retry-after'));
+      throw new FonbnkError(response.status, code, message, typeof data?.details === 'object' && data.details ? data.details : {},
+        response.status === 429 && Number.isFinite(retryAfter) ? retryAfter * 1000 : undefined);
     }
     return data;
+  }
+  /** A response that does not match the documented shape is a provider fault, not a bad request. */
+  private parse<T>(schema: z.ZodType<T>, data: unknown): T {
+    const parsed = schema.safeParse(data);
+    if (!parsed.success) throw new FonbnkError(502, 'provider_unexpected_response', 'The exchange provider sent an unexpected response');
+    return parsed.data;
   }
 
   async quote(deposit: LegRequest, payout: LegRequest) {
     if ((deposit.amount === undefined) === (payout.amount === undefined)) throw new FonbnkError(400, 'invalid_quote', 'Set exactly one amount');
-    return quoteSchema.parse(await this.request('POST', '/api/v2/quote', { deposit, payout }));
+    return this.parse(quoteSchema, await this.request('POST', '/api/v2/quote', { deposit, payout }));
   }
 
   async limits(deposit: LegRequest, payout: LegRequest) {
@@ -104,21 +125,37 @@ export class FonbnkClient {
     if (deposit.countryIsoCode) query.set('depositCountryIsoCode', deposit.countryIsoCode);
     if (payout.countryIsoCode) query.set('payoutCountryIsoCode', payout.countryIsoCode);
     const side = z.object({ min: z.number(), max: z.number(), supportsDecimals: z.boolean().optional() }).passthrough();
-    return z.object({ deposit: side, payout: side, supported: z.boolean() }).passthrough().parse(await this.request('GET', `/api/v2/order-limits?${query}`));
+    return this.parse(z.object({ deposit: side, payout: side, supported: z.boolean() }).passthrough(), await this.request('GET', `/api/v2/order-limits?${query}`));
+  }
+
+  /** The end user's KYC state with Fonbnk (registers the email as an end user if new). */
+  async userKyc(userEmail: string, countryIsoCode = 'NG') {
+    const query = new URLSearchParams({ userEmail, countryIsoCode });
+    return this.parse(kycSchema, await this.request('GET', `/api/v2/user/kyc?${query}`));
   }
 
   async createOrder(input: {
     quoteId: string; userEmail: string; userCountryIsoCode: string; userIp: string; deposit: LegRequest; payout: LegRequest;
     fieldsToCreateOrder: Record<string, string>; orderParams: string; webhookUrl?: string; callbackUrl?: string;
   }) {
-    const result = z.object({ quoteUsed: z.boolean().optional(), order: orderSchema }).passthrough()
-      .parse(await this.request('POST', '/api/v2/order', input));
-    return result;
+    return this.parse(z.object({ quoteUsed: z.boolean().optional(), order: orderSchema }).passthrough(),
+      await this.request('POST', '/api/v2/order', { ...input, deposit: orderLeg(input.deposit), payout: orderLeg(input.payout) }));
   }
 
   async getOrder(orderId: string) {
     if (!/^[A-Za-z0-9_-]{6,64}$/.test(orderId)) throw new FonbnkError(400, 'invalid_order', 'Invalid order id');
-    return orderSchema.parse(await this.request('GET', `/api/v2/order?orderId=${encodeURIComponent(orderId)}`));
+    return this.parse(orderSchema, await this.request('GET', `/api/v2/order?orderId=${encodeURIComponent(orderId)}`));
+  }
+
+  /** Looks an order up by the reference Roots sent as orderParams; null if Fonbnk has none. */
+  async findOrderByParams(orderParams: string) {
+    if (!/^[A-Za-z0-9_-]{6,64}$/.test(orderParams)) throw new FonbnkError(400, 'invalid_order', 'Invalid order reference');
+    try {
+      return this.parse(orderSchema, await this.request('GET', `/api/v2/order?orderParams=${encodeURIComponent(orderParams)}`));
+    } catch (error) {
+      if (error instanceof FonbnkError && error.status === 404) return null;
+      throw error;
+    }
   }
 
   async confirmOrder(orderId: string, fieldsToConfirmOrder: Record<string, string>) {

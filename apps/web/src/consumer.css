@@ -3309,3 +3309,6 @@
   padding: 8px 0;
   background: none;
 }
+.fin-convert-kyc { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--fin-line, #e3e8ee); border-radius: 12px; }
+.fin-convert-kyc p { margin: 0; }
+.fin-convert > .fin-status { justify-self: start; }
