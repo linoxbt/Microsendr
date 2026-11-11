@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { buildApi } from '../services/api/src/app.js';
 import { pool, id } from '../packages/database/src/index.js';
+import { hashKey } from '../packages/payments/src/auth.js';
 
 const codes = new Map<string, string>();
 const app = await buildApi({
@@ -49,10 +50,11 @@ const write = (auth: any, url: string, payload: any, method: 'POST' | 'PATCH' = 
     headers: { origin, cookie: auth.cookie, 'x-kora-csrf': auth.csrf },
     payload,
   });
-async function register(data = input()) {
+async function register(data = input(), remoteAddress?: string) {
   const r = await app.inject({
     method: 'POST',
     url: '/personal/api/auth/register',
+    ...(remoteAddress ? { remoteAddress } : {}),
     headers: { origin },
     payload: data,
   });
@@ -269,4 +271,65 @@ test('payment availability cannot fabricate a quote or expose simulated money', 
   assert.equal(quote.statusCode, 503);
   assert.equal(quote.json().error.code, 'conversion_unavailable');
   assert.equal((await app.inject({ url: '/personal/api/profile' })).statusCode, 401);
+});
+
+test('a new code replaces the old one, and wrong codes are capped per email across codes', async () => {
+  const email = `${id('codes')}@example.test`;
+  await pool.query('INSERT INTO personal_users(id,email) VALUES($1,$2)', [id('usr'), email]);
+  const remoteAddress = '10.20.0.1';
+  const start = () => app.inject({ method: 'POST', url: '/personal/api/auth/start', remoteAddress, headers: { origin }, payload: { email } });
+  const verify = (challenge_id: string, code: string) =>
+    app.inject({ method: 'POST', url: '/personal/api/auth/verify', remoteAddress: '10.20.0.2', headers: { origin }, payload: { challenge_id, code } });
+  const age = () => pool.query("UPDATE personal_email_challenges SET created_at=created_at-interval '61 seconds' WHERE email=$1", [email]);
+  const first = await start();
+  const firstCode = codes.get(email)!;
+  await age();
+  const second = await start();
+  // The first code no longer works once a second was issued.
+  assert.equal((await verify(first.json().challenge_id, firstCode)).statusCode, 401);
+  // Ten wrong guesses across codes block the email for an hour, even with the right code.
+  const wrong = (code: string) => String((Number(code) + 1) % 1_000_000).padStart(6, '0');
+  for (let i = 0; i < 5; i++) await verify(second.json().challenge_id, wrong(codes.get(email)!));
+  await age();
+  const third = await start();
+  for (let i = 0; i < 5; i++) await verify(third.json().challenge_id, wrong(codes.get(email)!));
+  await age();
+  const fourth = await start();
+  const blocked = await verify(fourth.json().challenge_id, codes.get(email)!);
+  assert.equal(blocked.statusCode, 429, blocked.body);
+  // Five codes an hour at most.
+  await age();
+  assert.equal((await start()).statusCode, 200);
+  await age();
+  const sixth = await app.inject({ method: 'POST', url: '/personal/api/auth/start', remoteAddress: '10.20.0.3', headers: { origin }, payload: { email } });
+  assert.equal(sixth.json().error.code, 'code_recently_sent');
+});
+
+test('the account-wide login cap does not lock out a browser that signed in before', async () => {
+  const auth = await register(input(), '10.30.1.1');
+  const remoteAddress = '10.30.0.1';
+  const login = (data: { email: string; password: string }) => app.inject({ method: 'POST', url: '/personal/api/auth/password', remoteAddress,
+    headers: { origin }, payload: { email: data.email, password: data.password } });
+  const good = await login(auth.data);
+  assert.equal(good.statusCode, 200, good.body);
+  const device = String(good.headers['set-cookie']).match(/roots_device=([a-f0-9]{64})/)?.[1];
+  assert.ok(device, 'a known-device cookie is set on sign-in');
+  // Simulate a distributed attack that exhausted the account-wide cap.
+  await pool.query(`INSERT INTO personal_auth_limits(email_hash,failures) VALUES($1,500)
+    ON CONFLICT(email_hash) DO UPDATE SET failures=500, window_started_at=now()`, [hashKey(`${auth.data.email}|*`)]);
+  const stranger = await login(auth.data);
+  assert.equal(stranger.statusCode, 429);
+  const owner = await app.inject({ method: 'POST', url: '/personal/api/auth/password', remoteAddress: '10.30.0.2', headers: { origin, cookie: `roots_device=${device}` },
+    payload: { email: auth.data.email, password: auth.data.password } });
+  assert.equal(owner.statusCode, 200, owner.body);
+  // A device cookie for another account does not help.
+  const other = await register(input(), '10.30.1.2');
+  const otherDevice = await app.inject({ method: 'POST', url: '/personal/api/auth/password', remoteAddress: '10.30.0.2', headers: { origin, cookie: `roots_device=${device}` },
+    payload: { email: other.data.email, password: other.data.password } });
+  assert.equal(otherDevice.statusCode, 200);
+  await pool.query(`INSERT INTO personal_auth_limits(email_hash,failures) VALUES($1,500)
+    ON CONFLICT(email_hash) DO UPDATE SET failures=500, window_started_at=now()`, [hashKey(`${other.data.email}|*`)]);
+  const crossDevice = await app.inject({ method: 'POST', url: '/personal/api/auth/password', remoteAddress: '10.30.0.2', headers: { origin, cookie: `roots_device=${device}` },
+    payload: { email: other.data.email, password: other.data.password } });
+  assert.equal(crossDevice.statusCode, 429);
 });

@@ -23,6 +23,7 @@ function deviceLabel() {
 export function PaymentSecurity({ csrf, hasPassword }: { csrf: string; hasPassword: boolean }) {
   const [status, setStatus] = useState<PaymentAuthStatus>();
   const [mode, setMode] = useState<'pin' | 'passkey' | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [password, setPassword] = useState('');
@@ -31,7 +32,7 @@ export function PaymentSecurity({ csrf, hasPassword }: { csrf: string; hasPasswo
   const toast = useToast();
   const load = () => consumerRequest<PaymentAuthStatus>('payment-auth').then(setStatus).catch((e) => setError((e as Error).message));
   useEffect(() => { void load(); }, []);
-  const close = () => { setMode(null); setPin(''); setConfirmPin(''); setPassword(''); };
+  const close = () => { setMode(null); setRemoving(null); setPin(''); setConfirmPin(''); setPassword(''); };
 
   async function run(action: () => Promise<void>) {
     setBusy(true); setError('');
@@ -57,10 +58,14 @@ export function PaymentSecurity({ csrf, hasPassword }: { csrf: string; hasPasswo
       close(); toast('Passkey added.'); await load();
     });
   };
-  const remove = (passkeyId: string) => void run(async () => {
-    await consumerRequest(`payment-auth/passkeys/${passkeyId}`, 'DELETE', undefined, csrf);
-    await load();
-  });
+  const remove = (event: FormEvent) => {
+    event.preventDefault();
+    if (!removing) return;
+    void run(async () => {
+      await consumerRequest(`payment-auth/passkeys/${removing}/remove`, 'POST', hasPassword ? { password } : {}, csrf);
+      close(); toast('Passkey removed.'); await load();
+    });
+  };
   const passwordField = hasPassword && <label>Password
     <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
   </label>;
@@ -102,9 +107,17 @@ export function PaymentSecurity({ csrf, hasPassword }: { csrf: string; hasPasswo
       {!!status?.passkeys.length && <ul className="fin-passkeys">
         {status.passkeys.map((key) => <li key={key.id}>
           <span><b>{key.label}</b><small>Added {new Date(key.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</small></span>
-          <button className="fin-text" type="button" aria-label={`Remove ${key.label}`} onClick={() => remove(key.id)} disabled={busy}><Trash2 size={16} /></button>
+          <button className="fin-text" type="button" aria-label={`Remove ${key.label}`} onClick={() => { close(); setRemoving(key.id); }} disabled={busy}><Trash2 size={16} /></button>
         </li>)}
       </ul>}
+      {removing && <form className="fin-security-form" onSubmit={remove} aria-label="Remove passkey">
+        <p className="fin-small">Remove {status?.passkeys.find((key) => key.id === removing)?.label ?? 'this passkey'}? You can add it again later.</p>
+        {passwordField}
+        <div className="fin-form-actions">
+          <button className="fin-primary" disabled={busy}>Remove passkey</button>
+          <button className="fin-text" type="button" onClick={close}>Cancel</button>
+        </div>
+      </form>}
     </>}
     {error && <p className="fin-error" role="alert">{error}</p>}
   </section>;

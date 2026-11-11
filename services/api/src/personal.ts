@@ -16,6 +16,7 @@ import { registerConsumer } from './consumer.js';
 import { registerPersonalWallets, requireLinkedWallet } from './personal-wallets.js';
 import { registerP2P, rememberPayee } from './p2p.js';
 import { registerPaymentAuth } from './payment-auth.js';
+import { rememberDevice } from './devices.js';
 import { registerConversion } from './conversion.js';
 import type { FonbnkClient } from '../../../connectors/fonbnk/src/index.js';
 import { authSecret, requireOrigin, sandboxFixturesEnabled, secureCookie } from './config.js';
@@ -141,6 +142,11 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
     const latest = (await pool.query('SELECT created_at FROM personal_email_challenges WHERE email=$1 ORDER BY created_at DESC LIMIT 1', [email])).rows[0];
     if (latest && Date.now() - new Date(latest.created_at).getTime() < 60_000)
       throw new PaymentError(429, 'code_recently_sent', 'Wait a minute before requesting another code');
+    // At most five codes an hour per email, known or not, so the answer reveals nothing.
+    if (Number((await pool.query(`SELECT count(*) FROM personal_email_challenges WHERE email=$1 AND created_at>now()-interval '1 hour'`, [email])).rows[0].count) >= 5)
+      throw new PaymentError(429, 'code_recently_sent', 'Too many codes requested. Try again in an hour.');
+    // A new code replaces any earlier one, so only one code can be guessed at a time.
+    await pool.query('UPDATE personal_email_challenges SET expires_at=now() WHERE email=$1 AND consumed_at IS NULL AND expires_at>now()', [email]);
     const challengeId = id('otp');
     const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
     // Codes sign in to existing accounts only; registration collects the full profile.
@@ -165,6 +171,10 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
       const challenge = (await c.query('SELECT * FROM personal_email_challenges WHERE id=$1 FOR UPDATE', [challenge_id])).rows[0];
       if (!challenge || challenge.consumed_at || challenge.attempts >= 5 || new Date(challenge.expires_at).getTime() <= Date.now())
         throw new PaymentError(401, 'invalid_code', 'Code is invalid or expired');
+      // Wrong guesses are capped per email across codes, not just per code.
+      const failures = Number((await c.query(`SELECT COALESCE(sum(attempts),0) AS n FROM personal_email_challenges
+        WHERE email=$1 AND created_at>now()-interval '1 hour'`, [challenge.email])).rows[0].n);
+      if (failures >= 10) throw new PaymentError(429, 'too_many_attempts', 'Too many wrong codes. Try again in an hour.');
       const valid = timingSafeEqual(Buffer.from(challenge.code_hash), Buffer.from(codeHash(secret, challenge_id, code)));
       if (!valid) {
         await c.query('UPDATE personal_email_challenges SET attempts=attempts+1 WHERE id=$1', [challenge_id]);
@@ -195,6 +205,7 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
     });
     if (!result) throw new PaymentError(401, 'invalid_code', 'Code is invalid or expired');
     setCookie(request, reply, result.token);
+    await rememberDevice(request, reply, result.userId, origin(request));
     // The cookie is only on the response, so construct the session from its committed identity.
     const user = (await pool.query('SELECT u.*,a.id AS account_id FROM personal_users u JOIN kora_accounts a ON a.personal_user_id=u.id WHERE u.id=$1', [result.userId])).rows[0];
     return publicSession({ ...user, user_id: user.id, csrf_token: result.csrfToken });

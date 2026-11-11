@@ -7,6 +7,7 @@ import { PaymentError } from '../../../packages/payments/src/errors.js';
 import { publicSettlement } from '../../../packages/settlement/src/service.js';
 import { personalIncomingTransfers } from '../../../packages/settlement/src/incoming.js';
 import { ensureManagedWallet } from './managed-wallet.js';
+import { knownDevice, rememberDevice } from './devices.js';
 import { personalAssets } from './personal-assets.js';
 import { personalWalletUsdValue } from './personal-valuation.js';
 import { FonbnkClient } from '../../../connectors/fonbnk/src/index.js';
@@ -168,7 +169,7 @@ export function registerConsumer(app: FastifyInstance, deps: Dependencies) {
     '/personal/api/auth/register',
     { config: { rateLimit: { max: 5, timeWindow: '1 hour' } } },
     async (request, reply) => {
-      deps.origin(request);
+      const registrationOrigin = deps.origin(request);
       const input = profileSchema.extend({ email, password }).strict().parse(request.body);
       const passwordHash = await hashPassword(input.password);
       let userId: string;
@@ -200,6 +201,7 @@ export function registerConsumer(app: FastifyInstance, deps: Dependencies) {
       }
       const s = await newSession(userId, 'password');
       deps.setCookie(request, reply, s.token);
+      await rememberDevice(request, reply, userId, registrationOrigin);
       const account = (await pool.query('SELECT id FROM kora_accounts WHERE personal_user_id=$1', [userId])).rows[0];
       const wallet = await provisionWallet(request, userId, account.id);
       return { authenticated: true, csrf_token: s.csrf, wallet_address: wallet?.address ?? null };
@@ -209,7 +211,7 @@ export function registerConsumer(app: FastifyInstance, deps: Dependencies) {
     '/personal/api/auth/password',
     { config: { rateLimit: { max: 15, timeWindow: '15 minutes' } } },
     async (request, reply) => {
-      deps.origin(request);
+      const requestOrigin = deps.origin(request);
       const input = z
         .object({ email, password: z.string().min(1).max(128) })
         .strict()
@@ -230,7 +232,10 @@ export function registerConsumer(app: FastifyInstance, deps: Dependencies) {
       window_started_at=CASE WHEN personal_auth_limits.window_started_at < now()-interval '15 minutes' THEN now() ELSE personal_auth_limits.window_started_at END RETURNING failures`,
         [hashKey(`${input.email}|*`)],
       );
-      if (attempt.rows[0].failures > 10 || accountLimit.rows[0].failures > 100)
+      // The account-wide cap does not apply to a browser that signed in to this account
+      // before, so distributed guessing cannot lock the owner out.
+      const trusted = await knownDevice(request, input.email);
+      if (attempt.rows[0].failures > 10 || (!trusted && accountLimit.rows[0].failures > 100))
         throw new PaymentError(429, 'login_limited', 'Too many attempts. Try again in 15 minutes.');
       const user = (
         await pool.query(
@@ -265,6 +270,7 @@ export function registerConsumer(app: FastifyInstance, deps: Dependencies) {
           user.id, await hashPassword(input.password), user.password_hash,
         ]);
       deps.setCookie(request, reply, s.token);
+      await rememberDevice(request, reply, user.id, requestOrigin);
       const account = (await pool.query('SELECT id FROM kora_accounts WHERE personal_user_id=$1', [user.id])).rows[0];
       const wallet = await provisionWallet(request, user.id, account.id);
       return { authenticated: true, csrf_token: s.csrf, wallet_address: wallet?.address ?? null };

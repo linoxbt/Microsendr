@@ -52,12 +52,31 @@ function relyingParty(request: FastifyRequest) {
   return { origin, rpID: process.env.KORA_WEBAUTHN_RP_ID || new URL(origin).hostname };
 }
 
-/** Setting a PIN or adding a passkey needs the password, or a fresh email-code session. */
+const PASSWORD_ATTEMPTS = 5;
+/**
+ * Password checks behind a session (payment approval, PIN and passkey changes) share
+ * one per-user counter. Each attempt is counted before the hash is compared, so
+ * parallel guesses cannot exceed the limit.
+ */
+async function checkPassword(userId: string, password: string, stored: string) {
+  const key = hashKey(`step-up-password:${userId}`);
+  const failures = (await pool.query(`INSERT INTO personal_auth_limits(email_hash,failures) VALUES($1,1)
+    ON CONFLICT(email_hash) DO UPDATE SET
+      failures=CASE WHEN personal_auth_limits.window_started_at<now()-interval '15 minutes' THEN 1 ELSE personal_auth_limits.failures+1 END,
+      window_started_at=CASE WHEN personal_auth_limits.window_started_at<now()-interval '15 minutes' THEN now() ELSE personal_auth_limits.window_started_at END
+    RETURNING failures`, [key])).rows[0].failures as number;
+  if (failures > PASSWORD_ATTEMPTS)
+    throw new PaymentError(429, 'password_locked', 'Too many wrong passwords. Try again in 15 minutes.');
+  if (!(await matches(password, stored))) throw new PaymentError(401, 'invalid_password', 'Your password is incorrect');
+  await pool.query('DELETE FROM personal_auth_limits WHERE email_hash=$1', [key]);
+}
+
+/** Setting a PIN or changing passkeys needs the password, or a fresh email-code session. */
 async function reauthenticate(request: FastifyRequest, person: Person, password: string | undefined) {
   const user = (await pool.query('SELECT password_hash FROM personal_users WHERE id=$1', [person.user_id])).rows[0];
   if (user?.password_hash) {
-    if (password && await matches(password, user.password_hash)) return;
-    throw new PaymentError(401, 'invalid_password', 'Your password is incorrect');
+    if (!password) throw new PaymentError(401, 'invalid_password', 'Enter your password');
+    return checkPassword(person.user_id, password, user.password_hash);
   }
   const token = request.cookies.kora_personal;
   const current = token ? (await pool.query('SELECT auth_method,created_at FROM personal_sessions WHERE token_hash=$1 AND expires_at>now()',
@@ -67,17 +86,27 @@ async function reauthenticate(request: FastifyRequest, person: Person, password:
 }
 
 async function checkPin(userId: string, pin: string) {
-  const row = (await pool.query('SELECT payment_pin_hash,pin_locked_until FROM personal_users WHERE id=$1', [userId])).rows[0];
-  if (!row?.payment_pin_hash) throw new PaymentError(409, 'pin_not_set', 'Set a payment PIN in Security first');
-  if (row.pin_locked_until && new Date(row.pin_locked_until) > new Date())
+  // Reserve the attempt before comparing: the counter rises atomically and the lock is
+  // armed by the fifth reservation, so concurrent guesses can never exceed five. An
+  // expired lock starts a fresh window.
+  const reserved = (await pool.query(`UPDATE personal_users SET
+      pin_failed_attempts=CASE WHEN pin_locked_until IS NOT NULL AND pin_locked_until<=now() THEN 1 ELSE pin_failed_attempts+1 END,
+      pin_locked_until=CASE
+        WHEN pin_locked_until IS NOT NULL AND pin_locked_until<=now() THEN NULL
+        WHEN pin_failed_attempts+1>=$2 THEN now()+make_interval(mins => $3)
+        ELSE pin_locked_until END
+    WHERE id=$1 AND payment_pin_hash IS NOT NULL AND (pin_locked_until IS NULL OR pin_locked_until<=now())
+    RETURNING payment_pin_hash,pin_failed_attempts`, [userId, PIN_ATTEMPTS, PIN_LOCK_MINUTES])).rows[0];
+  if (!reserved) {
+    const row = (await pool.query('SELECT payment_pin_hash,pin_locked_until FROM personal_users WHERE id=$1', [userId])).rows[0];
+    if (!row?.payment_pin_hash) throw new PaymentError(409, 'pin_not_set', 'Set a payment PIN in Security first');
     throw new PaymentError(429, 'pin_locked', `Too many wrong PINs. Try again after ${new Date(row.pin_locked_until).toISOString().slice(11, 16)} UTC, or use your passkey.`);
-  if (await matches(pinMaterial(userId, pin), row.payment_pin_hash)) {
+  }
+  if (await matches(pinMaterial(userId, pin), reserved.payment_pin_hash)) {
     await pool.query('UPDATE personal_users SET pin_failed_attempts=0,pin_locked_until=NULL WHERE id=$1', [userId]);
     return;
   }
-  const failed = (await pool.query(`UPDATE personal_users SET pin_failed_attempts=pin_failed_attempts+1,
-    pin_locked_until=CASE WHEN pin_failed_attempts+1>=$2 THEN now()+make_interval(mins => $3) ELSE pin_locked_until END
-    WHERE id=$1 RETURNING pin_failed_attempts`, [userId, PIN_ATTEMPTS, PIN_LOCK_MINUTES])).rows[0].pin_failed_attempts as number;
+  const failed = reserved.pin_failed_attempts as number;
   if (failed >= PIN_ATTEMPTS)
     throw new PaymentError(429, 'pin_locked', `Too many wrong PINs. Your PIN is locked for ${PIN_LOCK_MINUTES} minutes.`);
   const left = PIN_ATTEMPTS - failed;
@@ -116,7 +145,7 @@ export async function approveSend(request: FastifyRequest, person: Person, appro
   if ('passkey' in approval) return checkPasskey(request, person, approval.passkey, transfer);
   const stored = (await pool.query('SELECT password_hash FROM personal_users WHERE id=$1', [person.user_id])).rows[0];
   if (!stored?.password_hash) throw new PaymentError(403, 'password_required', 'Set a password in Security before sending');
-  if (!(await matches(approval.password, stored.password_hash))) throw new PaymentError(401, 'invalid_password', 'Your password is incorrect');
+  await checkPassword(person.user_id, approval.password, stored.password_hash);
 }
 
 export function registerPaymentAuth(app: FastifyInstance, required: Required) {
@@ -187,9 +216,12 @@ export function registerPaymentAuth(app: FastifyInstance, required: Required) {
     return inserted.rows[0];
   });
 
-  app.delete('/personal/api/payment-auth/passkeys/:id', limited, async (request) => {
+  // Removing a passkey needs the password too, so a stolen session cannot strip them.
+  app.post('/personal/api/payment-auth/passkeys/:id/remove', limited, async (request) => {
     const person = await required(request, true);
     const { id: passkeyId } = z.object({ id: z.string().regex(/^pky_[a-f0-9]{32}$/) }).parse(request.params);
+    const input = z.object({ password: z.string().max(128).optional() }).strict().parse(request.body ?? {});
+    await reauthenticate(request, person, input.password);
     const removed = await pool.query('DELETE FROM personal_passkeys WHERE id=$1 AND personal_user_id=$2', [passkeyId, person.user_id]);
     if (!removed.rowCount) throw new PaymentError(404, 'passkey_not_found', 'Passkey not found');
     return { removed: true };

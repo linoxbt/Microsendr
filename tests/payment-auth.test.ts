@@ -135,7 +135,39 @@ test('a passkey approves only the payment it was asked for, once', async () => {
   const listed = (await app.inject({ url: '/personal/api/payment-auth', headers: who.headers })).json();
   assert.equal(listed.passkeys.length, 1);
   assert.equal(listed.passkeys[0].label, 'Test phone');
-  const removed = await app.inject({ method: 'DELETE', url: `/personal/api/payment-auth/passkeys/${listed.passkeys[0].id}`, headers: who.headers });
-  assert.equal(removed.statusCode, 200);
+  // Removing a passkey needs the password.
+  assert.equal((await who.post(`/personal/api/payment-auth/passkeys/${listed.passkeys[0].id}/remove`, {})).json().error.code, 'invalid_password');
+  const removed = await who.post(`/personal/api/payment-auth/passkeys/${listed.passkeys[0].id}/remove`, { password });
+  assert.equal(removed.statusCode, 200, removed.body);
   assert.equal((await who.post('/personal/api/payment-auth/passkeys/challenge', { to, amount_atomic: '1000' })).json().error.code, 'passkey_not_set');
+});
+
+test('parallel PIN guesses cannot get past the lock', async () => {
+  const who = await member();
+  await who.post('/personal/api/payment-auth/pin', { pin: '730415', password });
+  // Twelve wrong guesses at once: at most five are ever compared, the rest are refused as locked.
+  const results = await Promise.all(Array.from({ length: 12 }, (_, i) => send(who, { pin: String(100200 + i) })));
+  const compared = results.filter((r) => r.json().error.code === 'invalid_pin').length;
+  assert.ok(compared <= 4, `compared ${compared}`);
+  assert.equal(results.filter((r) => r.json().error.code === 'pin_locked').length, 12 - compared);
+  // The right PIN is refused while locked.
+  assert.equal((await send(who, { pin: '730415' })).json().error.code, 'pin_locked');
+  const row = (await pool.query('SELECT pin_failed_attempts FROM personal_users WHERE id=$1', [who.userId])).rows[0];
+  assert.equal(row.pin_failed_attempts, 5);
+  // After the lock expires a fresh window starts, and the right PIN works.
+  await pool.query("UPDATE personal_users SET pin_locked_until=now()-interval '1 second' WHERE id=$1", [who.userId]);
+  assert.equal((await send(who, { pin: '730415' })).json().error.code, 'managed_transfers_unavailable');
+});
+
+test('wrong passwords on payment approval and security changes lock after five tries', async () => {
+  const who = await member();
+  const results = await Promise.all(Array.from({ length: 8 }, () => send(who, { password: 'not-the-password-123' })));
+  assert.equal(results.filter((r) => r.json().error.code === 'invalid_password').length, 5);
+  assert.equal(results.filter((r) => r.json().error.code === 'password_locked').length, 3);
+  // The lock covers the right password and the PIN and passkey routes too.
+  assert.equal((await send(who, { password })).json().error.code, 'password_locked');
+  assert.equal((await who.post('/personal/api/payment-auth/pin', { pin: '402913', password })).json().error.code, 'password_locked');
+  await pool.query("UPDATE personal_auth_limits SET window_started_at=now()-interval '16 minutes' WHERE email_hash=$1",
+    [hashKey(`step-up-password:${who.userId}`)]);
+  assert.equal((await send(who, { password })).json().error.code, 'managed_transfers_unavailable');
 });
