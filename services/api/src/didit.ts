@@ -33,10 +33,49 @@ async function personal(request: FastifyRequest, write = false) {
 }
 
 // Terminal decisions cannot be overwritten by delayed progress events.
-async function applyStatus(c: Client, current: { id: string; status: string }, status: string) {
+async function applyStatus(c: Client, current: { id: string; status: string }, status: string, reason: string | null = null) {
   if (['Approved', 'Declined', 'Kyc Expired'].includes(current.status) && status !== 'Kyc Expired') return;
-  if (current.status === status) return;
-  await c.query('UPDATE personal_didit_sessions SET status=$2,updated_at=now() WHERE id=$1', [current.id, status]);
+  if (current.status === status && !reason) return;
+  await c.query('UPDATE personal_didit_sessions SET status=$2,review_reason=$3,updated_at=now() WHERE id=$1', [current.id, status, reason]);
+}
+
+const fold = (value: unknown) => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+const tokens = (value: unknown) => fold(value).split(/[^A-Z]+/).filter(Boolean);
+const isoDate = (value: unknown) => value instanceof Date ? value.toISOString().slice(0, 10) : String(value ?? '').slice(0, 10);
+
+/**
+ * Didit approves a document and a face; Roots also needs that document to be this
+ * customer's. The profile's names must all appear on the document and the dates of
+ * birth must be equal. Middle names on the document are allowed.
+ */
+export function identityMatches(profile: { first_name: unknown; last_name: unknown; date_of_birth: unknown },
+  document: { first_name?: unknown; last_name?: unknown; full_name?: unknown; date_of_birth?: unknown }) {
+  const onDocument = new Set([...tokens(document.first_name), ...tokens(document.last_name), ...tokens(document.full_name)]);
+  const wanted = [...tokens(profile.first_name), ...tokens(profile.last_name)];
+  if (!wanted.length || !wanted.every((t) => onDocument.has(t))) return false;
+  const dob = isoDate(profile.date_of_birth);
+  return /^\d{4}-\d{2}-\d{2}$/.test(dob) && dob === isoDate(document.date_of_birth);
+}
+
+type Verdict = { status: string; reason: string | null };
+/** An 'Approved' decision only counts when the document matches the profile. */
+async function confirmApproval(providerSessionId: string, userId: string, request: typeof fetch, decision?: unknown): Promise<Verdict> {
+  try {
+    if (!decision) {
+      const response = await request(`${API_URL}${providerSessionId}/decision/`, {
+        headers: { 'x-api-key': process.env.DIDIT_API_KEY ?? '' }, redirect: 'error', signal: AbortSignal.timeout(8000),
+      });
+      if (!response.ok) return { status: 'In Review', reason: 'decision_unavailable' };
+      decision = await response.json();
+    }
+    const body = decision as { id_verifications?: unknown[]; id_verification?: unknown };
+    const document = (body.id_verifications?.[0] ?? body.id_verification) as Record<string, unknown> | undefined;
+    const profile = (await pool.query('SELECT first_name,last_name,date_of_birth FROM personal_users WHERE id=$1', [userId])).rows[0];
+    if (!document || !profile) return { status: 'In Review', reason: 'identity_mismatch' };
+    return identityMatches(profile, document) ? { status: 'Approved', reason: null } : { status: 'In Review', reason: 'identity_mismatch' };
+  } catch {
+    return { status: 'In Review', reason: 'decision_unavailable' };
+  }
 }
 
 let lastCreatingSweep = 0;
@@ -54,16 +93,18 @@ export async function reconcileOneDiditSession(request: typeof fetch = fetch) {
       AND status IN ('Not Started','In Progress','Awaiting User','In Review','Resubmitted')
       AND updated_at<now()-interval '10 minutes' AND created_at>now()-interval '30 days'
       ORDER BY updated_at,id FOR UPDATE SKIP LOCKED LIMIT 1)
-    RETURNING id,provider_session_id`)).rows[0];
+    RETURNING id,provider_session_id,personal_user_id`)).rows[0];
   if (!due) return false;
   const response = await request(`${API_URL}${due.provider_session_id}/decision/`, {
     headers: { 'x-api-key': apiKey }, redirect: 'error', signal: AbortSignal.timeout(8000),
   });
   if (!response.ok) throw new PaymentError(502, 'kyc_decision_unavailable', `Didit decision lookup returned ${response.status}`);
-  const { status } = z.object({ status: statusSchema }).passthrough().parse(await response.json());
+  const decision = await response.json();
+  const { status } = z.object({ status: statusSchema }).passthrough().parse(decision);
+  const verdict = status === 'Approved' ? await confirmApproval(due.provider_session_id, due.personal_user_id, request, decision) : { status, reason: null };
   await transaction(async c => {
     const current = (await c.query('SELECT id,status FROM personal_didit_sessions WHERE id=$1 FOR UPDATE', [due.id])).rows[0];
-    if (current) await applyStatus(c, current, status);
+    if (current) await applyStatus(c, current, verdict.status, verdict.reason);
   });
   return true;
 }
@@ -80,8 +121,11 @@ export function registerDidit(app: FastifyInstance) {
   app.post('/personal/api/kyc/session', { config: { rateLimit: { max: 3, timeWindow: '1 hour' } } }, async request => {
     const userId = await personal(request, true);
     z.object({ consent: z.literal(true) }).strict().parse(request.body);
-    const owner = (await pool.query('SELECT email_verified_at FROM personal_users WHERE id=$1',[userId])).rows[0];
+    const owner = (await pool.query('SELECT email_verified_at,first_name,last_name,date_of_birth FROM personal_users WHERE id=$1',[userId])).rows[0];
     if (!owner.email_verified_at) throw new PaymentError(403,'verified_email_required','Verify your email before starting identity verification.');
+    // The document is checked against these, so they must be on the profile first.
+    if (!tokens(owner.first_name).length || !tokens(owner.last_name).length || !owner.date_of_birth)
+      throw new PaymentError(422, 'profile_incomplete', 'Add your legal name and date of birth in Account before verifying.');
     const apiKey = process.env.DIDIT_API_KEY;
     if (!apiKey || !process.env.DIDIT_WEBHOOK_SECRET) throw new PaymentError(503, 'kyc_unavailable', 'Identity verification is being set up');
     const origin = requireOrigin(request);
@@ -97,7 +141,8 @@ export function registerDidit(app: FastifyInstance) {
       const response = await fetch(API_URL, {
         method: 'POST',
         headers: { 'x-api-key': apiKey, 'content-type': 'application/json' },
-        body: JSON.stringify({ workflow_id: WORKFLOW_ID, vendor_data: userId, callback: `${origin}/personal/profile?kyc_return=1` }),
+        body: JSON.stringify({ workflow_id: WORKFLOW_ID, vendor_data: userId, callback: `${origin}/personal/profile?kyc_return=1`,
+          expected_details: { first_name: owner.first_name, last_name: owner.last_name, date_of_birth: isoDate(owner.date_of_birth) } }),
         signal: AbortSignal.timeout(8000),
       });
       if (!response.ok) throw new Error('Didit session request failed');
@@ -121,11 +166,15 @@ export function registerDidit(app: FastifyInstance) {
     // Didit payloads are not guaranteed to carry an event id; the signed session,
     // status and timestamp identify a delivery just as well.
     const eventId = event.event_id ?? `sha256:${createHash('sha256').update(`${event.session_id}|${event.status}|${event.timestamp}`).digest('hex')}`;
+    if ((await pool.query('SELECT 1 FROM personal_didit_events WHERE event_id=$1', [eventId])).rowCount) return { ok: true };
+    // An approval is confirmed against the profile before it counts (outside the lock: it calls Didit).
+    const known = (await pool.query('SELECT 1 FROM personal_didit_sessions WHERE provider_session_id=$1 AND personal_user_id=$2', [event.session_id, event.vendor_data])).rowCount;
+    const verdict = event.status === 'Approved' && known ? await confirmApproval(event.session_id, event.vendor_data, fetch) : { status: event.status, reason: null };
     await transaction(async c => {
       const inserted = await c.query('INSERT INTO personal_didit_events(event_id,provider_session_id,status) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [eventId, event.session_id, event.status]);
       if (!inserted.rowCount) return;
       const current = (await c.query('SELECT id,status FROM personal_didit_sessions WHERE provider_session_id=$1 AND personal_user_id=$2 FOR UPDATE', [event.session_id, event.vendor_data])).rows[0];
-      if (current) await applyStatus(c, current, event.status);
+      if (current) await applyStatus(c, current, verdict.status, verdict.reason);
     });
     reply.header('cache-control', 'no-store');
     return { ok: true };

@@ -12,17 +12,22 @@ export function trustedProxies() {
     .split(',').map((value) => value.trim()).filter(Boolean);
 }
 
-export async function clientIp(request: FastifyRequest) {
+/** Whether the request carries a valid Netlify proxy signature, and the client address to trust. */
+export async function proxyCheck(request: FastifyRequest): Promise<{ ip: string; signed: boolean }> {
   const secret = process.env.KORA_PROXY_SIGNING_SECRET;
-  const forwarded = request.headers['x-nf-client-connection-ip'];
   const signature = request.headers['x-nf-sign'];
-  if (secret && typeof forwarded === 'string' && isIP(forwarded) && typeof signature === 'string') {
+  if (secret && typeof signature === 'string') {
     try {
       await jwtVerify(signature, new TextEncoder().encode(secret), { issuer: 'netlify', algorithms: ['HS256'] });
-      return forwarded;
+      const forwarded = request.headers['x-nf-client-connection-ip'];
+      return { ip: typeof forwarded === 'string' && isIP(forwarded) ? forwarded : request.ip, signed: true };
     } catch {
       // Fall back to the transport address below.
     }
   }
-  return request.ip;
+  return { ip: request.ip, signed: false };
+}
+
+export async function clientIp(request: FastifyRequest) {
+  return (await proxyCheck(request)).ip;
 }

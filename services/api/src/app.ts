@@ -58,7 +58,7 @@ import { registerRails } from './rails.js';
 import { registerProduct } from './product.js';
 import { registerPersonal, type PersonalOptions } from './personal.js';
 import { registerDidit } from './didit.js';
-import { clientIp, trustedProxies } from './client-ip.js';
+import { proxyCheck, trustedProxies } from './client-ip.js';
 import { legacyPlatformEnabled, legacyPlatformPath } from './config.js';
 // Keep in step with the [[headers]] block in netlify.toml, which serves production.
 export const contentSecurityPolicy =
@@ -70,6 +70,7 @@ declare module 'fastify' {
     principal: Principal | null;
     rawBody: string;
     clientIp: string;
+    proxySigned: boolean;
   }
 }
 function publicQuote(q: Record<string, unknown>) {
@@ -130,11 +131,14 @@ export async function buildApi(options: ApiOptions = {}) {
   app.decorateRequest('principal', null);
   app.decorateRequest('rawBody', '');
   app.decorateRequest('clientIp', '');
+  app.decorateRequest('proxySigned', false);
   app.addHook('onRequest', async (request) => {
     // The retired business platform answers as if it did not exist, before any other work.
     if (!legacyPlatformEnabled() && legacyPlatformPath.test(request.url))
       throw new PaymentError(404, 'not_found', 'Not found');
-    request.clientIp = await clientIp(request);
+    const proxy = await proxyCheck(request);
+    request.clientIp = proxy.ip;
+    request.proxySigned = proxy.signed;
   });
   await app.register(rateLimit, {
     max: options.rateLimitMax ?? 300,
@@ -414,6 +418,11 @@ export async function buildApi(options: ApiOptions = {}) {
   app.get('/health', async () => {
     await pool.query('SELECT 1');
     return { status: 'ok', service: 'roots-api' };
+  });
+  // Reached through the web proxy: reports whether the proxy's signature checked out.
+  app.get('/personal/api/health', async (request, reply) => {
+    reply.header('cache-control', 'no-store');
+    return { status: 'ok', via_signed_proxy: request.proxySigned };
   });
   app.get('/v1/me', async (request) => {
     const merchantId = principal(request, 'payments:read');

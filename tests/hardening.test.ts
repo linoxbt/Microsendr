@@ -4,7 +4,7 @@ import { createHmac, randomUUID } from 'node:crypto';
 import { SignJWT } from 'jose';
 import { buildApi } from '../services/api/src/app.js';
 import { authSecret } from '../services/api/src/config.js';
-import { reconcileOneDiditSession } from '../services/api/src/didit.js';
+import { identityMatches, reconcileOneDiditSession } from '../services/api/src/didit.js';
 import { id, pool } from '../packages/database/src/index.js';
 
 const codes = new Map<string, string>();
@@ -153,7 +153,7 @@ test('wallet listing never provisions; explicit provisioning reports an unconfig
 
 test('Didit webhooks without an event id are deduplicated, and missed decisions are fetched', async () => {
   const userId = id('usr'), providerId = randomUUID(), recordId = id('kyc');
-  await pool.query('INSERT INTO personal_users(id,email,email_verified_at) VALUES($1,$2,now())', [userId, `${userId}@example.test`]);
+  await pool.query("INSERT INTO personal_users(id,email,email_verified_at,first_name,last_name,date_of_birth) VALUES($1,$2,now(),'Émeka','Obi','1990-06-15')", [userId, `${userId}@example.test`]);
   await pool.query("INSERT INTO kora_accounts(id,owner_type,personal_user_id) VALUES($1,'personal',$2)", [id('acct'), userId]);
   await pool.query("INSERT INTO personal_didit_sessions(id,personal_user_id,provider_session_id,status) VALUES($1,$2,$3,'Not Started')", [recordId, userId, providerId]);
   const previous = { key: process.env.DIDIT_API_KEY, secret: process.env.DIDIT_WEBHOOK_SECRET };
@@ -176,7 +176,9 @@ test('Didit webhooks without an event id are deduplicated, and missed decisions 
     while (reconciled) reconciled = await reconcileOneDiditSession(async (url, init) => {
       requested.push(String(url));
       assert.equal((init?.headers as Record<string, string>)['x-api-key'], 'didit-test-key');
-      return Response.json({ status: String(url).includes(providerId) ? 'Approved' : 'In Review' });
+      return Response.json(String(url).includes(providerId)
+        ? { status: 'Approved', id_verifications: [{ first_name: 'EMEKA JOHN', last_name: 'OBI', date_of_birth: '1990-06-15' }] }
+        : { status: 'In Review' });
     });
     assert.ok(requested.includes(`https://verification.didit.me/v3/session/${providerId}/decision/`));
     assert.equal((await pool.query('SELECT status FROM personal_didit_sessions WHERE id=$1', [recordId])).rows[0].status, 'Approved');
@@ -184,6 +186,15 @@ test('Didit webhooks without an event id are deduplicated, and missed decisions 
     for (const [name, value] of [['DIDIT_API_KEY', previous.key], ['DIDIT_WEBHOOK_SECRET', previous.secret]] as const)
       if (value === undefined) delete process.env[name]; else process.env[name] = value;
   }
+});
+
+test('identity matching folds accents and case, allows middle names, and needs the same birth date', () => {
+  const profile = { first_name: 'Chiamaka', last_name: 'Nwosu-Adé', date_of_birth: new Date('1992-03-04T00:00:00Z') };
+  assert.equal(identityMatches(profile, { first_name: 'CHIAMAKA GRACE', last_name: 'NWOSU ADE', date_of_birth: '1992-03-04' }), true);
+  assert.equal(identityMatches(profile, { full_name: 'Nwosu Ade Chiamaka', date_of_birth: '1992-03-04' }), true);
+  assert.equal(identityMatches(profile, { first_name: 'CHIAMAKA', last_name: 'NWOSU', date_of_birth: '1992-03-04' }), false);
+  assert.equal(identityMatches(profile, { first_name: 'CHIAMAKA', last_name: 'NWOSU ADE', date_of_birth: '1992-04-03' }), false);
+  assert.equal(identityMatches({ first_name: '', last_name: '', date_of_birth: null }, { first_name: '', date_of_birth: '' }), false);
 });
 
 test('the email code secret must be at least 32 bytes', () => {

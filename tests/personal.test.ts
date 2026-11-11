@@ -155,8 +155,12 @@ test('Didit session and signed decisions remain separate from sandbox access', a
   const providerId = randomUUID();
   process.env.DIDIT_API_KEY = 'test-key-only';
   process.env.DIDIT_WEBHOOK_SECRET = 'test-webhook-secret-only';
+  let document = { first_name: 'ADA NGOZI', last_name: 'OKAFOR', date_of_birth: '1995-05-12' };
   globalThis.fetch = async (input, init) => {
+    if (String(input) === `https://verification.didit.me/v3/session/${providerId}/decision/`)
+      return Response.json({ status: 'Approved', id_verifications: [document] });
     assert.equal(input, 'https://verification.didit.me/v3/session/');
+    assert.deepEqual(JSON.parse(String(init?.body)).expected_details, { first_name: 'Ada', last_name: 'Okafor', date_of_birth: '1995-05-12' });
     assert.equal((init?.headers as Record<string, string>)['x-api-key'], 'test-key-only');
     const request = JSON.parse(String(init?.body));
     assert.equal(request.workflow_id, '5045382d-f318-4cfe-8439-7b3d097adf63');
@@ -165,6 +169,12 @@ test('Didit session and signed decisions remain separate from sandbox access', a
   };
   try {
     assert.equal((await write(auth, '/personal/api/kyc/session', { consent: false })).statusCode, 400);
+    // The document is compared with the profile, so the legal name and birth date come first.
+    const email = (await app.inject({ url: '/personal/api/session', headers: { cookie: auth.cookie } })).json().email;
+    const incomplete = await app.inject({ method: 'POST', url: '/personal/api/kyc/session', remoteAddress: '10.77.0.1',
+      headers: { origin, cookie: auth.cookie, 'x-kora-csrf': auth.csrf }, payload: { consent: true } });
+    assert.deepEqual([incomplete.statusCode, incomplete.json().error.code], [422, 'profile_incomplete']);
+    await pool.query("UPDATE personal_users SET first_name='Ada',last_name='Okafor',date_of_birth='1995-05-12' WHERE email=$1", [email]);
     const created = await write(auth, '/personal/api/kyc/session', { consent: true });
     assert.equal(created.statusCode, 200, created.body);
     assert.equal(created.json().session_id, providerId);
@@ -180,6 +190,12 @@ test('Didit session and signed decisions remain separate from sandbox access', a
     };
     assert.equal((await send('stale', 'Approved', 1)).statusCode, 401);
     assert.equal((await send('bad', 'Approved', undefined, false)).statusCode, 401);
+    // A document for someone else is held for review, not approved.
+    document = { first_name: 'BOLA', last_name: 'OKAFOR', date_of_birth: '1995-05-12' };
+    assert.equal((await send('other-person', 'Approved')).statusCode, 200);
+    const held = (await pool.query('SELECT status,review_reason FROM personal_didit_sessions WHERE provider_session_id=$1', [providerId])).rows[0];
+    assert.deepEqual(held, { status: 'In Review', review_reason: 'identity_mismatch' });
+    document = { first_name: 'ADA NGOZI', last_name: 'OKAFOR', date_of_birth: '1995-05-12' };
     assert.equal((await send('approved', 'Approved')).statusCode, 200);
     assert.equal((await send('approved', 'Approved')).statusCode, 200);
     assert.equal((await send('late-progress', 'In Progress')).statusCode, 200);
