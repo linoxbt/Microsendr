@@ -19,10 +19,11 @@ each service directly; keep the two in step.
 
 The API runs in the production environment at `roots-api.up.railway.app`.
 
-Run one `api` replica. The general per-client request limit is kept in memory, so
-with several replicas it would apply per replica. The limits that guard against guessing
-(sign-in, email codes, password, payment PIN) are kept in PostgreSQL and hold
-across replicas either way; move the general limit to a shared store before scaling out.
+The general per-client request limit is kept in memory by default, which is right for
+one `api` replica. Before running more than one, set `KORA_RATE_LIMIT_STORE=postgres`
+on `api` so every replica counts against the same window (one small write per request;
+the worker clears old counters). The limits that guard against guessing (sign-in, email
+codes, password, payment PIN) are kept in PostgreSQL and hold across replicas either way.
 
 ## Variables
 

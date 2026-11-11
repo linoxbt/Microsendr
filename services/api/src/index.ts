@@ -1,6 +1,10 @@
 import { buildApi } from './app.js';
 import { pool } from '../../../packages/database/src/index.js';
-import { configReport } from './config.js';
+import { configReport, fatalConfigProblems } from './config.js';
+// Without the auth secret, codes and PINs would be hashed without a server-side key:
+// refuse to start rather than run weakened.
+const fatal=fatalConfigProblems();
+if(fatal.length){console.error(JSON.stringify({level:'fatal',msg:'Roots API refuses to start: missing required settings',missing:fatal}));await pool.end();process.exit(1);}
 // KORA_RATE_LIMIT_MAX raises the general per-client limit (requests a minute) for test servers.
 const app=await buildApi({logger:true,rateLimitMax:Number(process.env.KORA_RATE_LIMIT_MAX)||undefined});
 // Names only: a missing setting is visible at deploy time.

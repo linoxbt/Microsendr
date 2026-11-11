@@ -24,10 +24,13 @@ export async function findManagedWallet(userId: string, accountId: string): Prom
 }
 
 // No database connection or lock is held while Privy is called: a slow provider
-// must not exhaust the pool. Privy's external_id is unique per app and write-once, so
-// concurrent or retried creates converge on one wallet; after any create failure the
-// wallet is looked up by that id. (Idempotency keys are avoided: Privy caches 5xx
-// replies under a key for 24 hours.) The primary key on personal_user_id keeps one row.
+// must not exhaust the pool. Each wallet carries external_id roots_<user> (Privy: URL-safe,
+// at most 64 characters, write-once). Privy does not document it as unique, so the wallet
+// is looked up by it (GET /v1/wallets?external_id=, the documented filter) before creating
+// and again after any create failure; if more than one ever matches, the oldest is used,
+// so retries and concurrent requests settle on the same wallet. (Idempotency keys are
+// avoided: Privy caches 5xx replies under a key for 24 hours.) The primary key on
+// personal_user_id keeps one row here.
 export async function ensureManagedWallet(userId: string, accountId: string): Promise<Wallet | null> {
   const existing = await findManagedWallet(userId, accountId);
   if (existing) return existing;
@@ -54,18 +57,33 @@ export async function ensureManagedWallet(userId: string, accountId: string): Pr
       throw new ManagedWalletError(cause instanceof Error ? cause.name : 'network_error');
     }
     if (!response.ok) throw new ManagedWalletError(`privy_status_${response.status}`);
-    return (await response.json().catch(() => ({}))) as { id?: unknown; address?: unknown };
+    return (await response.json().catch(() => ({}))) as Record<string, unknown>;
   };
-  let record: { id?: unknown; address?: unknown };
-  try {
-    // With PRIVY_POLICY_ID set (see scripts/privy-policy.ts), Privy itself limits what the wallet can sign.
-    const policy = process.env.PRIVY_POLICY_ID;
-    record = await call(base, { method: 'POST', body: JSON.stringify({ chain_type: 'ethereum', external_id: externalId,
-      ...(policy ? { policy_ids: [policy] } : {}) }) });
-  } catch (createError) {
-    // A previous attempt may have created it (Privy succeeded, we did not record it).
-    try { record = await call(`${base}/ext_wal_${externalId}`); } catch { throw createError; }
+  type PrivyWallet = { id?: unknown; address?: unknown; external_id?: unknown; created_at?: unknown };
+  const lookup = async (): Promise<PrivyWallet | undefined> => {
+    const page = await call(`${base}?${new URLSearchParams({ external_id: externalId, chain_type: 'ethereum', limit: '10' })}`);
+    const matches = (Array.isArray(page.data) ? page.data as PrivyWallet[] : []).filter((wallet) => wallet.external_id === externalId);
+    const time = (wallet: PrivyWallet) => typeof wallet.created_at === 'number' ? wallet.created_at
+      : typeof wallet.created_at === 'string' ? Date.parse(wallet.created_at) || 0 : 0;
+    // Oldest first; equal times fall back to the id, so every caller picks the same wallet.
+    return matches.sort((a, b) => time(a) - time(b) || String(a.id).localeCompare(String(b.id)))[0];
+  };
+  let record: PrivyWallet | undefined = await lookup();
+  if (!record) {
+    try {
+      // With PRIVY_POLICY_ID set (see scripts/privy-policy.ts), Privy itself limits what the wallet can sign.
+      const policy = process.env.PRIVY_POLICY_ID;
+      await call(base, { method: 'POST', body: JSON.stringify({ chain_type: 'ethereum', external_id: externalId,
+        ...(policy ? { policy_ids: [policy] } : {}) }) });
+    } catch (createError) {
+      // A previous or concurrent attempt may have created it; otherwise report the failure.
+      record = await lookup().catch(() => undefined);
+      if (!record) throw createError;
+    }
+    // Read back by external id, so a duplicate created by a concurrent request resolves to the oldest.
+    record ??= await lookup();
   }
+  if (!record) throw new ManagedWalletError('invalid_wallet_record');
   if (typeof record.id !== 'string' || typeof record.address !== 'string' || !isAddress(record.address))
     throw new ManagedWalletError('invalid_wallet_record');
   const address = getAddress(record.address);

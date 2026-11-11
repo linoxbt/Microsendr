@@ -302,3 +302,38 @@ test('a signed transfer whose nonce was used by another transaction is closed, a
   const closed = await state();
   assert.deepEqual([closed.status, closed.last_error], ['expired', 'nonce_replaced']);
 });
+
+test('after a recovery-only credential change, account-wallet sends wait out a 24-hour hold', async () => {
+  const p = await person();
+  const { holdSends } = await import('../services/api/src/send-hold.js');
+  const key = id('key');
+  const first = await send(p, QIE, key);
+  await holdSends(p.userId);
+  // A send recorded before the hold is still replayed, but nothing new is signed.
+  assert.equal((await send(p, QIE, key)).id, first.id);
+  const signer = privy(p.account);
+  await assert.rejects(send(p, QIE, id('key'), node(), signer), { code: 'send_hold' });
+  assert.equal(signer.calls.length, 0);
+  // The hold only ever extends, never shortens; once it lapses, sends work again.
+  const until = (await pool.query('SELECT send_hold_until FROM personal_users WHERE id=$1', [p.userId])).rows[0].send_hold_until;
+  assert.ok(new Date(until).getTime() > Date.now() + 23 * 3600_000);
+  await pool.query("UPDATE personal_users SET send_hold_until=now()-interval '1 minute' WHERE id=$1", [p.userId]);
+  await send(p, QIE);
+});
+
+test('in production, account-wallet sends need the Privy signing policy', async () => {
+  const { managedTransfersEnabled } = await import('../services/api/src/managed-transfer.js');
+  const saved = { env: process.env.NODE_ENV, policy: process.env.PRIVY_POLICY_ID, allow: process.env.KORA_ALLOW_UNPOLICED_TRANSFERS };
+  try {
+    process.env.NODE_ENV = 'production';
+    delete process.env.PRIVY_POLICY_ID; delete process.env.KORA_ALLOW_UNPOLICED_TRANSFERS;
+    assert.equal(managedTransfersEnabled(), false);
+    const p = await person();
+    await assert.rejects(send(p, QIE), { code: 'managed_transfers_unavailable' });
+    process.env.PRIVY_POLICY_ID = 'policy_test';
+    assert.equal(managedTransfersEnabled(), true);
+  } finally {
+    for (const [name, value] of [['NODE_ENV', saved.env], ['PRIVY_POLICY_ID', saved.policy], ['KORA_ALLOW_UNPOLICED_TRANSFERS', saved.allow]] as const)
+      if (value === undefined) delete process.env[name]; else process.env[name] = value;
+  }
+});

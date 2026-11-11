@@ -171,3 +171,34 @@ test('wrong passwords on payment approval and security changes lock after five t
     [hashKey(`step-up-password:${who.userId}`)]);
   assert.equal((await send(who, { password })).json().error.code, 'managed_transfers_unavailable');
 });
+
+test('credential changes made with the password do not hold sends; email-only ones do', async () => {
+  const who = await member();
+  assert.equal((await who.post('/personal/api/payment-auth/pin', { pin: '402913', password })).statusCode, 200);
+  const held = async (userId: string) => (await pool.query('SELECT send_hold_until FROM personal_users WHERE id=$1', [userId])).rows[0].send_hold_until;
+  assert.equal(await held(who.userId), null);
+  // An account without a password, signed in moments ago with an email code.
+  const userId = id('usr'), token = hex(32), csrf = hex(32);
+  await pool.query('INSERT INTO personal_users(id,email,email_verified_at) VALUES($1,$2,now())', [userId, `${userId}@example.test`]);
+  await pool.query("INSERT INTO kora_accounts(id,owner_type,personal_user_id) VALUES($1,'personal',$2)", [id('acct'), userId]);
+  await pool.query("INSERT INTO personal_sessions(token_hash,personal_user_id,csrf_token,expires_at,auth_method) VALUES($1,$2,$3,now()+interval '1 day','email')",
+    [hashKey(token), userId, csrf]);
+  const headers = { origin, cookie: `kora_personal=${token}`, 'x-kora-csrf': csrf };
+  const pin = await app.inject({ method: 'POST', url: '/personal/api/payment-auth/pin', headers, payload: { pin: '583920' }, remoteAddress: '10.88.0.1' });
+  assert.equal(pin.statusCode, 200, pin.body);
+  const until = await held(userId);
+  assert.ok(until && new Date(until).getTime() > Date.now() + 23 * 3600_000);
+  const status = await app.inject({ url: '/personal/api/payment-auth', headers });
+  assert.ok(status.json().send_hold_until);
+});
+
+test('a flood of sign-ins cannot crowd out payment approvals', async () => {
+  const { hashPassword: hash, matches } = await import('../services/api/src/consumer.js');
+  const stored = await hash('lane-test-password');
+  // Fill the sign-in queue past its bound; payment checks still complete.
+  const logins = Array.from({ length: 80 }, () => matches('wrong', stored).then(() => 'ok', (e) => e.code));
+  const payment = await matches('lane-test-password', stored, 'payment');
+  assert.equal(payment, true);
+  const results = await Promise.all(logins);
+  assert.ok(results.includes('busy'), 'excess sign-ins are refused quickly');
+});

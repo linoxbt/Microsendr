@@ -1,3 +1,5 @@
+import { production } from './config.js';
+import { assertNoSendHold } from './send-hold.js';
 import { getAddress, isAddress, keccak256, parseEther, parseTransaction, parseUnits, recoverTransactionAddress, type Hex } from 'viem';
 import { z } from 'zod';
 import { randomBytes } from 'node:crypto';
@@ -14,7 +16,15 @@ import { findManagedWallet, managedWalletConfigured, privyWalletRpc } from './ma
  * account password, and per-transfer and rolling 24-hour limits.
  */
 export function managedTransfersEnabled() {
-  return process.env.KORA_MANAGED_TRANSFERS === 'true' && managedWalletConfigured();
+  return process.env.KORA_MANAGED_TRANSFERS === 'true' && managedWalletConfigured() && signingPolicyInPlace();
+}
+/**
+ * In production, account-wallet sends need the Privy signing policy (PRIVY_POLICY_ID),
+ * so Privy itself refuses anything above the limits even if this server were compromised.
+ * KORA_ALLOW_UNPOLICED_TRANSFERS=true is an explicit, temporary override.
+ */
+export function signingPolicyInPlace() {
+  return !production() || !!process.env.PRIVY_POLICY_ID || process.env.KORA_ALLOW_UNPOLICED_TRANSFERS === 'true';
 }
 const limit = (name: string, fallback: string) => parseEther(process.env[name] || fallback);
 const tokenLimit = (name: string, fallback: string) => parseUnits(process.env[name] || fallback, QUSDC_DECIMALS);
@@ -81,6 +91,8 @@ export async function sendFromManagedWallet(input: ManagedTransferInput, client 
   const owner = (await pool.query(`SELECT u.email_verified_at,(SELECT status FROM personal_didit_sessions d WHERE d.personal_user_id=u.id
     ORDER BY created_at DESC,id DESC LIMIT 1) AS kyc FROM personal_users u WHERE u.id=$1`, [input.userId])).rows[0];
   if (!owner?.email_verified_at) throw new PaymentError(403, 'verified_email_required', 'Verify your email before sending');
+  // A send already recorded is replayed above; a new one waits out any recovery hold.
+  await assertNoSendHold(input.userId);
   const verified = owner.kyc === 'Approved';
   if (process.env.KORA_MANAGED_TRANSFERS_REQUIRE_KYC !== 'false' && !verified)
     throw new PaymentError(403, 'identity_verification_required', 'Complete identity verification before sending from your account wallet');

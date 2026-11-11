@@ -8,6 +8,7 @@ const sweeps = [
   "DELETE FROM personal_webauthn_challenges WHERE ctid IN (SELECT ctid FROM personal_webauthn_challenges WHERE expires_at < now() - interval '1 day' LIMIT 500)",
   "DELETE FROM personal_chain_wallet_challenges WHERE ctid IN (SELECT ctid FROM personal_chain_wallet_challenges WHERE expires_at < now() - interval '1 day' LIMIT 500)",
   "DELETE FROM personal_auth_limits WHERE ctid IN (SELECT ctid FROM personal_auth_limits WHERE window_started_at < now() - interval '1 day' LIMIT 500)",
+  "DELETE FROM rate_limit_hits WHERE ctid IN (SELECT ctid FROM rate_limit_hits WHERE window_ends < now() - interval '1 hour' LIMIT 500)",
   // Quotes an order still refers to are kept; the rest expire within minutes.
   `DELETE FROM personal_conversion_quotes q WHERE q.ctid IN (SELECT ctid FROM personal_conversion_quotes WHERE expires_at < now() - interval '1 day' LIMIT 500)
      AND NOT EXISTS (SELECT 1 FROM personal_conversion_orders o WHERE o.quote_id = q.quote_id)`,

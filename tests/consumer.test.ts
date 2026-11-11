@@ -198,6 +198,25 @@ test('password rotation revokes every other session and refuses CSRF or wrong ol
     (await login({ ...auth.data, password: 'new-test-password-56789' })).statusCode,
     200,
   );
+  // Changed with the old password: sends are not held.
+  const hold = (await pool.query('SELECT send_hold_until FROM personal_users WHERE email=$1', [auth.data.email])).rows[0];
+  assert.equal(hold.send_hold_until, null);
+});
+
+test('replacing a password with only an email code holds account-wallet sends for a day', async () => {
+  const auth = await register(input(), '10.66.0.2');
+  await pool.query('UPDATE personal_users SET email_verified_at=now() WHERE email=$1', [auth.data.email]);
+  const start = await app.inject({ method: 'POST', url: '/personal/api/auth/start', headers: { origin }, payload: { email: auth.data.email }, remoteAddress: '10.66.0.1' });
+  assert.equal(start.statusCode, 200, start.body);
+  const verify = await app.inject({ method: 'POST', url: '/personal/api/auth/verify', headers: { origin },
+    payload: { challenge_id: start.json().challenge_id, code: codes.get(auth.data.email) }, remoteAddress: '10.66.0.1' });
+  assert.equal(verify.statusCode, 200, verify.body);
+  const reset = await write({ cookie: cookie(verify), csrf: verify.json().csrf_token }, '/personal/api/profile/password', {
+    password: 'recovered-password-8812',
+  });
+  assert.equal(reset.statusCode, 200, reset.body);
+  const until = (await pool.query('SELECT send_hold_until FROM personal_users WHERE email=$1', [auth.data.email])).rows[0].send_hold_until;
+  assert.ok(until && new Date(until).getTime() > Date.now() + 23 * 3600_000);
 });
 
 test('claiming an unverified email revokes planted credentials and permits password recovery only after email proof', async () => {

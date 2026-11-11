@@ -14,6 +14,7 @@ import { QIE_NATIVE_POSITION, QIE_QUSDC_POSITION } from '../../../packages/qie/s
 
 const positionOf = (asset: 'QIE' | 'QUSDC' | undefined) => (asset === 'QUSDC' ? QIE_QUSDC_POSITION : QIE_NATIVE_POSITION);
 import { hashPassword, matches } from './consumer.js';
+import { holdSends } from './send-hold.js';
 
 type Person = { user_id: string; account_id: string };
 type Required = (request: FastifyRequest, write?: boolean) => Promise<Person>;
@@ -67,21 +68,25 @@ async function checkPassword(userId: string, password: string, stored: string) {
     RETURNING failures`, [key])).rows[0].failures as number;
   if (failures > PASSWORD_ATTEMPTS)
     throw new PaymentError(429, 'password_locked', 'Too many wrong passwords. Try again in 15 minutes.');
-  if (!(await matches(password, stored))) throw new PaymentError(401, 'invalid_password', 'Your password is incorrect');
+  if (!(await matches(password, stored, 'payment'))) throw new PaymentError(401, 'invalid_password', 'Your password is incorrect');
   await pool.query('DELETE FROM personal_auth_limits WHERE email_hash=$1', [key]);
 }
 
-/** Setting a PIN or changing passkeys needs the password, or a fresh email-code session. */
-async function reauthenticate(request: FastifyRequest, person: Person, password: string | undefined) {
+/**
+ * Setting a PIN or changing passkeys needs the password, or a fresh email-code session.
+ * Returns how it was authorised; a change made with only an email code pauses sends.
+ */
+async function reauthenticate(request: FastifyRequest, person: Person, password: string | undefined): Promise<'password' | 'email'> {
   const user = (await pool.query('SELECT password_hash FROM personal_users WHERE id=$1', [person.user_id])).rows[0];
   if (user?.password_hash) {
     if (!password) throw new PaymentError(401, 'invalid_password', 'Enter your password');
-    return checkPassword(person.user_id, password, user.password_hash);
+    await checkPassword(person.user_id, password, user.password_hash);
+    return 'password';
   }
   const token = request.cookies.kora_personal;
   const current = token ? (await pool.query('SELECT auth_method,created_at FROM personal_sessions WHERE token_hash=$1 AND expires_at>now()',
     [hashKey(token)])).rows[0] : null;
-  if (current && ['email', 'restore'].includes(current.auth_method) && Date.now() - new Date(current.created_at).getTime() < 600_000) return;
+  if (current && ['email', 'restore'].includes(current.auth_method) && Date.now() - new Date(current.created_at).getTime() < 600_000) return 'email';
   throw new PaymentError(401, 'reauth_required', 'Set a password in Security first, or sign in again with an email code.');
 }
 
@@ -102,7 +107,7 @@ async function checkPin(userId: string, pin: string) {
     if (!row?.payment_pin_hash) throw new PaymentError(409, 'pin_not_set', 'Set a payment PIN in Security first');
     throw new PaymentError(429, 'pin_locked', `Too many wrong PINs. Try again after ${new Date(row.pin_locked_until).toISOString().slice(11, 16)} UTC, or use your passkey.`);
   }
-  if (await matches(pinMaterial(userId, pin), reserved.payment_pin_hash)) {
+  if (await matches(pinMaterial(userId, pin), reserved.payment_pin_hash, 'payment')) {
     await pool.query('UPDATE personal_users SET pin_failed_attempts=0,pin_locked_until=NULL WHERE id=$1', [userId]);
     return;
   }
@@ -153,11 +158,12 @@ export function registerPaymentAuth(app: FastifyInstance, required: Required) {
 
   app.get('/personal/api/payment-auth', async (request) => {
     const person = await required(request);
-    const user = (await pool.query('SELECT payment_pin_hash IS NOT NULL AS pin_set,pin_locked_until FROM personal_users WHERE id=$1', [person.user_id])).rows[0];
+    const user = (await pool.query('SELECT payment_pin_hash IS NOT NULL AS pin_set,pin_locked_until,send_hold_until FROM personal_users WHERE id=$1', [person.user_id])).rows[0];
     const keys = (await pool.query('SELECT id,label,created_at,last_used_at FROM personal_passkeys WHERE personal_user_id=$1 ORDER BY created_at', [person.user_id])).rows;
     return {
       pin_set: !!user?.pin_set,
       pin_locked_until: user?.pin_locked_until && new Date(user.pin_locked_until) > new Date() ? user.pin_locked_until : null,
+      send_hold_until: user?.send_hold_until && new Date(user.send_hold_until) > new Date() ? user.send_hold_until : null,
       passkeys: keys,
     };
   });
@@ -166,16 +172,17 @@ export function registerPaymentAuth(app: FastifyInstance, required: Required) {
     const person = await required(request, true);
     const input = z.object({ pin: pinSchema, password: z.string().max(128).optional() }).strict().parse(request.body);
     if (weakPin(input.pin)) throw new PaymentError(422, 'weak_pin', 'Choose a PIN that is harder to guess');
-    await reauthenticate(request, person, input.password);
+    const method = await reauthenticate(request, person, input.password);
     await pool.query('UPDATE personal_users SET payment_pin_hash=$2,pin_failed_attempts=0,pin_locked_until=NULL,updated_at=now() WHERE id=$1',
-      [person.user_id, await hashPassword(pinMaterial(person.user_id, input.pin))]);
+      [person.user_id, await hashPassword(pinMaterial(person.user_id, input.pin), 'payment')]);
+    if (method === 'email') await holdSends(person.user_id);
     return { pin_set: true };
   });
 
   app.post('/personal/api/payment-auth/passkeys/options', limited, async (request) => {
     const person = await required(request, true);
     const input = z.object({ password: z.string().max(128).optional() }).strict().parse(request.body ?? {});
-    await reauthenticate(request, person, input.password);
+    const method = await reauthenticate(request, person, input.password);
     const { origin, rpID } = relyingParty(request);
     const user = (await pool.query('SELECT email,username FROM personal_users WHERE id=$1', [person.user_id])).rows[0];
     const existing = (await pool.query('SELECT credential_id,transports FROM personal_passkeys WHERE personal_user_id=$1', [person.user_id])).rows;
@@ -189,6 +196,7 @@ export function registerPaymentAuth(app: FastifyInstance, required: Required) {
     const challengeId = id('wac');
     await pool.query(`INSERT INTO personal_webauthn_challenges(id,personal_user_id,purpose,challenge,origin,expires_at)
       VALUES($1,$2,'register',$3,$4,now()+interval '5 minutes')`, [challengeId, person.user_id, options.challenge, origin]);
+    if (method === 'email') await holdSends(person.user_id);
     return { challenge_id: challengeId, options };
   });
 
@@ -221,9 +229,10 @@ export function registerPaymentAuth(app: FastifyInstance, required: Required) {
     const person = await required(request, true);
     const { id: passkeyId } = z.object({ id: z.string().regex(/^pky_[a-f0-9]{32}$/) }).parse(request.params);
     const input = z.object({ password: z.string().max(128).optional() }).strict().parse(request.body ?? {});
-    await reauthenticate(request, person, input.password);
+    const method = await reauthenticate(request, person, input.password);
     const removed = await pool.query('DELETE FROM personal_passkeys WHERE id=$1 AND personal_user_id=$2', [passkeyId, person.user_id]);
     if (!removed.rowCount) throw new PaymentError(404, 'passkey_not_found', 'Passkey not found');
+    if (method === 'email') await holdSends(person.user_id);
     return { removed: true };
   });
 

@@ -7,6 +7,8 @@ import { useToast } from './toast.js';
 export type PaymentAuthStatus = {
   pin_set: boolean;
   pin_locked_until: string | null;
+  /** Account-wallet sends are paused until then after an email-only credential change. */
+  send_hold_until?: string | null;
   passkeys: { id: string; label: string; created_at: string; last_used_at: string | null }[];
 };
 export const passkeysSupported = () =>
@@ -73,6 +75,9 @@ export function PaymentSecurity({ csrf, hasPassword }: { csrf: string; hasPasswo
 
   return <section className="fin-panel fin-payment-security" aria-label="Payment approval">
     <h2>Approve payments</h2>
+    {status?.send_hold_until && new Date(status.send_hold_until) > new Date() && <p className="fin-notice" role="note">
+      For your security, sending from your Roots wallet is paused until {new Date(status.send_hold_until).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })} after a recent sign-in change.
+    </p>}
     <div className="fin-security-row">
       <KeyRound size={20} />
       <div><b>Payment PIN</b><small>{status?.pin_set ? 'On' : 'Not set'}</small></div>

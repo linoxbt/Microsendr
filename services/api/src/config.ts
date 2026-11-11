@@ -66,12 +66,13 @@ export function configReport() {
   if (!allowedOrigins().length) missing.push('KORA_CONSOLE_ORIGINS');
   if (!(env.EMAIL_FROM || env.SMTP_FROM) || !(env.RESEND_API_KEY || env.SMTP_HOST)) missing.push('email (RESEND_API_KEY and EMAIL_FROM)');
   if (production() && !env.KORA_PROXY_SIGNING_SECRET) missing.push('KORA_PROXY_SIGNING_SECRET');
+  if (production() && env.KORA_MANAGED_TRANSFERS === 'true' && !env.PRIVY_POLICY_ID && env.KORA_ALLOW_UNPOLICED_TRANSFERS !== 'true')
+    missing.push('PRIVY_POLICY_ID (account-wallet sends stay off without it)');
   const optional: string[] = [];
   if (!env.KORA_PUBLIC_API_URL) optional.push('KORA_PUBLIC_API_URL');
   if (!env.DIDIT_API_KEY || !env.DIDIT_WEBHOOK_SECRET) optional.push('identity verification (DIDIT_API_KEY, DIDIT_WEBHOOK_SECRET)');
   if (!env.FONBNK_CLIENT_ID || !env.FONBNK_SIGNATURE_SECRET || !env.FONBNK_WEBHOOK_SECRET) optional.push('naira purchases (FONBNK_*)');
   if (!env.PRIVY_APP_ID || !env.PRIVY_APP_SECRET) optional.push('account wallets (PRIVY_APP_ID, PRIVY_APP_SECRET)');
-  if (env.PRIVY_APP_ID && !env.PRIVY_POLICY_ID) optional.push('PRIVY_POLICY_ID');
   return { ready: missing.length === 0, missing, optional };
 }
 
@@ -87,3 +88,11 @@ export function proxySignatureRequired() {
   return production() && !!process.env.KORA_PROXY_SIGNING_SECRET;
 }
 export const proxyExemptPath = /^\/personal\/api\/(?:webhooks\/|health(?:[?#]|$))/;
+
+/** Settings without which the API must not serve at all in production. */
+export function fatalConfigProblems() {
+  if (!production()) return [];
+  const problems: string[] = [];
+  if (Buffer.byteLength(process.env.KORA_AUTH_SECRET ?? '') < 32) problems.push('KORA_AUTH_SECRET (at least 32 bytes)');
+  return problems;
+}

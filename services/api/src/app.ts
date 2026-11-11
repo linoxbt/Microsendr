@@ -1,3 +1,4 @@
+import { PostgresRateLimitStore, sharedRateLimitStore } from './rate-limit-store.js';
 import { registerNetwork } from './network.js';
 import Fastify, { type FastifyRequest } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
@@ -151,6 +152,8 @@ export async function buildApi(options: ApiOptions = {}) {
       throw new PaymentError(403, 'proxy_required', 'Use the Roots app');
   });
   await app.register(rateLimit, {
+    // Shared counters across API instances when enabled; a counter failure never blocks a request.
+    ...(sharedRateLimitStore() ? { store: PostgresRateLimitStore as never, skipOnError: true } : {}),
     max: options.rateLimitMax ?? 300,
     timeWindow: '1 minute',
     keyGenerator: (request) => request.clientIp || request.ip,

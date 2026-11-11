@@ -457,6 +457,7 @@ function SendFlow({ source, token, limits, csrf, draft, onDraft, onChanged, onLo
     {source.managed && auth && <div className="fin-approval-switch">
       {method !== 'passkey' && !!auth.passkeys.length && passkeysSupported() && <button type="button" className="fin-text" onClick={() => setMethod('passkey')}>Use passkey</button>}
       {method !== 'pin' && pinUsable && <button type="button" className="fin-text" onClick={() => setMethod('pin')}>Use PIN</button>}
+      {auth.send_hold_until && new Date(auth.send_hold_until) > new Date() && <span className="fin-small">Sending is paused until {new Date(auth.send_hold_until).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })} after a recent sign-in change</span>}
       {pinLocked && <span className="fin-small">PIN locked until {new Date(auth.pin_locked_until!).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>}
       {!auth.pin_set && !auth.passkeys.length && go && <button type="button" className="fin-text" onClick={() => go('/personal/security')}>Set up a PIN or passkey</button>}
     </div>}

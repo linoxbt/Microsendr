@@ -7,6 +7,7 @@ import { PaymentError } from '../../../packages/payments/src/errors.js';
 import { publicSettlement } from '../../../packages/settlement/src/service.js';
 import { personalIncomingTransfers } from '../../../packages/settlement/src/incoming.js';
 import { ensureManagedWallet } from './managed-wallet.js';
+import { holdSends } from './send-hold.js';
 import { knownDevice, rememberDevice } from './devices.js';
 import { personalAssets } from './personal-assets.js';
 import { personalWalletUsdValue } from './personal-valuation.js';
@@ -83,14 +84,16 @@ const privateIdentityFields = [
 // upgraded on the next successful login.
 const CURRENT_N = 131072, LEGACY_N = 32768;
 let deriving = 0;
-const waiting: (() => void)[] = [];
-// Two derivations run at once; a bounded queue waits behind them. Past that, a request is
-// refused quickly rather than piling up memory and latency for everyone.
-const MAX_WAITING = 64;
-async function derive(value: string, salt: string, N = CURRENT_N) {
-  if (deriving >= 2 && waiting.length >= MAX_WAITING)
+// Two lanes share the two slots. Payment approvals (PIN, password step-up) wait in their
+// own queue and are served first, so a flood of sign-in attempts can delay them but never
+// crowd them out. Each queue is bounded; past that a request is refused quickly.
+export type HashLane = 'login' | 'payment';
+const waiting: Record<HashLane, (() => void)[]> = { login: [], payment: [] };
+const MAX_WAITING: Record<HashLane, number> = { login: 64, payment: 32 };
+async function derive(value: string, salt: string, N = CURRENT_N, lane: HashLane = 'login') {
+  if (deriving >= 2 && waiting[lane].length >= MAX_WAITING[lane])
     throw new PaymentError(503, 'busy', 'Roots is busy. Try again in a moment.');
-  while (deriving >= 2) await new Promise<void>((resolve) => waiting.push(resolve));
+  while (deriving >= 2) await new Promise<void>((resolve) => waiting[lane].push(resolve));
   deriving++;
   try {
     return await new Promise<Buffer>((resolve, reject) =>
@@ -100,22 +103,22 @@ async function derive(value: string, salt: string, N = CURRENT_N) {
     );
   } finally {
     deriving--;
-    waiting.shift()?.();
+    (waiting.payment.shift() ?? waiting.login.shift())?.();
   }
 }
-export async function hashPassword(value: string) {
+export async function hashPassword(value: string, lane: HashLane = 'login') {
   const salt = randomBytes(16).toString('hex');
-  return `scrypt2:${CURRENT_N}:${salt}:${(await derive(value, salt)).toString('hex')}`;
+  return `scrypt2:${CURRENT_N}:${salt}:${(await derive(value, salt, CURRENT_N, lane)).toString('hex')}`;
 }
 const legacyHash = (stored: string | null) => !!stored?.startsWith('scrypt:');
-export async function matches(value: string, stored: string | null) {
+export async function matches(value: string, stored: string | null, lane: HashLane = 'login') {
   const parts = (stored ?? '').split(':');
   // Unknown accounts and unparseable hashes pay the current cost, so response time
   // does not reveal whether an email has an account.
   const [salt, hex, N] = parts[0] === 'scrypt2' ? [parts[2], parts[3], Number(parts[1])]
     : parts[0] === 'scrypt' ? [parts[1], parts[2], LEGACY_N] : ['', '', CURRENT_N];
   if (![CURRENT_N, LEGACY_N].includes(N)) return false;
-  const key = await derive(value, salt || 'roots-constant-time-missing-user', N);
+  const key = await derive(value, salt || 'roots-constant-time-missing-user', N, lane);
   return !!hex && /^[a-f0-9]{128}$/.test(hex) && timingSafeEqual(key, Buffer.from(hex, 'hex'));
 }
 function profile(row: Record<string, any>) {
@@ -411,6 +414,8 @@ export function registerConsumer(app: FastifyInstance, deps: Dependencies) {
           person.user_id,
           hash,
         ]);
+        // Replacing a password with only an email code (recovery) pauses account-wallet sends.
+        if (recovery && user.password_hash) await holdSends(person.user_id, c);
         await c.query('DELETE FROM personal_sessions WHERE personal_user_id=$1', [person.user_id]);
         await c.query(
           "INSERT INTO personal_sessions(token_hash,personal_user_id,csrf_token,expires_at,auth_method) VALUES($1,$2,$3,now()+interval '1 day','password')",
