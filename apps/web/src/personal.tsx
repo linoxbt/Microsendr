@@ -964,8 +964,8 @@ function MoneyFlow({
       );
     return (
       <div className="rt-page fin-flow-narrow fin-flow-deposit">
-        <PageBar title="Receive" back={back('/personal/deposit/crypto')} />
-        <ConsumerChainWallet csrf={csrf} mode="receive" onChanged={onChanged} initialToken={token} go={go} />
+        <PageBar title={`Receive ${token}`} back={back('/personal/deposit/crypto')} />
+        <ConsumerChainWallet key={token} csrf={csrf} mode="receive" onChanged={onChanged} initialToken={token} go={go} />
       </div>
     );
   }
@@ -982,18 +982,31 @@ function MoneyFlow({
           ]} />
         </div>
       );
+    const via = step === 'user' ? 'user' : 'address';
+    // Pick the token first, from a list that can grow.
+    if (!token && !initialRecipient)
+      return (
+        <div className="rt-page">
+          <PageBar title="Select token" back={back('/personal/send')} />
+          <OptionList label="Choose a token" options={(['QIE', 'QUSDC'] as const).map((code) => ({
+            key: code, title: code, text: code === 'QUSDC' ? 'Digital dollars on QIE' : 'QIE Mainnet',
+            icon: <AssetIcon code={code} />, onClick: back(`/personal/send/${via}/${code.toLowerCase()}`),
+          }))} />
+        </div>
+      );
+    const sendToken = token ?? 'QIE';
     return (
       <div className="rt-page fin-flow-narrow fin-flow-send">
-        <PageBar title={step === 'user' ? 'Roots user' : 'Wallet address'} back={back('/personal/send')} />
-        <ConsumerChainWallet csrf={csrf} mode="send" onChanged={onChanged} initialRecipient={initialRecipient}
-          initialToken={token ?? 'QIE'} go={go} />
+        <PageBar title={`Send ${sendToken}`} back={back(`/personal/send/${via}`)} />
+        <ConsumerChainWallet key={sendToken} csrf={csrf} mode="send" onChanged={onChanged} initialRecipient={initialRecipient}
+          initialToken={sendToken} go={go} />
         {step === 'user' && payees.length > 0 && (
           <section className="rt-recent" aria-label="Pay again">
             <h2>Recent</h2>
             <ul className="fin-payees" aria-label="People you paid recently">
               {payees.map((name) => (
                 <li key={name}>
-                  <button onClick={() => go(`/personal/send/user?to=${encodeURIComponent('@' + name)}`)} aria-label={`Pay @${name} again`}>
+                  <button onClick={() => go(`/personal/send/user/${sendToken.toLowerCase()}?to=${encodeURIComponent('@' + name)}`)} aria-label={`Pay @${name} again`}>
                     <span className={`fin-payee-avatar fin-payee-tone-${tone(name)}`} aria-hidden="true">{name.slice(0, 2).toUpperCase()}</span>
                     <small>@{name}</small>
                   </button>

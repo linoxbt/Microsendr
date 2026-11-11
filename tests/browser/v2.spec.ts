@@ -281,11 +281,9 @@ test('custom registration, optional identity, profile editing and mobile money n
     }),
   }));
   await page.goto('/personal/deposit/crypto/qie');
-  // A managed (custodial) wallet cannot send yet, so it is never offered as a deposit address.
-  await expect(page.getByRole('group', { name: 'Roots account wallet' })).toContainText('not open yet');
-  await expect(page.getByRole('button', { name: 'Link QIE wallet' })).toBeVisible();
-  await expect(page.getByRole('img', { name: /QR code/ })).toHaveCount(0);
-  await expect(page.locator('main')).not.toContainText(wallet.address);
+  // The Roots account address always receives, even while sending from it is off.
+  await expect(page.locator('.fin-chain-receive code')).toHaveText(wallet.address);
+  await expect(page.getByRole('button', { name: 'Link QIE wallet' })).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 
@@ -362,7 +360,7 @@ test('Personal activity labels sends from data and the landing uses the Personal
   expect(calls.some((call) => call.includes('/console/'))).toBe(false);
 });
 
-test('managed account wallet never shows a receive address or QR, and can be checked', async ({ page }) => {
+test('the Roots address always receives; sending says when it is off; a missing address can be checked', async ({ page }) => {
   await signedIn(page);
   let managedCreated = false;
   const managedBodies: unknown[] = [];
@@ -376,77 +374,17 @@ test('managed account wallet never shows a receive address or QR, and can be che
   });
   await page.goto('/personal/deposit/crypto/qie');
   const account = page.getByRole('group', { name: 'Roots account wallet' });
-  await expect(account).toContainText("isn't set up yet");
-  await account.getByRole('button', { name: 'Check wallet' }).click();
-  await expect(account).toContainText("Roots manages this wallet's signing key");
+  await expect(account).toContainText('Your Roots address is being set up.');
+  await account.getByRole('button', { name: 'Check again' }).click();
   expect(managedBodies).toEqual([{}]);
-  await expect(page.getByRole('img', { name: /QR code/ })).toHaveCount(0);
-  await expect(page.locator('body')).not.toContainText(managedAddress);
-  await expect(page.locator('body')).not.toContainText(managedAddress.toLowerCase());
-  await page.goto('/personal/send/address');
+  await expect(page.locator('.fin-chain-receive code')).toHaveText(managedAddress);
+  await expect(page.getByRole('img', { name: /QR code/ })).toBeVisible();
+  // There is no wallet linking and no token toggle on these screens.
+  await expect(page.getByRole('button', { name: /Link QIE wallet/ })).toHaveCount(0);
+  await expect(page.getByRole('group', { name: 'Token' })).toHaveCount(0);
+  await page.goto('/personal/send/address/qie');
   await expect(page.getByLabel('Recipient', { exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Link QIE wallet' })).toBeVisible();
-  await expect(page.locator('body')).not.toContainText(managedAddress);
-});
-
-test('links a self-custody wallet by signature, receives to it, and unlinks it', async ({ page }) => {
-  await signedIn(page);
-  await page.addInitScript(({ address }) => {
-    const calls: string[] = [];
-    (window as unknown as { ethereumCalls: string[] }).ethereumCalls = calls;
-    (window as unknown as { ethereum: unknown }).ethereum = {
-      async request({ method, params }: { method: string; params?: unknown[] }) {
-        calls.push(method);
-        if (method === 'eth_chainId') return '0x7c6';
-        if (method === 'eth_requestAccounts') return [address];
-        if (method === 'personal_sign') {
-          if (!String(params?.[0]).startsWith('Link this QIE wallet')) throw new Error('unexpected message');
-          return '0x' + 'ab'.repeat(65);
-        }
-        throw new Error('unsupported ' + method);
-      },
-    };
-  }, { address: linkedAddress });
-  let linked = false;
-  const posted: unknown[] = [];
-  await page.route('**/personal/api/wallets', (route) => {
-    if (route.request().method() === 'POST') {
-      expect(route.request().headers()['x-kora-csrf']).toBe(csrf);
-      posted.push(route.request().postDataJSON());
-      linked = true;
-      return route.fulfill(json({ id: linkedRecord.id, address: linkedAddress, network: 'qie-mainnet' }));
-    }
-    return route.fulfill(json({ data: linked ? [managedRecord, linkedRecord] : [managedRecord] }));
-  });
-  await page.route('**/personal/api/wallets/challenge', (route) => {
-    expect(route.request().postDataJSON()).toEqual({ address: linkedAddress });
-    return route.fulfill(json({ challenge_id: 'cwc_' + 'b'.repeat(32), message: 'Link this QIE wallet to your Roots account', expires_at: '2026-10-21T10:05:00.000Z' }));
-  });
-  let deleted = '';
-  await page.route('**/personal/api/wallets/cwa_*', (route) => {
-    expect(route.request().method()).toBe('DELETE');
-    expect(route.request().headers()['x-kora-csrf']).toBe(csrf);
-    deleted = new URL(route.request().url()).pathname;
-    linked = false;
-    return route.fulfill(json({ removed: true }));
-  });
-  await page.goto('/personal/deposit/crypto/qie');
-  await page.getByRole('button', { name: 'Link QIE wallet' }).click();
-  await expect(page.getByText('QIE wallet linked to your account.')).toBeVisible();
-  expect(posted).toEqual([{ challenge_id: 'cwc_' + 'b'.repeat(32), signature: '0x' + 'ab'.repeat(65) }]);
-  expect(await page.evaluate(() => (window as unknown as { ethereumCalls: string[] }).ethereumCalls)).toContain('personal_sign');
-  await expect(page.getByRole('img', { name: 'QR code for the QIE wallet address shown below' })).toBeVisible();
-  await expect(page.locator('.fin-chain-receive code')).toHaveText(linkedAddress);
-  await expect(page.locator('.fin-chain-receive')).not.toContainText('Roots manages');
-  await expect(page.locator('body')).not.toContainText(managedAddress);
-  await page.screenshot({ path: '/tmp/roots-linked-wallet-receive.png', fullPage: true });
-  await page.goto('/personal/send/address');
-  await expect(page.getByLabel('Recipient', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Continue' })).toBeEnabled();
-  await page.getByRole('button', { name: 'Unlink wallet' }).click();
-  await page.getByRole('button', { name: 'Confirm unlink' }).click();
-  await expect(page.getByRole('button', { name: 'Link QIE wallet' })).toBeVisible();
-  expect(deleted).toBe(`/personal/api/wallets/${linkedRecord.id}`);
+  await expect(page.getByRole('group', { name: 'Roots account wallet' })).toContainText('Sending isn’t available right now.');
 });
 
 test('Convert shows unavailable without calling the quote API', async ({ page }) => {
@@ -554,7 +492,7 @@ test('when account wallet sends are enabled it can receive and send with the pas
   const panel = page.getByRole('group', { name: 'Roots account wallet' });
   await expect(panel.locator('code')).toHaveText(managedAddress);
   await expect(panel.getByAltText(/QR code for your account wallet/)).toBeVisible();
-  await page.goto('/personal/send/address');
+  await page.goto('/personal/send/address/qie');
   const send = page.getByRole('region', { name: 'QIE wallet' });
   // The password belongs to the review step, not the form.
   await expect(send.getByLabel('Password')).toHaveCount(0);

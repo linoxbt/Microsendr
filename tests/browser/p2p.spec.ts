@@ -53,7 +53,7 @@ test('paying @username resolves the recipient and sends to their address', async
     posts.push(route.request().postDataJSON());
     return route.fulfill(json({ id: 'stl_' + 'e'.repeat(32), tx_hash: '0x' + 'f'.repeat(64), status: 'submitted', custody: 'managed' }));
   });
-  await page.goto('/personal/send/address');
+  await page.goto('/personal/send/address/qie');
   const panel = page.getByRole('region', { name: 'QIE wallet' });
   const recipient = panel.getByLabel('Recipient');
   await recipient.fill('@nobody_here');
@@ -125,9 +125,14 @@ test('home is the balance card, shortcuts and activity; recent payees wait on th
   await expect(page).toHaveURL(/\/personal\/send$/);
   await page.getByRole('listitem').filter({ hasText: 'Roots user' }).click();
   await expect(page).toHaveURL(/\/personal\/send\/user$/);
+  // The token is chosen from a list, not a toggle.
+  await expect(page.getByRole('list', { name: 'Choose a token' }).getByRole('listitem')).toHaveCount(2);
+  await page.getByRole('list', { name: 'Choose a token' }).getByRole('listitem').filter({ hasText: 'QUSDC' }).click();
+  await expect(page).toHaveURL(/\/personal\/send\/user\/qusdc$/);
+  await expect(page.getByRole('heading', { name: 'Send QUSDC' })).toBeVisible();
   await expect(page.getByRole('list', { name: 'People you paid recently' }).getByRole('listitem')).toHaveCount(1);
   await page.getByRole('button', { name: 'Pay @ada_okafor again' }).click();
-  await expect(page).toHaveURL(/\/personal\/send\/user\?to=%40ada_okafor$/);
+  await expect(page).toHaveURL(/\/personal\/send\/user\/qusdc\?to=%40ada_okafor$/);
   // Bank sends are shown as coming soon and cannot be opened.
   await page.goto('/personal/send');
   await expect(page.getByRole('listitem').filter({ hasText: 'Bank account' })).toBeDisabled();
@@ -149,7 +154,7 @@ test('with a payment PIN set, the review step asks for the PIN instead of the pa
     posts.push(route.request().postDataJSON());
     return route.fulfill(json({ id: 'stl_' + 'e'.repeat(32), tx_hash: '0x' + 'f'.repeat(64), status: 'submitted', custody: 'managed' }));
   });
-  await page.goto('/personal/send/address');
+  await page.goto('/personal/send/address/qie');
   const panel = page.getByRole('region', { name: 'QIE wallet' });
   await panel.getByLabel('Recipient').fill(payeeAddress);
   await panel.getByLabel('Amount').fill('3');
@@ -220,11 +225,10 @@ test('each token has its own receive screen, and QUSDC sends from the Roots wall
   // From the QUSDC page, Receive opens the address screen on QUSDC.
   await page.goto('/personal/assets/qusdc');
   await page.getByRole('button', { name: 'Receive QUSDC' }).click();
-  const tokens = page.getByRole('group', { name: 'Token' });
-  await expect(tokens.getByRole('button', { name: 'QUSDC' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('heading', { name: 'Receive QUSDC' })).toBeVisible();
   await expect(page.getByText('Only send QUSDC on QIE Mainnet.')).toBeVisible();
   await expect(page.locator('.fin-chain-receive code')).toHaveText(accountAddress);
-  await tokens.getByRole('button', { name: 'QIE' }).click();
+  await page.goto('/personal/deposit/crypto/qie');
   await expect(page.getByText('Only send QIE on QIE Mainnet.')).toBeVisible();
   await expect(page.locator('.fin-chain-receive code')).toHaveText(accountAddress);
   // Sending QUSDC uses six decimals and names the asset.
@@ -261,7 +265,7 @@ test('a failed or expired account-wallet send is never shown as sent, and a clea
     const reply = replies.shift()!;
     return route.fulfill(json(reply.body, reply.status));
   });
-  await page.goto('/personal/send/address');
+  await page.goto('/personal/send/address/qie');
   const panel = page.getByRole('region', { name: 'QIE wallet' });
   await panel.getByLabel('Recipient').fill(payeeAddress);
   await panel.getByLabel('Amount').fill('1');

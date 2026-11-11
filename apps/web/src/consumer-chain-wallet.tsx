@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { formatUnits, getAddress, isAddress, parseUnits } from 'viem';
-import { ArrowLeft, ArrowRight, ArrowUpRight, Check, Copy, Fingerprint, Link2, RefreshCw, Share2, Unlink } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUpRight, Check, Copy, Fingerprint, RefreshCw, Share2 } from 'lucide-react';
 import { consumerRequest, isNetworkError } from './consumer-api.js';
 import { RecipientStatus, recipientPattern, useRecipient } from './recipient.js';
 import { RootsMark } from './roots-logo.js';
@@ -100,7 +100,8 @@ export function ConsumerChainWallet({
   initialToken?: Token;
   go?: (path: string) => void;
 }) {
-  const [token, setToken] = useState<Token>(initialToken);
+  // The token is chosen on the step before this screen.
+  const token = initialToken;
   // What the user typed survives switching token or wallet.
   const [draft, setDraft] = useState({ to: initialRecipient, amount: '' });
   const [wallets, setWallets] = useState<WalletRecord[]>();
@@ -109,15 +110,15 @@ export function ConsumerChainWallet({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [confirmUnlink, setConfirmUnlink] = useState(false);
   // Once a payment is under review the source is fixed.
   const [locked, setLocked] = useState(false);
 
   const managed = (wallets ?? []).find(isManaged);
   const managedOpen = !!managed?.can_send && !!limits;
   const linked = (wallets ?? []).filter(wallet => !isManaged(wallet));
+  // Your Roots address can always receive; it is offered for sending while account-wallet sends are on.
   const sources: Source[] = [
-    ...(managedOpen && managed ? [{ key: managed.id, wallet: managed, managed: true, label: 'Roots wallet' }] : []),
+    ...(managed && (mode === 'receive' || managedOpen) ? [{ key: managed.id, wallet: managed, managed: true, label: 'Roots wallet' }] : []),
     ...linked.map((wallet) => ({
       key: wallet.id, wallet, managed: false,
       label: linked.length > 1 ? `Wallet ··${wallet.address.slice(-4)}` : 'My wallet',
@@ -134,40 +135,8 @@ export function ConsumerChainWallet({
     setLimits(result.managed_transfers ?? null);
   }
   useEffect(() => { void loadWallets().catch(e => setError((e as Error).message)); }, []);
-  useEffect(() => { setConfirmUnlink(false); setNotice(''); setError(''); }, [source?.key]);
+  useEffect(() => { setNotice(''); setError(''); }, [source?.key]);
 
-  async function linkWallet() {
-    setBusy(true); setError(''); setNotice('');
-    try {
-      const injected = provider();
-      await mainnet(injected);
-      const address = await selectedAccount(injected);
-      const challenge = await consumerRequest<{ challenge_id: string; message: string }>(
-        'wallets/challenge', 'POST', { address }, csrf,
-      );
-      const signed = await signature(injected, address, challenge.message);
-      const result = await consumerRequest<WalletRecord>('wallets', 'POST',
-        { challenge_id: challenge.challenge_id, signature: signed }, csrf);
-      await loadWallets();
-      setSourceKey(result.id);
-      setNotice('QIE wallet linked to your account.');
-      await notifyChanged();
-    } catch (cause) { setError((cause as Error).message || 'Could not link this wallet.'); }
-    finally { setBusy(false); }
-  }
-  async function unlinkWallet() {
-    if (!source || source.managed) return;
-    setBusy(true); setError(''); setNotice('');
-    try {
-      await consumerRequest(`wallets/${encodeURIComponent(source.wallet.id)}`, 'DELETE', undefined, csrf);
-      setConfirmUnlink(false);
-      setSourceKey('');
-      await loadWallets();
-      setNotice('Wallet unlinked. Its funds stay in that wallet.');
-      await notifyChanged();
-    } catch (cause) { setError((cause as Error).message); }
-    finally { setBusy(false); }
-  }
   async function setUpAccountWallet() {
     setBusy(true); setError('');
     try { await consumerRequest('wallets/managed', 'POST', {}, csrf); await loadWallets(); }
@@ -175,54 +144,30 @@ export function ConsumerChainWallet({
     finally { setBusy(false); }
   }
 
-  const tokenSwitch = !locked && (
-    <div className="fin-token-switch" role="group" aria-label="Token">
-      {(Object.keys(TOKENS) as Token[]).map((code) => <button key={code} type="button" aria-pressed={code === token}
-        className={code === token ? 'active' : ''} onClick={() => setToken(code)}>{TOKENS[code].label}</button>)}
-    </div>
-  );
   const switcher = sources.length > 1 && !locked && (
     <div className="fin-source-switch" role="group" aria-label={mode === 'receive' ? 'Receive to' : 'Send from'}>
       {sources.map(s => <button key={s.key} type="button" aria-pressed={s.key === source?.key}
         className={s.key === source?.key ? 'active' : ''} onClick={() => setSourceKey(s.key)}>{s.label}</button>)}
     </div>
   );
-  const manage = source && !source.managed && !locked && <div className="fin-chain-unlink">
-    {confirmUnlink ? <>
-      <span>Unlink {short(source.wallet.address)}?</span>
-      <button className="fin-text" type="button" onClick={() => void unlinkWallet()} disabled={busy}>Confirm unlink</button>
-      <button className="fin-text" type="button" onClick={() => setConfirmUnlink(false)} disabled={busy}>Cancel</button>
-    </> : <>
-      <button className="fin-text" type="button" onClick={() => setConfirmUnlink(true)} disabled={busy}><Unlink size={14} /> Unlink wallet</button>
-      <button className="fin-text" type="button" onClick={() => void linkWallet()} disabled={busy}><Link2 size={14} /> Add wallet</button>
-    </>}
-  </div>;
-  const accountWallet = wallets && !managedOpen && <div className="fin-chain-account" role="group" aria-label="Roots account wallet">
-    <b>Roots account wallet</b>
-    {managed ? <p>Roots manages this wallet's signing key; it's not open yet.</p>
-      : <><p>Your account wallet isn't set up yet.</p>
-        <button className="fin-text" type="button" onClick={() => void setUpAccountWallet()} disabled={busy}><RefreshCw size={14} /> Check wallet</button></>}
-  </div>;
-
   return <section className={`fin-chain-wallet fin-chain-wallet-${mode}`} aria-label="QIE wallet">
-    {tokenSwitch}
     {switcher}
     {!wallets ? <div className={`fin-wallet-skeleton fin-wallet-skeleton-${mode}`} role="status" aria-label="Loading wallets">
         {mode === 'receive' ? <><i className="fin-sk fin-sk-line" /><i className="fin-sk fin-sk-qr" /></>
           : <><i className="fin-sk fin-sk-field" /><i className="fin-sk fin-sk-field" /><i className="fin-sk fin-sk-button" /></>}
       </div>
-      : !source ? <div className="fin-chain-empty">
+      : !source ? <div className="fin-chain-empty" role="group" aria-label="Roots account wallet">
         {mode === 'receive' && <h1 className="fin-sr-only">Your address</h1>}
-        <p>Link a wallet you control to {mode === 'receive' ? 'receive' : 'send'} QIE.</p>
-        <button className="fin-primary" type="button" onClick={() => void linkWallet()} disabled={busy}>
-          <Link2 size={17} /> {busy ? 'Connecting…' : 'Link QIE wallet'}
-        </button>
-        {accountWallet}
+        {managed
+          ? <p>Sending isn’t available right now. You can still receive.</p>
+          : <><p>Your Roots address is being set up.</p>
+            <button className="fin-secondary" type="button" onClick={() => void setUpAccountWallet()} disabled={busy}>
+              <RefreshCw size={15} /> {busy ? 'Checking…' : 'Check again'}
+            </button></>}
       </div>
       : mode === 'receive' ? <ReceiveCard key={source.key} source={source} token={token} />
         : <SendFlow key={`${source.key}-${token}`} source={source} token={token} limits={limits} csrf={csrf} draft={draft} onDraft={setDraft}
           onChanged={notifyChanged} onLock={setLocked} go={go} />}
-    {manage}
     {notice && <p className="fin-chain-notice" role="status">{notice}</p>}
     {error && <p className="fin-error" role="alert">{error}</p>}
   </section>;
