@@ -17,6 +17,9 @@ test('the retired business platform is unreachable when switched off (the produc
       const response = await app.inject({ method, url, headers: { origin, 'content-type': 'application/json' }, payload: method === 'POST' ? '{}' : undefined });
       assert.equal(response.statusCode, 404, `${method} ${url}: ${response.body}`);
     }
+    // Percent-encoded spellings reach the same routes, so they are refused the same way.
+    for (const url of ['/%761/me', '/%6fpenapi.json', '/%63onsole/auth/config', '/%62usiness/api/auth/start', '/%76%31/assets', '/v1%2Fme'])
+      assert.equal((await app.inject({ url })).statusCode, 404, url);
     // Nothing was created by the attempted workspace provisioning.
     const health = await app.inject({ url: '/health' });
     assert.deepEqual([health.statusCode, health.json().service], [200, 'roots-api']);
@@ -38,6 +41,9 @@ test('with proxy signatures required, browser routes need the web proxy; webhook
   try {
     const direct = await app.inject({ url: '/personal/api/session' });
     assert.deepEqual([direct.statusCode, direct.json().error.code], [403, 'proxy_required']);
+    for (const url of ['/%70ersonal/api/session', '/personal/%61pi/session', '/personal/api/%73ession', '/personal/api/webhooks/../session'])
+      assert.equal((await app.inject({ url })).statusCode, 403, url);
+    assert.equal((await app.inject({ url: '/%E0%A4%A' })).statusCode, 400);
     const forged = await app.inject({ url: '/personal/api/session', headers: { 'x-nf-sign': 'not-a-jws', 'x-nf-client-connection-ip': '1.2.3.4' } });
     assert.equal(forged.statusCode, 403);
     const sign = (secret: string) => new SignJWT({}).setProtectedHeader({ alg: 'HS256' }).setIssuer('netlify').setIssuedAt().setExpirationTime('5m')

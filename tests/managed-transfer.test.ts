@@ -277,9 +277,28 @@ test('a signed transfer whose nonce was used by another transaction is closed, a
   reads = 0;
   await reconcileChainSettlement(sent.id, adapter(true, BigInt(row.nonce) + 1n));
   assert.equal((await pool.query('SELECT status FROM chain_settlements WHERE id=$1', [sent.id])).rows[0].status, 'pending');
-  // Still unknown after the nonce moved on: replaced.
+  const state = async () => (await pool.query('SELECT status,last_error,replaced_seen_at FROM chain_settlements WHERE id=$1', [sent.id])).rows[0];
+  // Missing after the nonce moved on: noted, but one node's view is not enough yet.
   reads = 0;
   await reconcileChainSettlement(sent.id, adapter(false, BigInt(row.nonce) + 1n));
-  assert.deepEqual((await pool.query('SELECT status,last_error FROM chain_settlements WHERE id=$1', [sent.id])).rows[0],
-    { status: 'expired', last_error: 'nonce_replaced' });
+  let seen = await state();
+  assert.equal(seen.status, 'pending');
+  assert.ok(seen.replaced_seen_at);
+  // Seen again within ten minutes: still open.
+  reads = 0;
+  await reconcileChainSettlement(sent.id, adapter(false, BigInt(row.nonce) + 1n));
+  assert.equal((await state()).status, 'pending');
+  // Found mined after all: the note is cleared.
+  reads = 0;
+  await reconcileChainSettlement(sent.id, adapter(true, BigInt(row.nonce) + 1n));
+  seen = await state();
+  assert.deepEqual([seen.status, seen.replaced_seen_at], ['pending', null]);
+  // Still missing ten minutes after it was first seen missing: replaced.
+  reads = 0;
+  await reconcileChainSettlement(sent.id, adapter(false, BigInt(row.nonce) + 1n));
+  await pool.query("UPDATE chain_settlements SET replaced_seen_at=now()-interval '11 minutes' WHERE id=$1", [sent.id]);
+  reads = 0;
+  await reconcileChainSettlement(sent.id, adapter(false, BigInt(row.nonce) + 1n));
+  const closed = await state();
+  assert.deepEqual([closed.status, closed.last_error], ['expired', 'nonce_replaced']);
 });

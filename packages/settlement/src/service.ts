@@ -127,6 +127,7 @@ const retryDelaySeconds = (failures: number) => Math.min(3600, 15 * 2 ** Math.mi
 
 /** Worker-safe reconciliation. Never resubmits a transfer. Contradicting evidence is
  * terminal; RPC failures back off and give up after seven days. */
+const REPLACEMENT_HOLD_MS = 10 * 60_000;
 export async function reconcileChainSettlement(settlementId: string, adapter: ChainSettlementAdapter = new QieClient()) {
   const row = (await pool.query(`SELECT * FROM chain_settlements WHERE id=$1 AND status IN ('submitted','pending','unknown')`, [settlementId])).rows[0];
   if (!row) return false;
@@ -149,14 +150,20 @@ export async function reconcileChainSettlement(settlementId: string, adapter: Ch
       : adapter.nativeTransferEvidence(row.tx_hash, instruction);
     let evidence = await read();
     // A Roots-signed transaction the node cannot find, whose nonce another transaction
-    // has since used, can never be mined. Re-read once so our own just-mined transaction
-    // is never mistaken for a replacement.
+    // has since used, can never be mined. A single RPC node can lag or disagree with its
+    // peers, so this must hold on a re-read now and still hold ten minutes later before
+    // the transfer is written off; until then it stays open (and counts toward limits).
     if (evidence.state === 'pending' && evidence.block_number === null && row.signed_transaction &&
         row.nonce !== null && row.nonce !== undefined && adapter.accountNonce &&
         await adapter.accountNonce(row.source_address) > BigInt(row.nonce)) {
       evidence = await read();
       if (evidence.state === 'pending' && evidence.block_number === null) {
-        await terminal('expired', 'nonce_replaced');
+        if (row.replaced_seen_at && Date.now() - new Date(row.replaced_seen_at).getTime() >= REPLACEMENT_HOLD_MS) {
+          await terminal('expired', 'nonce_replaced');
+          return true;
+        }
+        await pool.query(`UPDATE chain_settlements SET replaced_seen_at=COALESCE(replaced_seen_at,now()),last_checked_at=now(),
+          next_check_at=now()+interval '2 minutes',updated_at=now() WHERE id=$1 AND status IN ('submitted','pending','unknown')`, [settlementId]);
         return true;
       }
     }
@@ -173,7 +180,7 @@ export async function reconcileChainSettlement(settlementId: string, adapter: Ch
       return true;
     }
     await pool.query(`UPDATE chain_settlements SET status=$2,block_number=$3,block_hash=$4,observed_confirmations=$5,
-      last_error=NULL,check_failures=0,last_checked_at=now(),next_check_at=now()+interval '15 seconds',updated_at=now()
+      last_error=NULL,check_failures=0,replaced_seen_at=NULL,last_checked_at=now(),next_check_at=now()+interval '15 seconds',updated_at=now()
       WHERE id=$1 AND status IN ('submitted','pending','unknown')`,
       [settlementId,evidence.state,evidence.block_number,evidence.block_hash,Number(evidence.confirmations)]);
   } catch (cause) {

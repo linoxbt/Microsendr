@@ -133,13 +133,21 @@ export async function buildApi(options: ApiOptions = {}) {
   app.decorateRequest('clientIp', '');
   app.decorateRequest('proxySigned', false);
   app.addHook('onRequest', async (request) => {
+    // Path gates look at what the router will actually serve: the matched route pattern
+    // and the percent-decoded path (the router decodes escapes such as %70 before
+    // matching, so the raw URL alone could be bypassed). Undecodable paths are refused.
+    let path: string;
+    try { path = decodeURIComponent(request.url.split('?')[0]); }
+    catch { throw new PaymentError(400, 'invalid_path', 'Invalid path'); }
+    const paths = [path, request.routeOptions.url ?? ''];
     // The retired business platform answers as if it did not exist, before any other work.
-    if (!legacyPlatformEnabled() && legacyPlatformPath.test(request.url))
+    if (!legacyPlatformEnabled() && paths.some((value) => legacyPlatformPath.test(value)))
       throw new PaymentError(404, 'not_found', 'Not found');
     const proxy = await proxyCheck(request);
     request.clientIp = proxy.ip;
     request.proxySigned = proxy.signed;
-    if (!proxy.signed && request.url.startsWith('/personal/api/') && !proxyExemptPath.test(request.url) && proxySignatureRequired())
+    if (!proxy.signed && proxySignatureRequired()
+      && paths.some((value) => value.startsWith('/personal/api/') && !proxyExemptPath.test(value)))
       throw new PaymentError(403, 'proxy_required', 'Use the Roots app');
   });
   await app.register(rateLimit, {
