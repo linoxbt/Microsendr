@@ -26,6 +26,8 @@ export interface ChainSettlementAdapter {
   transactionSender?(hash: string): Promise<string | null>;
   /** Re-sends a transaction this service signed, while it is not yet mined. */
   sendRawTransaction?(raw: string): Promise<string>;
+  /** Number of transactions the address has mined (its next nonce). */
+  accountNonce?(address: string): Promise<bigint>;
   nativeTransferEvidence(hash: string, instruction: NativeTransferInstruction): Promise<SettlementEvidence>;
   /** Allowlisted tokens on this network, by asset position id. */
   readonly tokens?: Record<string, { code: string; decimals: number; contract: string }>;

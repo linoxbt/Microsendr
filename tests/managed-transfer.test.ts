@@ -187,3 +187,99 @@ test('the account wallet sends QUSDC as an exact transfer call, with its own lim
     idempotencyKey: id('key'), asset: 'QUSDC' }, fresh.client, tampered.request), { code: 'signature_mismatch' });
   assert.equal(fresh.broadcasts.length, 0);
 });
+
+test('retrying a key whose attempt failed says so instead of reporting a transfer', async () => {
+  const p = await person();
+  const key = id('key');
+  await assert.rejects(send(p, QIE, key, node(), privy(p.account, (t) => { t.to = `0x${randomBytes(20).toString('hex')}`; })), { code: 'signature_mismatch' });
+  await assert.rejects(send(p, QIE, key), { code: 'transfer_failed' });
+});
+
+test('nonces skip past every unconfirmed transaction the wallet already signed', async () => {
+  const p = await person();
+  // An earlier transfer with nonce 7 was signed but its broadcast never reached the node,
+  // so the node still reports 7 as the next nonce.
+  await pool.query(`INSERT INTO chain_settlements(id,personal_user_id,account_id,asset_position_id,network,chain_id,direction,source_address,
+    destination_address,amount_atomic,required_confirmations,minimum_block_number,idempotency_key,authorization_expires_at,custody,nonce,status,tx_hash,signed_transaction)
+    VALUES($1,$2,$3,'pos_qiev3_mainnet','qie-mainnet','1990','outbound',$4,$5,1,12,1,$6,now(),'managed',7,'submitted',$7,'0x02f8')`,
+    [id('stl'), p.userId, p.accountId, p.account.address.toLowerCase(), recipient, id('key'), `0x${randomBytes(32).toString('hex')}`]);
+  const qie = node();
+  await send(p, QIE, id('key'), qie);
+  assert.equal(parseTransaction(qie.broadcasts[0] as Hex).nonce, 8);
+});
+
+test('a legacy or otherwise unexpected transaction type is never broadcast', async () => {
+  const p = await person();
+  const qie = node();
+  const legacy = (async (_url: string | URL | Request, init?: RequestInit) => {
+    const t = JSON.parse(String(init?.body)).params.transaction;
+    const signed = await p.account.signTransaction({ type: 'legacy', chainId: t.chain_id, to: t.to, value: BigInt(t.value), nonce: t.nonce,
+      gas: BigInt(t.gas_limit), gasPrice: BigInt(t.max_fee_per_gas) });
+    return Response.json({ data: { signed_transaction: signed } });
+  }) as typeof fetch;
+  await assert.rejects(sendFromManagedWallet({ userId: p.userId, accountId: p.accountId, to: recipient, amountAtomic: QIE.toString(), idempotencyKey: id('key') },
+    qie.client, legacy), { code: 'signature_mismatch' });
+  assert.equal(qie.broadcasts.length, 0);
+});
+
+test('nothing is broadcast once the attempt was closed while signing', async () => {
+  const p = await person();
+  const qie = node();
+  const signer = privy(p.account);
+  const slow = (async (url: string | URL | Request, init?: RequestInit) => {
+    // The worker sweep closes the attempt while Privy is still signing.
+    await pool.query("UPDATE chain_settlements SET status='expired' WHERE personal_user_id=$1 AND status='awaiting_submission'", [p.userId]);
+    return signer.request(url, init);
+  }) as typeof fetch;
+  await assert.rejects(sendFromManagedWallet({ userId: p.userId, accountId: p.accountId, to: recipient, amountAtomic: QIE.toString(), idempotencyKey: id('key') },
+    qie.client, slow), { code: 'transfer_expired' });
+  assert.equal(qie.broadcasts.length, 0);
+});
+
+test('without identity verification, sends are held to the unverified limits', async () => {
+  process.env.KORA_MANAGED_TRANSFERS_REQUIRE_KYC = 'false';
+  process.env.KORA_UNVERIFIED_TRANSFER_MAX_QIE = '3';
+  process.env.KORA_UNVERIFIED_TRANSFER_DAILY_QIE = '5';
+  try {
+    const p = await person({ kyc: '' });
+    await assert.rejects(send(p, 4n * QIE), { code: 'transfer_limit' });
+    await send(p, 3n * QIE);
+    await assert.rejects(send(p, 3n * QIE), { code: 'daily_limit' });
+    // A verified account keeps the normal limits.
+    const v = await person();
+    await send(v, 9n * QIE);
+  } finally {
+    delete process.env.KORA_MANAGED_TRANSFERS_REQUIRE_KYC;
+    delete process.env.KORA_UNVERIFIED_TRANSFER_MAX_QIE;
+    delete process.env.KORA_UNVERIFIED_TRANSFER_DAILY_QIE;
+  }
+});
+
+test('a signed transfer whose nonce was used by another transaction is closed, and only then', async () => {
+  const p = await person();
+  const qie = node();
+  const sent = await send(p, QIE, id('key'), qie);
+  const row = (await pool.query('SELECT nonce FROM chain_settlements WHERE id=$1', [sent.id])).rows[0];
+  let reads = 0;
+  const adapter = (minedOnSecondRead: boolean, nonce: bigint) => ({ network: 'qie-mainnet', chainId: 1990n, nativeAssetPositionId: 'pos_qiev3_mainnet',
+    nativeAssetCode: 'QIEV3', nativeDecimals: 18, requiredConfirmations: 12n, transactionUrl: (h: string) => h, headBlock: async () => 300n,
+    sendRawTransaction: async () => 'ok', accountNonce: async () => nonce,
+    nativeTransferEvidence: async () => {
+      reads += 1;
+      return minedOnSecondRead && reads > 1
+        ? { state: 'pending' as const, confirmations: '1', block_number: '299', block_hash: '0x' + 'a'.repeat(64) }
+        : { state: 'pending' as const, confirmations: '0', block_number: null, block_hash: null };
+    } });
+  // The nonce is not used yet: keep waiting.
+  await reconcileChainSettlement(sent.id, adapter(false, BigInt(row.nonce)));
+  assert.equal((await pool.query('SELECT status FROM chain_settlements WHERE id=$1', [sent.id])).rows[0].status, 'pending');
+  // Our own transaction was mined between the reads: not a replacement.
+  reads = 0;
+  await reconcileChainSettlement(sent.id, adapter(true, BigInt(row.nonce) + 1n));
+  assert.equal((await pool.query('SELECT status FROM chain_settlements WHERE id=$1', [sent.id])).rows[0].status, 'pending');
+  // Still unknown after the nonce moved on: replaced.
+  reads = 0;
+  await reconcileChainSettlement(sent.id, adapter(false, BigInt(row.nonce) + 1n));
+  assert.deepEqual((await pool.query('SELECT status,last_error FROM chain_settlements WHERE id=$1', [sent.id])).rows[0],
+    { status: 'expired', last_error: 'nonce_replaced' });
+});

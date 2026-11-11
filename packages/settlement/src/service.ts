@@ -50,6 +50,8 @@ export async function createNativeSettlement(input: CreateNativeSettlement) {
     idempotencyKey: input.idempotencyKey, expiresAt: input.expiresAt, token });
   const valid = await verifyMessage({ address: input.from as `0x${string}`, message, signature: input.signature }).catch(() => false);
   if (!valid) throw new SettlementError(401, 'wallet_signature_invalid', 'The sending wallet did not authorize this transfer');
+  // Read the chain head before taking a connection and lock, so a slow RPC cannot hold either.
+  const minimumBlock = await adapter.headBlock();
   return transaction(async c => {
     await c.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [`chain:${input.userId}:${input.idempotencyKey}`]);
     const linked = await c.query(`SELECT 1 FROM personal_chain_wallets
@@ -65,7 +67,6 @@ export async function createNativeSettlement(input: CreateNativeSettlement) {
         throw new SettlementError(409, 'idempotency_conflict', 'This request key was used for another transfer');
       return publicSettlement(existing);
     }
-    const minimumBlock = await adapter.headBlock();
     const settlementId = id('stl');
     const result = (await c.query(`INSERT INTO chain_settlements
       (id,personal_user_id,account_id,asset_position_id,network,chain_id,direction,source_address,destination_address,amount_atomic,required_confirmations,minimum_block_number,idempotency_key,authorization_expires_at)
@@ -143,16 +144,31 @@ export async function reconcileChainSettlement(settlementId: string, adapter: Ch
       from: row.source_address, to: row.destination_address,
       amountAtomic: BigInt(row.amount_atomic), confirmations: BigInt(row.required_confirmations),
     };
-    const evidence = isToken
-      ? await adapter.tokenTransferEvidence!(row.tx_hash, row.asset_position_id, instruction)
-      : await adapter.nativeTransferEvidence(row.tx_hash, instruction);
+    const read = () => isToken
+      ? adapter.tokenTransferEvidence!(row.tx_hash, row.asset_position_id, instruction)
+      : adapter.nativeTransferEvidence(row.tx_hash, instruction);
+    let evidence = await read();
+    // A Roots-signed transaction the node cannot find, whose nonce another transaction
+    // has since used, can never be mined. Re-read once so our own just-mined transaction
+    // is never mistaken for a replacement.
+    if (evidence.state === 'pending' && evidence.block_number === null && row.signed_transaction &&
+        row.nonce !== null && row.nonce !== undefined && adapter.accountNonce &&
+        await adapter.accountNonce(row.source_address) > BigInt(row.nonce)) {
+      evidence = await read();
+      if (evidence.state === 'pending' && evidence.block_number === null) {
+        await terminal('expired', 'nonce_replaced');
+        return true;
+      }
+    }
     if (evidence.block_number !== null && BigInt(evidence.block_number) < BigInt(row.minimum_block_number))
       throw new SettlementError(422, 'historical_transaction', 'Transaction predates the settlement instruction');
     // A transfer Roots signed is re-sent byte for byte while unmined, in case
     // the first broadcast never reached the network. It is never re-signed.
     if (evidence.state === 'pending' && row.signed_transaction)
       await adapter.sendRawTransaction?.(row.signed_transaction).catch(() => undefined);
-    if (evidence.state === 'pending' && Date.now() - new Date(row.created_at).getTime() > MAX_PENDING_AGE_MS) {
+    // A transaction signed by Roots could still be mined later, so it is never written off
+    // by age; it ends only when confirmed, failed or replaced.
+    if (evidence.state === 'pending' && !row.signed_transaction && Date.now() - new Date(row.created_at).getTime() > MAX_PENDING_AGE_MS) {
       await terminal('expired', 'not_final_after_7_days');
       return true;
     }
@@ -165,7 +181,7 @@ export async function reconcileChainSettlement(settlementId: string, adapter: Ch
       await terminal('mismatched', cause instanceof SettlementError ? cause.code : 'evidence_mismatch');
       return true;
     }
-    if (Date.now() - new Date(row.created_at).getTime() > MAX_PENDING_AGE_MS) {
+    if (!row.signed_transaction && Date.now() - new Date(row.created_at).getTime() > MAX_PENDING_AGE_MS) {
       await terminal('expired', 'evidence_unavailable_after_7_days');
       return true;
     }

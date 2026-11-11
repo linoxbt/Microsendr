@@ -1,6 +1,7 @@
 import { getAddress, isAddress, keccak256, parseEther, parseTransaction, parseUnits, recoverTransactionAddress, type Hex } from 'viem';
 import { z } from 'zod';
-import { id, pool, transaction } from '../../../packages/database/src/index.js';
+import { randomBytes } from 'node:crypto';
+import { id, pool } from '../../../packages/database/src/index.js';
 import { PaymentError } from '../../../packages/payments/src/errors.js';
 import { QieClient, QIE_CHAIN_ID, QIE_NATIVE_POSITION, QIE_NETWORK, QIE_QUSDC_CONTRACT, QIE_QUSDC_POSITION, QUSDC_DECIMALS, qusdcTransferData } from '../../../packages/qie/src/index.js';
 import { publicSettlement } from '../../../packages/settlement/src/service.js';
@@ -24,6 +25,14 @@ export const managedTransferLimits = () => ({
   qusdc_daily_atomic: tokenLimit('KORA_MANAGED_TRANSFER_DAILY_QUSDC', '5000'),
 });
 export type ManagedAsset = 'QIE' | 'QUSDC';
+// Until identity is verified, account-wallet sends are held to small limits
+// (only reachable when KORA_MANAGED_TRANSFERS_REQUIRE_KYC=false).
+export const unverifiedTransferLimits = () => ({
+  per_transfer_wei: limit('KORA_UNVERIFIED_TRANSFER_MAX_QIE', '50'),
+  daily_wei: limit('KORA_UNVERIFIED_TRANSFER_DAILY_QIE', '100'),
+  qusdc_per_transfer_atomic: tokenLimit('KORA_UNVERIFIED_TRANSFER_MAX_QUSDC', '50'),
+  qusdc_daily_atomic: tokenLimit('KORA_UNVERIFIED_TRANSFER_DAILY_QUSDC', '100'),
+});
 
 const signedSchema = z.object({ data: z.object({ signed_transaction: z.string().regex(/^0x[0-9a-fA-F]+$/) }) });
 
@@ -54,35 +63,53 @@ export async function sendFromManagedWallet(input: ManagedTransferInput, client 
   if (!wallet) throw new PaymentError(404, 'wallet_not_found', 'Your account wallet is not ready yet');
   if (to === wallet.address) throw new PaymentError(400, 'invalid_destination', 'Choose a different recipient');
 
-  // A retried request returns the original transfer; a reused key with new details is refused.
-  const previous = (await pool.query('SELECT * FROM chain_settlements WHERE personal_user_id=$1 AND idempotency_key=$2', [input.userId, input.idempotencyKey])).rows[0];
-  if (previous) {
+  // A retried request returns the original transfer; a reused key with new details is
+  // refused, and a key whose attempt failed before anything was signed says so.
+  const replay = async () => {
+    const previous = (await pool.query('SELECT * FROM chain_settlements WHERE personal_user_id=$1 AND idempotency_key=$2', [input.userId, input.idempotencyKey])).rows[0];
+    if (!previous) return null;
     if (previous.custody !== 'managed' || previous.destination_address !== to.toLowerCase() || String(previous.amount_atomic) !== input.amountAtomic ||
         previous.asset_position_id !== position)
       throw new PaymentError(409, 'idempotency_conflict', 'This request key was used for another transfer');
+    if (!previous.tx_hash && ['expired', 'mismatched', 'failed'].includes(previous.status))
+      throw new PaymentError(409, 'transfer_failed', 'That attempt did not go through and nothing was sent. Try again.');
     return publicSettlement(previous);
-  }
+  };
+  const earlier = await replay();
+  if (earlier) return earlier;
 
   const owner = (await pool.query(`SELECT u.email_verified_at,(SELECT status FROM personal_didit_sessions d WHERE d.personal_user_id=u.id
     ORDER BY created_at DESC,id DESC LIMIT 1) AS kyc FROM personal_users u WHERE u.id=$1`, [input.userId])).rows[0];
   if (!owner?.email_verified_at) throw new PaymentError(403, 'verified_email_required', 'Verify your email before sending');
-  if (process.env.KORA_MANAGED_TRANSFERS_REQUIRE_KYC !== 'false' && owner.kyc !== 'Approved')
+  const verified = owner.kyc === 'Approved';
+  if (process.env.KORA_MANAGED_TRANSFERS_REQUIRE_KYC !== 'false' && !verified)
     throw new PaymentError(403, 'identity_verification_required', 'Complete identity verification before sending from your account wallet');
-  const limits = managedTransferLimits();
+  // Unverified accounts (allowed only when KYC is not required) get much smaller limits.
+  const limits = verified ? managedTransferLimits() : unverifiedTransferLimits();
   const perTransfer = token ? limits.qusdc_per_transfer_atomic : limits.per_transfer_wei;
   const daily = token ? limits.qusdc_daily_atomic : limits.daily_wei;
-  if (value > perTransfer) throw new PaymentError(422, 'transfer_limit', 'This amount is above the per-transfer limit');
+  if (value > perTransfer)
+    throw new PaymentError(422, 'transfer_limit', verified ? 'This amount is above the per-transfer limit'
+      : 'This amount is above the limit for unverified accounts. Verify your identity to send more.');
 
-  // One signing per wallet at a time: two concurrent sends must not share a nonce.
-  const claimed = (await pool.query(`UPDATE personal_managed_wallets SET signing_until=now()+interval '2 minutes'
-    WHERE personal_user_id=$1 AND (signing_until IS NULL OR signing_until<now()) RETURNING 1`, [input.userId])).rowCount;
+  // One signing per wallet at a time: two concurrent sends must not share a nonce. The
+  // claim carries a token so only its holder can release it.
+  const lockToken = randomBytes(16).toString('hex');
+  const claimed = (await pool.query(`UPDATE personal_managed_wallets SET signing_until=now()+interval '2 minutes',signing_token=$2
+    WHERE personal_user_id=$1 AND (signing_until IS NULL OR signing_until<now()) RETURNING 1`, [input.userId, lockToken])).rowCount;
   if (!claimed) throw new PaymentError(409, 'transfer_in_progress', 'Another transfer is being sent. Try again in a moment.');
   let settlementId: string | null = null;
+  let recorded = false;
   try {
+    // Re-check under the claim: a concurrent request with the same key may have just finished.
+    const raced = await replay();
+    if (raced) return raced;
     const sentToday = BigInt((await pool.query(`SELECT COALESCE(sum(amount_atomic),0)::text total FROM chain_settlements
       WHERE personal_user_id=$1 AND custody='managed' AND asset_position_id=$2 AND created_at>now()-interval '24 hours'
       AND status NOT IN ('expired','mismatched')`, [input.userId, position])).rows[0].total);
-    if (sentToday + value > daily) throw new PaymentError(422, 'daily_limit', 'This transfer would exceed your 24-hour sending limit');
+    if (sentToday + value > daily)
+      throw new PaymentError(422, 'daily_limit', verified ? 'This transfer would exceed your 24-hour sending limit'
+        : 'This transfer would exceed the 24-hour limit for unverified accounts. Verify your identity to send more.');
     if (token && BigInt((await client.qusdcBalance(wallet.address)).balance_atomic) < value)
       throw new PaymentError(422, 'insufficient_funds', 'Your account wallet does not have enough QUSDC for this amount');
     const params = await client.transferParameters(wallet.address, txTo, txValue, txData);
@@ -91,20 +118,23 @@ export async function sendFromManagedWallet(input: ManagedTransferInput, client 
         ? 'Your account wallet needs a little QIE to pay the network fee'
         : 'Your account wallet does not have enough QIE for this amount and the network fee');
     const head = await client.headBlock();
+    // Never reuse a nonce this wallet already signed and has not seen confirmed: the node's
+    // pending count misses a transaction whose broadcast failed or went to another node.
+    const highest = (await pool.query(`SELECT max(nonce)::text AS n FROM chain_settlements
+      WHERE source_address=$1 AND custody='managed' AND status IN ('submitted','pending','unknown')`, [wallet.address.toLowerCase()])).rows[0].n;
+    const nonce = Math.max(params.nonce, highest === null ? 0 : Number(highest) + 1);
     settlementId = id('stl');
-    await transaction(async (c) => {
-      await c.query(`INSERT INTO chain_settlements(id,personal_user_id,account_id,asset_position_id,network,chain_id,direction,
-        source_address,destination_address,amount_atomic,required_confirmations,minimum_block_number,idempotency_key,
-        authorization_expires_at,submission_expires_at,custody)
-        VALUES($1,$2,$3,$4,$5,$6,'outbound',$7,$8,$9,$10,$11,$12,now()+interval '5 minutes',now()+interval '5 minutes','managed')`,
-        [settlementId, input.userId, input.accountId, position, QIE_NETWORK, String(QIE_CHAIN_ID),
-          wallet.address.toLowerCase(), to.toLowerCase(), input.amountAtomic, Number(client.requiredConfirmations),
-          String(head), input.idempotencyKey]);
-    });
+    await pool.query(`INSERT INTO chain_settlements(id,personal_user_id,account_id,asset_position_id,network,chain_id,direction,
+      source_address,destination_address,amount_atomic,required_confirmations,minimum_block_number,idempotency_key,
+      authorization_expires_at,submission_expires_at,custody,nonce)
+      VALUES($1,$2,$3,$4,$5,$6,'outbound',$7,$8,$9,$10,$11,$12,now()+interval '5 minutes',now()+interval '5 minutes','managed',$13)`,
+      [settlementId, input.userId, input.accountId, position, QIE_NETWORK, String(QIE_CHAIN_ID),
+        wallet.address.toLowerCase(), to.toLowerCase(), input.amountAtomic, Number(client.requiredConfirmations),
+        String(head), input.idempotencyKey, nonce]);
     const signed = signedSchema.parse(await privyWalletRpc(wallet.id, {
       method: 'eth_signTransaction',
       params: { transaction: {
-        to: txTo, value: `0x${txValue.toString(16)}`, ...(txData ? { data: txData } : {}), chain_id: Number(QIE_CHAIN_ID), type: 2, nonce: params.nonce,
+        to: txTo, value: `0x${txValue.toString(16)}`, ...(txData ? { data: txData } : {}), chain_id: Number(QIE_CHAIN_ID), type: 2, nonce,
         gas_limit: `0x${params.gas.toString(16)}`, max_fee_per_gas: `0x${params.maxFeePerGas.toString(16)}`,
         max_priority_fee_per_gas: `0x${params.maxPriorityFeePerGas.toString(16)}`,
       } },
@@ -112,24 +142,35 @@ export async function sendFromManagedWallet(input: ManagedTransferInput, client 
     // Never broadcast what we did not ask for: decode the signed bytes and recover the signer.
     const decoded = parseTransaction(signed);
     const signer = await recoverTransactionAddress({ serializedTransaction: signed as never });
-    if (decoded.to?.toLowerCase() !== txTo.toLowerCase() || (decoded.value ?? 0n) !== txValue || decoded.chainId !== Number(QIE_CHAIN_ID) ||
-        decoded.nonce !== params.nonce || (decoded.data ?? '0x').toLowerCase() !== (txData ?? '0x') ||
+    // Exactly an EIP-1559 transfer: no access list, no EIP-7702 delegation, no legacy gas price.
+    if (decoded.type !== 'eip1559' || decoded.authorizationList !== undefined || (decoded.accessList?.length ?? 0) > 0 ||
+        decoded.gasPrice !== undefined || decoded.maxFeePerGas === undefined || decoded.maxPriorityFeePerGas === undefined ||
+        decoded.to?.toLowerCase() !== txTo.toLowerCase() || (decoded.value ?? 0n) !== txValue || decoded.chainId !== Number(QIE_CHAIN_ID) ||
+        decoded.nonce !== nonce || (decoded.data ?? '0x').toLowerCase() !== (txData ?? '0x') ||
         signer.toLowerCase() !== wallet.address.toLowerCase() ||
-        (decoded.maxFeePerGas ?? 0n) > params.maxFeePerGas || (decoded.gas ?? 0n) > params.gas)
+        decoded.maxFeePerGas > params.maxFeePerGas || decoded.maxPriorityFeePerGas > params.maxPriorityFeePerGas || (decoded.gas ?? 0n) > params.gas)
       throw new PaymentError(502, 'signature_mismatch', 'The signed transfer did not match the request. Nothing was sent.');
     const hash = keccak256(signed);
-    // Record the exact transaction before it is broadcast, so a crash cannot lose it.
-    await pool.query(`UPDATE chain_settlements SET tx_hash=$2,signed_transaction=$3,status='submitted',updated_at=now()
-      WHERE id=$1 AND status='awaiting_submission'`, [settlementId, hash, signed]);
+    // Record the exact transaction before it is broadcast, so a crash cannot lose it. If the
+    // record was already closed (for example expired by the worker), nothing is broadcast.
+    const submitted = (await pool.query(`UPDATE chain_settlements SET tx_hash=$2,signed_transaction=$3,status='submitted',updated_at=now()
+      WHERE id=$1 AND status='awaiting_submission' AND submission_expires_at>now()`, [settlementId, hash, signed])).rowCount;
+    if (submitted !== 1) throw new PaymentError(409, 'transfer_expired', 'That attempt took too long and nothing was sent. Try again.');
+    recorded = true;
     await client.sendRawTransaction(signed).catch(() => undefined); // The worker re-broadcasts if needed.
     return publicSettlement((await pool.query('SELECT * FROM chain_settlements WHERE id=$1', [settlementId])).rows[0]);
   } catch (error) {
+    // Once the signed transaction is recorded it will be broadcast and tracked: report it,
+    // never "nothing was moved".
+    if (recorded && settlementId)
+      return publicSettlement((await pool.query('SELECT * FROM chain_settlements WHERE id=$1', [settlementId])).rows[0]);
     if (settlementId)
       await pool.query(`UPDATE chain_settlements SET status='expired',last_error=$2,updated_at=now()
         WHERE id=$1 AND status='awaiting_submission'`, [settlementId, error instanceof PaymentError ? error.code : 'signing_failed']);
     if (error instanceof PaymentError) throw error;
     throw new PaymentError(503, 'transfer_unavailable', 'Your transfer could not be sent. Nothing was moved; try again.');
   } finally {
-    await pool.query('UPDATE personal_managed_wallets SET signing_until=NULL WHERE personal_user_id=$1', [input.userId]);
+    await pool.query('UPDATE personal_managed_wallets SET signing_until=NULL,signing_token=NULL WHERE personal_user_id=$1 AND signing_token=$2',
+      [input.userId, lockToken]);
   }
 }

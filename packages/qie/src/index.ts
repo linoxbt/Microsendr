@@ -132,6 +132,15 @@ export class QieClient implements ChainSettlementAdapter {
     return { nonce: Number(BigInt(nonce)), gas: BigInt(gas), maxFeePerGas, maxPriorityFeePerGas, balance: BigInt(balance) };
   }
 
+  /** Transactions mined from the address: the next nonce at the latest block. */
+  async accountNonce(address: string): Promise<bigint> {
+    if (!addressPattern.test(address)) throw new QieRpcError('Invalid address');
+    await this.assertMainnet();
+    const count = await this.rpc<string>('eth_getTransactionCount', [address, 'latest']);
+    if (typeof count !== 'string' || !/^0x[0-9a-f]+$/i.test(count)) throw new QieRpcError('Invalid nonce response');
+    return BigInt(count);
+  }
+
   /** Broadcasts a signed transaction; resending one the node already has is harmless. */
   async sendRawTransaction(raw: string): Promise<string> {
     if (!/^0x[0-9a-f]+$/i.test(raw)) throw new QieRpcError('Invalid signed transaction');

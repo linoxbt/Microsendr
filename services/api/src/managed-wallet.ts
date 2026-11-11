@@ -58,7 +58,10 @@ export async function ensureManagedWallet(userId: string, accountId: string): Pr
   };
   let record: { id?: unknown; address?: unknown };
   try {
-    record = await call(base, { method: 'POST', body: JSON.stringify({ chain_type: 'ethereum', external_id: externalId }) });
+    // With PRIVY_POLICY_ID set (see scripts/privy-policy.ts), Privy itself limits what the wallet can sign.
+    const policy = process.env.PRIVY_POLICY_ID;
+    record = await call(base, { method: 'POST', body: JSON.stringify({ chain_type: 'ethereum', external_id: externalId,
+      ...(policy ? { policy_ids: [policy] } : {}) }) });
   } catch (createError) {
     // A previous attempt may have created it (Privy succeeded, we did not record it).
     try { record = await call(`${base}/ext_wal_${externalId}`); } catch { throw createError; }
