@@ -121,6 +121,8 @@ test('Add money offers Crypto or Bank / card; Bank / card buys with naira when F
   await page.route('**/personal/api/conversion/config', (r) => r.fulfill(json({ available: true, assets: [{ code: 'POLYGON_USDC', network: 'Polygon', asset: 'USDC' }] })));
   await page.route('**/personal/api/conversion/orders', (r) => r.fulfill(json({ data: [] })));
   await page.route('**/personal/api/wallets', (r) => r.fulfill(json({ data: [{ id: 'cwa_' + 'b'.repeat(32), address: linked, managed: false }] })));
+  await page.route('**/personal/api/conversion/limits*', (r) => r.fulfill(json({ supported: true, min: 1000, max: 500000, currency: 'NGN' })));
+  await page.route('**/personal/api/conversion/kyc', (r) => r.fulfill(json({ ready: true, support_required: false, kyc_url: null })));
   await page.goto('/personal/deposit');
   await expect(page.getByRole('heading', { name: 'Your address' })).toBeVisible();
   await page.getByRole('button', { name: 'Bank / card', exact: true }).click();
