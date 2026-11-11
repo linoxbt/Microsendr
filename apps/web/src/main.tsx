@@ -2,11 +2,11 @@ import { Moon, Sun } from 'lucide-react';
 import React, { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@fontsource-variable/dm-sans';
-// Stylesheet order matches the original cascade; Personal JS is lazy-loaded below.
+// Stylesheet order matches the original cascade; Personal JS is lazy-loaded below and
+// brings the app stylesheet (consumer.css) with it, so the landing page never loads it.
 import './base.css';
 import { LandingPage } from './landing.js';
 import './personal.css';
-import './consumer.css';
 import './roots.css';
 import { RootsMark, RootsWordmark } from './roots-logo.js';
 

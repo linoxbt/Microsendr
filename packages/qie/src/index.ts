@@ -34,6 +34,10 @@ const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a
 export class QieEvidenceMismatch extends QieRpcError {}
 // eth_chainId is fixed per endpoint; verify once per RPC URL and process.
 const verifiedEndpoints = new Set<string>();
+// Balance reads are polled by every open app. Identical reads within a few seconds share
+// one RPC call (including one already in flight), per endpoint and process.
+const READ_TTL_MS = 3000;
+const recentReads = new Map<string, { at: number; value: Promise<unknown> }>();
 
 export class QieClient implements ChainSettlementAdapter {
   readonly network = QIE_NETWORK;
@@ -65,6 +69,22 @@ export class QieClient implements ChainSettlementAdapter {
     return (body as { result: T }).result;
   }
 
+  /** A latest-state read that may be shared for READ_TTL_MS; only with the real fetch. */
+  private read<T>(method: string, params: unknown[] = []): Promise<T> {
+    if (this.request !== fetch) return this.rpc<T>(method, params);
+    const key = `${this.rpcUrl}|${method}|${JSON.stringify(params)}`;
+    const now = Date.now();
+    const hit = recentReads.get(key);
+    if (hit && now - hit.at < READ_TTL_MS) return hit.value as Promise<T>;
+    if (recentReads.size > 2000)
+      for (const [k, v] of recentReads) if (now - v.at >= READ_TTL_MS) recentReads.delete(k);
+    const value = this.rpc<T>(method, params);
+    recentReads.set(key, { at: now, value });
+    // A failed read is never served to the next caller.
+    value.catch(() => { if (recentReads.get(key)?.value === value) recentReads.delete(key); });
+    return value;
+  }
+
   async assertMainnet(): Promise<void> {
     if (this.request === fetch && verifiedEndpoints.has(this.rpcUrl)) return;
     const chainId = await this.rpc<string>('eth_chainId');
@@ -86,8 +106,8 @@ export class QieClient implements ChainSettlementAdapter {
     if (!addressPattern.test(address)) throw new QieRpcError('Invalid QIE address');
     await this.assertMainnet();
     const [rawBalance, rawBlock] = await Promise.all([
-      this.rpc<string>('eth_getBalance', [address, 'latest']),
-      this.rpc<string>('eth_blockNumber'),
+      this.read<string>('eth_getBalance', [address.toLowerCase(), 'latest']),
+      this.read<string>('eth_blockNumber'),
     ]);
     if (!/^0x[0-9a-f]+$/i.test(rawBalance) || !/^0x[0-9a-f]+$/i.test(rawBlock))
       throw new QieRpcError('Invalid balance response');
@@ -99,8 +119,8 @@ export class QieClient implements ChainSettlementAdapter {
     await this.assertMainnet();
     const data = `0x70a08231${address.slice(2).toLowerCase().padStart(64, '0')}`;
     const [rawBalance, rawBlock] = await Promise.all([
-      this.rpc<string>('eth_call', [{ to: QIE_QUSDC_CONTRACT, data }, 'latest']),
-      this.rpc<string>('eth_blockNumber'),
+      this.read<string>('eth_call', [{ to: QIE_QUSDC_CONTRACT, data }, 'latest']),
+      this.read<string>('eth_blockNumber'),
     ]);
     if (!/^0x[0-9a-f]{64}$/i.test(rawBalance) || !/^0x[0-9a-f]+$/i.test(rawBlock))
       throw new QieRpcError('Invalid QUSDC balance response');

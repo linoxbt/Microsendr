@@ -19,6 +19,11 @@ each service directly; keep the two in step.
 
 The API runs in the production environment at `roots-api.up.railway.app`.
 
+Run one `api` replica. The general per-client request limit is kept in memory, so
+with several replicas it would apply per replica. The limits that guard against guessing
+(sign-in, email codes, password, payment PIN) are kept in PostgreSQL and hold
+across replicas either way; move the general limit to a shared store before scaling out.
+
 ## Variables
 
 Set on both `api` and `worker` (Railway variable references keep them in step):

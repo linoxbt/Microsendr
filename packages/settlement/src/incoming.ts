@@ -64,20 +64,26 @@ export async function* explorerCandidates(address: string, asset: IncomingAsset,
  * transfers. Only addresses currently linked or managed are scanned, starting from
  * when they joined an account. The cursor advances only after a scan with no errors.
  */
+let lastSeed = 0;
 export async function indexOneIncomingWallet(client = new QieClient(), request: typeof fetch = fetch) {
-  // Make sure every current address has a cursor, then claim the most overdue one.
-  await pool.query(`INSERT INTO chain_incoming_cursors(network,address,asset)
+  // Make sure every current address has a cursor (every 30 s, or when nothing is due, so
+  // a new wallet is picked up promptly), then claim the most overdue one.
+  const seed = () => pool.query(`INSERT INTO chain_incoming_cursors(network,address,asset)
     SELECT $1, w.address, a.asset FROM (
       SELECT address FROM personal_chain_wallets WHERE status='active' AND network=$1
       UNION SELECT address FROM personal_managed_wallets WHERE network=$1) w
     CROSS JOIN unnest($2::text[]) AS a(asset)
     ON CONFLICT DO NOTHING`, [QIE_NETWORK, ASSETS]);
-  const due = (await pool.query(`UPDATE chain_incoming_cursors c SET next_poll_at=now()+interval '5 minutes'
+  const claim = async () => (await pool.query(`UPDATE chain_incoming_cursors c SET next_poll_at=now()+interval '5 minutes'
     WHERE (network,address,asset)=(SELECT network,address,asset FROM chain_incoming_cursors
       WHERE next_poll_at<=now() AND (EXISTS(SELECT 1 FROM personal_chain_wallets w WHERE w.address=chain_incoming_cursors.address AND w.status='active')
         OR EXISTS(SELECT 1 FROM personal_managed_wallets m WHERE m.address=chain_incoming_cursors.address))
       ORDER BY next_poll_at FOR UPDATE SKIP LOCKED LIMIT 1)
     RETURNING c.*`)).rows[0];
+  let seeded = false;
+  if (Date.now() - lastSeed > 30_000) { lastSeed = Date.now(); await seed(); seeded = true; }
+  let due = await claim();
+  if (!due && !seeded) { lastSeed = Date.now(); await seed(); due = await claim(); }
   if (!due) return false;
   const address = due.address as string, asset = due.asset as IncomingAsset;
   try {

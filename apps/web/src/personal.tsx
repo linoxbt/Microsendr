@@ -1,3 +1,4 @@
+import './consumer.css';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowDownLeft,
