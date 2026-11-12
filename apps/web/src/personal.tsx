@@ -30,6 +30,9 @@ import {
   Landmark,
   Inbox,
   AtSign,
+  Phone,
+  Wifi,
+  Gift,
   LockKeyhole,
   Moon,
   Sun,
@@ -49,6 +52,7 @@ import { ConsumerChainWallet } from './consumer-chain-wallet.js';
 import { AssetDetail, AssetIcon, assetAmount, assetDefaults, type PersonalAsset } from './personal-assets.js';
 import { formatAtomic } from './money.js';
 import { ConversionPanel } from './conversion-panel.js';
+import { BillReceipt, BillsFlow, billTitles } from './bills.js';
 import { ToastProvider, useToast } from './toast.js';
 import { type PaymentAuthStatus } from './payment-security.js';
 
@@ -154,15 +158,19 @@ function PersonalSkeleton() {
 const actions = [
   ['deposit', 'Add money', Plus],
   ['send', 'Send', ArrowUpRight],
+  ['airtime', 'Airtime', Phone],
+  ['data', 'Data', Wifi],
+  ['giftcards', 'Subscriptions & gift cards', Gift],
+  ['assets', 'Assets', Coins],
   ['convert', 'Convert', ArrowLeftRight],
   ['withdraw', 'Withdraw', ArrowDownLeft],
 ] as const;
 // Home shortcuts: round icons under the balance card.
 const shortcuts = [
-  ['/personal/deposit/crypto', 'Receive', QrCode, 'blue'],
-  ['/personal/convert', 'Convert', ArrowLeftRight, 'amber'],
-  ['/personal/assets', 'Assets', Coins, 'green'],
-  ['/personal/withdraw', 'Withdraw', Landmark, 'slate'],
+  ['/personal/airtime', 'Airtime', Phone, 'blue'],
+  ['/personal/data', 'Data', Wifi, 'amber'],
+  ['/personal/giftcards', 'Subscriptions', Gift, 'green'],
+  ['/personal/deposit/crypto', 'Receive', QrCode, 'slate'],
 ] as const;
 
 export function PersonalPage({
@@ -193,6 +201,7 @@ export function PersonalPage({
     [refreshing, setRefreshing] = useState(false),
     [signInNotice, setSignInNotice] = useState('');
   const [copied, setCopied] = useState(false);
+  const [payTo, setPayTo] = useState('');
   const toastRef = useRef<(message: string) => void>(() => undefined);
   const toast = (message: string) => toastRef.current(message);
   const rawTab = path.split('/')[2]?.split('?')[0] || 'home';
@@ -200,7 +209,7 @@ export function PersonalPage({
   const assetCode = path.split('/')[3]?.split('?')[0]?.toUpperCase();
   const navTab = tab === 'assets' ? 'home' : ['profile', 'identity', 'security', 'onboarding'].includes(tab)
     ? 'profile'
-    : ['deposit', 'withdraw', 'send', 'convert'].includes(tab)
+    : ['deposit', 'withdraw', 'send', 'convert', 'airtime', 'data', 'giftcards', 'bills'].includes(tab)
       ? 'payments'
       : tab;
   // Balances and activity load on their own: a slow or failing chain read never blocks
@@ -589,6 +598,29 @@ export function PersonalPage({
                     <button onClick={() => go('/personal/send')}>Send <ArrowUpRight size={18} /></button>
                   </div>
                 </section>
+                <section className="rt-pay" aria-labelledby="pay-card-title">
+                  <h2 id="pay-card-title">Pay anyone on Microsendr</h2>
+                  <form
+                    className="rt-pay-search"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      const value = payTo.trim();
+                      go(value && payeePattern.test(value) ? `/personal/send/${value.startsWith('0x') ? 'address' : 'user'}/qie?to=${encodeURIComponent(value)}` : '/personal/send');
+                    }}
+                  >
+                    <Search size={18} aria-hidden="true" />
+                    <input
+                      value={payTo}
+                      onChange={(e) => setPayTo(e.target.value)}
+                      placeholder="@username or 0x… address"
+                      aria-label="Pay a Microsendr @username or QIE address"
+                      autoComplete="off"
+                      autoCapitalize="none"
+                      spellCheck={false}
+                    />
+                    <button aria-label="Continue to payment"><ArrowRight size={18} /></button>
+                  </form>
+                </section>
                 <nav className="rt-shortcuts" aria-label="Shortcuts">
                   {shortcuts.map(([path, label, Icon, tone]) => (
                     <button key={label} onClick={() => go(path)}>
@@ -671,6 +703,18 @@ export function PersonalPage({
               <OptionList label="Payments" options={actions.map(([key, label, Icon]) => ({
                 key, title: label, icon: <Icon size={22} />, onClick: () => go('/personal/' + key),
               }))} />
+            </div>
+          )}
+          {['airtime', 'data', 'giftcards'].includes(tab) && (
+            <div className="rt-page">
+              <PageBar title={billTitles[tab === 'giftcards' ? 'giftcard' : tab as 'airtime' | 'data']} back={() => go('/personal/home')} />
+              <BillsFlow key={tab} kind={tab === 'giftcards' ? 'giftcard' : tab as 'airtime' | 'data'} csrf={csrf} profile={p} go={go} />
+            </div>
+          )}
+          {tab === 'bills' && assetCode && (
+            <div className="rt-page">
+              <PageBar title="Purchase" back={() => go('/personal/home')} />
+              <BillReceipt id={path.split('/')[3].split('?')[0]} go={go} />
             </div>
           )}
           {['deposit', 'send', 'withdraw', 'convert'].includes(tab) && (
@@ -830,6 +874,10 @@ export function PersonalPage({
             'identity',
             'onboarding',
             'assets',
+            'airtime',
+            'data',
+            'giftcards',
+            'bills',
           ].includes(tab) && (
             <section className="fin-panel">
               <h1>Page not found</h1>

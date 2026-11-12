@@ -3090,14 +3090,15 @@
 /* Option lists */
 .rt-options {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 .rt-option {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   width: 100%;
-  padding: 16px;
+  padding: 10px 14px;
+  min-height: 58px;
   border: 1px solid var(--fin-line);
   border-radius: 16px;
   background: var(--fin-panel);
@@ -3124,16 +3125,27 @@
   display: grid;
   place-items: center;
   flex: none;
-  width: 48px;
-  height: 48px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background: var(--fin-soft);
   color: var(--fin-ink);
 }
 .rt-option-icon .fin-asset-icon {
-  width: 48px;
-  height: 48px;
-  flex: 0 0 48px;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+}
+.rt-option-icon .fin-asset-icon {
+  overflow: hidden;
+}
+.rt-option-icon .fin-asset-icon:not(.fin-asset-qusdc) img {
+  width: 28px;
+  height: 28px;
+}
+.rt-option-icon svg {
+  width: 19px;
+  height: 19px;
 }
 .rt-option-text {
   flex: 1;
@@ -3145,11 +3157,11 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
 }
 .rt-option-text > small {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--fin-muted);
 }
 .rt-badge {
@@ -3291,4 +3303,228 @@
   width: 60px;
   height: 60px;
   border-radius: 50%;
+}
+
+/* Pay box on home: paste an @username or address */
+.rt-pay {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--fin-line);
+  border-radius: 18px;
+  background: var(--fin-panel);
+}
+.fin-app .rt-pay h2 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.rt-pay-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 4px 4px 14px;
+  border: 1px solid var(--fin-line);
+  border-radius: 14px;
+  background: var(--fin-input);
+}
+.rt-pay-search:focus-within {
+  border-color: var(--fin-blue);
+}
+.rt-pay-search > svg {
+  flex: none;
+  color: var(--fin-muted);
+}
+.fin-app .rt-pay-search input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 0;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none;
+  font-size: 15px;
+}
+.rt-pay-search button {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 11px;
+  background: var(--fin-blue);
+  color: #fff;
+}
+
+/* Airtime, data, subscriptions */
+.rt-bills {
+  display: grid;
+  gap: 14px;
+}
+.rt-bill-picked {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--fin-line);
+  border-radius: 12px;
+  background: var(--fin-soft);
+}
+.rt-bill-picked img {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  object-fit: contain;
+  background: #fff;
+}
+.rt-bill-picked b {
+  flex: 1;
+  font-size: 14px;
+}
+.rt-amounts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.rt-amounts button,
+.rt-plan {
+  min-height: 44px;
+  border: 1px solid var(--fin-line);
+  border-radius: 12px;
+  background: var(--fin-panel);
+  color: var(--fin-ink);
+  font-weight: 600;
+  font-size: 14px;
+}
+.rt-amounts button.active,
+.rt-plan.active {
+  border-color: var(--fin-blue);
+  background: var(--fin-soft);
+  box-shadow: inset 0 0 0 1px var(--fin-blue);
+}
+.rt-plans {
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.rt-plan {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  text-align: left;
+}
+.rt-plan span {
+  font-weight: 500;
+  font-size: 13px;
+}
+.rt-country {
+  justify-self: start;
+}
+.rt-brand-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.rt-brand {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 14px 8px;
+  border: 1px solid var(--fin-line);
+  border-radius: 14px;
+  background: var(--fin-panel);
+  color: var(--fin-ink);
+}
+.rt-brand:hover {
+  border-color: var(--fin-blue);
+}
+.rt-brand img,
+.rt-brand-fallback {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  object-fit: contain;
+  background: #fff;
+}
+.rt-brand-fallback {
+  display: grid;
+  place-items: center;
+  background: var(--fin-soft);
+  font-weight: 700;
+  font-size: 20px;
+}
+.rt-brand b {
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+}
+.rt-bill-total {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 18px 0 6px;
+}
+.rt-bill-total span {
+  color: var(--fin-muted);
+  font-size: 13px;
+}
+.rt-bill-total strong {
+  font-size: 30px;
+  letter-spacing: -0.02em;
+}
+.rt-receipt {
+  justify-items: center;
+  text-align: center;
+}
+.rt-receipt .fin-send-facts {
+  width: 100%;
+}
+.rt-receipt-icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--fin-soft);
+  color: var(--fin-blue);
+}
+.rt-receipt-icon.done {
+  background: #e7f4ea;
+  color: #2f7d4f;
+}
+.fin-app .rt-receipt h2 {
+  margin: 4px 0 0;
+  font-size: 20px;
+}
+.rt-receipt > p {
+  margin: 0;
+  color: var(--fin-muted);
+  font-size: 14px;
+}
+.rt-code {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px 12px;
+  width: 100%;
+  padding: 14px;
+  border: 1px dashed var(--fin-blue);
+  border-radius: 14px;
+  text-align: left;
+}
+.rt-code span {
+  color: var(--fin-muted);
+  font-size: 12px;
+}
+.rt-code code {
+  font-size: 16px;
+  font-weight: 600;
+  word-break: break-all;
+}
+.rt-code button {
+  grid-column: 1 / -1;
+  justify-self: start;
 }

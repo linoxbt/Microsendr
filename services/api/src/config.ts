@@ -73,6 +73,8 @@ export function configReport() {
   if (!env.DIDIT_API_KEY || !env.DIDIT_WEBHOOK_SECRET) optional.push('identity verification (DIDIT_API_KEY, DIDIT_WEBHOOK_SECRET)');
   if (!env.FONBNK_CLIENT_ID || !env.FONBNK_SIGNATURE_SECRET || !env.FONBNK_WEBHOOK_SECRET) optional.push('naira purchases (FONBNK_*)');
   if (!env.PRIVY_APP_ID || !env.PRIVY_APP_SECRET) optional.push('account wallets (PRIVY_APP_ID, PRIVY_APP_SECRET)');
+  if (!env.RELOADLY_CLIENT_ID || !env.RELOADLY_CLIENT_SECRET || !env.BILLS_TREASURY_ADDRESS)
+    optional.push('airtime, data and gift cards (RELOADLY_CLIENT_ID, RELOADLY_CLIENT_SECRET, BILLS_TREASURY_ADDRESS)');
   return { ready: missing.length === 0, missing, optional };
 }
 

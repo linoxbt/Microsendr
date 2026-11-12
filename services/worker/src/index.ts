@@ -1,6 +1,8 @@
 import { writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { cleanupExpired } from './cleanup.js';
+import { reconcileOneBillOrder } from '../../api/src/bills.js';
+import '../../api/src/reloadly.js';
 import { runQueues } from './queues.js';
 import { pool } from '../../../packages/database/src/index.js';
 import { runRailOnce } from '../../../packages/rails/src/index.js';
@@ -41,12 +43,13 @@ try {
     await reconcileOnePersonalPaystack();
     await indexOneIncomingWallet();
     await reconcileOneConversionOrder();
+    await reconcileOneBillOrder();
     await cleanupExpired(true);
   } else {
     // Microsendr jobs always run; the retired business platform and the Paystack sandbox only where enabled.
     const queues: Record<string, () => Promise<boolean>> = {
       chain: reconcileOneChainSettlement, kyc: () => reconcileOneDiditSession(),
-      incoming: () => indexOneIncomingWallet(), conversion: () => reconcileOneConversionOrder(), cleanup: () => cleanupExpired(),
+      incoming: () => indexOneIncomingWallet(), conversion: () => reconcileOneConversionOrder(), bills: () => reconcileOneBillOrder(), cleanup: () => cleanupExpired(),
       ...(legacyPlatformEnabled() ? { dispatch, rail, webhooks } : {}),
       ...(sandboxFixturesEnabled() ? { paystack: () => reconcileOnePersonalPaystack() } : {}),
     };

@@ -18,6 +18,8 @@ import { registerP2P, rememberPayee } from './p2p.js';
 import { registerPaymentAuth } from './payment-auth.js';
 import { rememberDevice } from './devices.js';
 import { registerConversion } from './conversion.js';
+import { registerBills, type BillsProvider } from './bills.js';
+import './reloadly.js';
 import type { FonbnkClient } from '../../../connectors/fonbnk/src/index.js';
 import { authSecret, requireOrigin, sandboxFixturesEnabled, secureCookie } from './config.js';
 
@@ -31,6 +33,8 @@ export interface PersonalOptions {
   codeSecret?: string;
   sandboxFixtures?: boolean;
   fonbnkClient?: FonbnkClient;
+  billsProvider?: BillsProvider;
+  billsPayment?: Parameters<typeof registerBills>[3];
 }
 
 export { mailer } from './email.js';
@@ -89,6 +93,7 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
   registerP2P(app, required);
   registerPaymentAuth(app, required);
   registerConversion(app, required, options.fonbnkClient);
+  registerBills(app, required, options.billsProvider, options.billsPayment);
   app.get('/personal/api/auth/config', async () => ({ enabled: true, method: 'password', email_verification_available: !!secret && !!sendCode }));
   app.get('/personal/api/auth/legacy-config', async () => ({ enabled: await verifier.ready(), app_id: privyConfig.appId, client_id: privyConfig.clientId ?? null }));
   app.post('/personal/api/auth/privy', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {

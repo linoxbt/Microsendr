@@ -114,7 +114,12 @@ test('home is the balance card, shortcuts and activity; recent payees wait on th
   await page.goto('/personal/home');
   await expect(page.getByRole('region', { name: 'Your wallet overview' })).toContainText('$12.50');
   await expect(page.getByRole('group', { name: 'Money actions' }).getByRole('button')).toHaveText(['Add money', 'Send']);
-  await expect(page.getByRole('navigation', { name: 'Shortcuts' }).getByRole('button')).toHaveText(['Receive', 'Convert', 'Assets', 'Withdraw']);
+  await expect(page.getByRole('navigation', { name: 'Shortcuts' }).getByRole('button')).toHaveText(['Airtime', 'Data', 'Subscriptions', 'Receive']);
+  // The pay box sends straight to the send form with the recipient filled in.
+  await page.getByLabel('Pay a Microsendr @username or QIE address').fill('@ada_okafor');
+  await page.getByRole('button', { name: 'Continue to payment' }).click();
+  await expect(page).toHaveURL(/\/personal\/send\/user\/qie\?to=%40ada_okafor$/);
+  await page.goto('/personal/home');
   const feed = page.getByRole('region', { name: 'Activity' });
   await expect(feed.getByRole('heading', { name: 'Today' })).toBeVisible();
   await expect(feed).toContainText('To @ada_okafor');

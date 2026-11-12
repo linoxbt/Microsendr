@@ -43,6 +43,12 @@ Set on both `api` and `worker` (Railway variable references keep them in step):
 - `FONBNK_CLIENT_ID`, `FONBNK_SIGNATURE_SECRET`, `FONBNK_WEBHOOK_SECRET`,
   `FONBNK_BASE_URL` (`https://api.fonbnk.com` for live), `FONBNK_ASSETS`
 - `QIE_RPC_URL` only to override the default QIE Mainnet RPC
+- Airtime, data and gift cards: `RELOADLY_CLIENT_ID`, `RELOADLY_CLIENT_SECRET`,
+  `RELOADLY_ENVIRONMENT` (`production` for live orders), `BILLS_TREASURY_ADDRESS` (the QIE
+  address that receives customers' QUSDC) and optionally `BILLS_FEE_PERCENT`. Set them on
+  both `api` and `worker`: the worker places orders once payments confirm. Keep the
+  Reloadly account funded; orders the provider refuses are marked `refund_due` in
+  `personal_bill_orders` for a refund from the treasury.
 
 `api` only:
 

@@ -146,7 +146,7 @@ test('custom registration, optional identity, profile editing and mobile money n
   await page.getByRole('button', { name: 'Do this later' }).click();
   await expect(page.getByRole('heading', { name: /^Good (morning|afternoon|evening), Ada$/ })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Your wallet overview' })).toContainText(`@ada_${unique}`);
-  await page.getByRole('navigation', { name: 'Shortcuts' }).getByRole('button', { name: 'Assets' }).click();
+  await page.goto('/personal/assets');
   await expect(page.getByRole('heading', { name: 'Assets' })).toBeVisible();
   await expect(page.locator('.fin-asset-row')).toHaveCount(3);
   await expect(page.locator('.fin-asset-row')).toContainText(['QIE', 'QUSDC', 'NGN']);
