@@ -1,0 +1,157 @@
+{
+  "contractName": "TestToken",
+  "sourceName": "contracts/test/TestToken.sol",
+  "compiler": "0.8.38+commit.1835d247.Emscripten.clang",
+  "abi": [
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "from",
+          "type": "address"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "value",
+          "type": "uint256"
+        }
+      ],
+      "name": "Transfer",
+      "type": "event"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "balanceOf",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "decimals",
+      "outputs": [
+        {
+          "internalType": "uint8",
+          "name": "",
+          "type": "uint8"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "name": "mint",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "name",
+      "outputs": [
+        {
+          "internalType": "string",
+          "name": "",
+          "type": "string"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "symbol",
+      "outputs": [
+        {
+          "internalType": "string",
+          "name": "",
+          "type": "string"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "name": "transfer",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x6080604052348015600f57600080fd5b506103c98061001f6000396000f3fe608060405234801561001057600080fd5b50600436106100625760003560e01c806306fdde0314610067578063313ce567146100a457806340c10f19146100be57806370a08231146100d357806395d89b4114610101578063a9059cbb14610124575b600080fd5b61008e6040518060400160405280600881526020016715195cdd081554d160c21b81525081565b60405161009b91906102a1565b60405180910390f35b6100ac600681565b60405160ff909116815260200161009b565b6100d16100cc36600461030b565b610147565b005b6100f36100e1366004610335565b60006020819052908152604090205481565b60405190815260200161009b565b61008e60405180604001604052806004815260200163151554d160e21b81525081565b61013761013236600461030b565b6101b9565b604051901515815260200161009b565b6001600160a01b0382166000908152602081905260408120805483929061016f90849061036d565b90915550506040518181526001600160a01b038316906000907fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef9060200160405180910390a35050565b336000908152602081905260408120548211156102065760405162461bcd60e51b815260206004820152600760248201526662616c616e636560c81b604482015260640160405180910390fd5b3360009081526020819052604081208054849290610225908490610380565b90915550506001600160a01b0383166000908152602081905260408120805484929061025290849061036d565b90915550506040518281526001600160a01b0384169033907fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef9060200160405180910390a35060015b92915050565b602081526000825180602084015260005b818110156102cf57602081860181015160408684010152016102b2565b506000604082850101526040601f19601f83011684010191505092915050565b80356001600160a01b038116811461030657600080fd5b919050565b6000806040838503121561031e57600080fd5b610327836102ef565b946020939093013593505050565b60006020828403121561034757600080fd5b610350826102ef565b9392505050565b634e487b7160e01b600052601160045260246000fd5b8082018082111561029b5761029b610357565b8181038181111561029b5761029b61035756fea264697066735822122021d787058d48a4ebdc1541abca3e9556499566111df06bfbd36e1aff76674d6864736f6c63430008260033",
+  "deployedBytecode": "0x608060405234801561001057600080fd5b50600436106100625760003560e01c806306fdde0314610067578063313ce567146100a457806340c10f19146100be57806370a08231146100d357806395d89b4114610101578063a9059cbb14610124575b600080fd5b61008e6040518060400160405280600881526020016715195cdd081554d160c21b81525081565b60405161009b91906102a1565b60405180910390f35b6100ac600681565b60405160ff909116815260200161009b565b6100d16100cc36600461030b565b610147565b005b6100f36100e1366004610335565b60006020819052908152604090205481565b60405190815260200161009b565b61008e60405180604001604052806004815260200163151554d160e21b81525081565b61013761013236600461030b565b6101b9565b604051901515815260200161009b565b6001600160a01b0382166000908152602081905260408120805483929061016f90849061036d565b90915550506040518181526001600160a01b038316906000907fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef9060200160405180910390a35050565b336000908152602081905260408120548211156102065760405162461bcd60e51b815260206004820152600760248201526662616c616e636560c81b604482015260640160405180910390fd5b3360009081526020819052604081208054849290610225908490610380565b90915550506001600160a01b0383166000908152602081905260408120805484929061025290849061036d565b90915550506040518281526001600160a01b0384169033907fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef9060200160405180910390a35060015b92915050565b602081526000825180602084015260005b818110156102cf57602081860181015160408684010152016102b2565b506000604082850101526040601f19601f83011684010191505092915050565b80356001600160a01b038116811461030657600080fd5b919050565b6000806040838503121561031e57600080fd5b610327836102ef565b946020939093013593505050565b60006020828403121561034757600080fd5b610350826102ef565b9392505050565b634e487b7160e01b600052601160045260246000fd5b8082018082111561029b5761029b610357565b8181038181111561029b5761029b61035756fea264697066735822122021d787058d48a4ebdc1541abca3e9556499566111df06bfbd36e1aff76674d6864736f6c63430008260033",
+  "standardJsonInput": {
+    "language": "Solidity",
+    "sources": {
+      "contracts/test/TestToken.sol": {
+        "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.24;\n\n/// @dev Minimal 6-decimal ERC-20 used only by the tests (stands in for QUSDC).\ncontract TestToken {\n    string public constant name = \"Test USD\";\n    string public constant symbol = \"TUSD\";\n    uint8 public constant decimals = 6;\n    mapping(address => uint256) public balanceOf;\n    event Transfer(address indexed from, address indexed to, uint256 value);\n\n    function mint(address to, uint256 amount) external {\n        balanceOf[to] += amount;\n        emit Transfer(address(0), to, amount);\n    }\n\n    function transfer(address to, uint256 amount) external returns (bool) {\n        require(balanceOf[msg.sender] >= amount, \"balance\");\n        balanceOf[msg.sender] -= amount;\n        balanceOf[to] += amount;\n        emit Transfer(msg.sender, to, amount);\n        return true;\n    }\n}\n"
+      }
+    },
+    "settings": {
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "evmVersion": "paris",
+      "outputSelection": {
+        "*": {
+          "*": [
+            "abi",
+            "evm.bytecode"
+          ]
+        }
+      }
+    }
+  }
+}

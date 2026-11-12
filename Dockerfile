@@ -21,6 +21,8 @@ COPY --from=build --chown=node:node /app/node_modules node_modules
 COPY --from=build --chown=node:node /app/packages packages
 COPY --from=build --chown=node:node /app/connectors connectors
 COPY --from=build --chown=node:node /app/services services
+# The MicrosendrPay ABI, read by the API and worker.
+COPY --from=build --chown=node:node /app/contracts/artifacts contracts/artifacts
 COPY --from=build --chown=node:node /app/apps/web/dist apps/web/dist
 USER node
 # compose.public.yaml sets PORT=4312; the code default is 4310.

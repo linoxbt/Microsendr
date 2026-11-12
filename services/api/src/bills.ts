@@ -7,6 +7,7 @@ import { PaymentError } from '../../../packages/payments/src/errors.js';
 import { QUSDC_DECIMALS } from '../../../packages/qie/src/index.js';
 import { approveSend, sendApprovalSchema } from './payment-auth.js';
 import { managedTransfersEnabled, sendFromManagedWallet } from './managed-transfer.js';
+import { configuredEscrow, type Escrow } from './escrow.js';
 
 type Person = { user_id: string; account_id: string; email: string | null };
 
@@ -51,7 +52,10 @@ export class BillsProviderError extends Error {
 
 // Brands people subscribe to or top up regularly; the rest of the catalogue is left out.
 const SUBSCRIPTION_BRANDS = /netflix|spotify|apple|itunes|google play|playstation|xbox|steam|amazon|youtube|disney|uber|nintendo|roblox/i;
+/** Where customers pay: the MicrosendrPay escrow contract when configured, else the treasury. */
 export const billsTreasury = () => {
+  const escrow = configuredEscrow();
+  if (escrow) return escrow.address;
   const address = process.env.BILLS_TREASURY_ADDRESS ?? '';
   return /^0x[a-fA-F0-9]{40}$/.test(address) ? getAddress(address) : null;
 };
@@ -65,7 +69,7 @@ export function priceOf(costUsd: number) {
 }
 const phoneSchema = z.string().trim().regex(/^\+?[0-9]{7,15}$/, 'Enter a phone number with its country code').transform((v) => v.replace(/^\+/, ''));
 const countrySchema = z.string().regex(/^[A-Z]{2}$/);
-const FINAL = ['delivered', 'payment_failed', 'refund_due'];
+const FINAL = ['delivered', 'payment_failed', 'refund_due', 'refunded'];
 
 function publicOrder(row: Record<string, any>, codes?: { code: string; pin: string | null }[]) {
   return {
@@ -74,6 +78,7 @@ function publicOrder(row: Record<string, any>, codes?: { code: string; pin: stri
     face: { amount: Number(row.face_amount), currency: row.face_currency },
     price_atomic: String(row.price_atomic), fee_usd: Number(row.fee_usd), settlement_id: row.settlement_id,
     environment: row.provider_environment, created_at: row.created_at, updated_at: row.updated_at,
+    escrow: row.escrow_state ? { state: row.escrow_state, hold_tx: row.escrow_hold_tx, final_tx: row.escrow_final_tx } : null,
     ...(codes ? { codes } : {}),
   };
 }
@@ -256,13 +261,26 @@ export function setBillsProviderFactory(make: () => BillsProvider | null) { fact
  * as the provider reference (looked up first, so a retry never buys twice); a payment that
  * failed on chain closes the order; a definite provider refusal marks it for refund.
  */
-export async function reconcileOneBillOrder(override?: BillsProvider) {
+export async function reconcileOneBillOrder(override?: BillsProvider, escrowOverride?: Escrow | null) {
   const provider = override ?? billsProvider();
+  const escrow = escrowOverride === undefined ? configuredEscrow() : escrowOverride;
   const row = (await pool.query(`UPDATE personal_bill_orders SET next_check_at=now()+interval '1 minute',attempts=attempts+1,updated_at=now()
-    WHERE id=(SELECT id FROM personal_bill_orders WHERE status IN ('paid','fulfilling') AND next_check_at<=now()
-      ORDER BY next_check_at,id FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING *`)).rows[0];
+    WHERE id=(SELECT id FROM personal_bill_orders WHERE (status IN ('paid','fulfilling') OR (escrow_state='held' AND status IN ('delivered','refund_due')))
+      AND next_check_at<=now() ORDER BY next_check_at,id FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING *`)).rows[0];
   if (!row) return false;
-  const settlement = (await pool.query('SELECT status FROM chain_settlements WHERE id=$1', [row.settlement_id])).rows[0];
+  const settlement = (await pool.query('SELECT status,source_address,destination_address FROM chain_settlements WHERE id=$1', [row.settlement_id])).rows[0];
+  // Paid into the escrow contract: the operator records it, then settles or refunds it on chain.
+  const escrowed = !!escrow && !!settlement && settlement.destination_address?.toLowerCase() === escrow.address.toLowerCase();
+  if (row.escrow_state === 'held' && ['delivered', 'refund_due'].includes(row.status)) {
+    if (!escrow || !escrowed) return true;
+    const onChain = await escrow.state(row.id);
+    const delivered = row.status === 'delivered';
+    const tx = onChain === 'held' ? await (delivered ? escrow.settle(row.id) : escrow.refund(row.id)) : null;
+    const final = onChain === 'held' ? (delivered ? 'settled' : 'refunded') : onChain;
+    await pool.query(`UPDATE personal_bill_orders SET escrow_state=$2,escrow_final_tx=COALESCE($3,escrow_final_tx),
+      status=CASE WHEN $2='refunded' THEN 'refunded' ELSE status END,updated_at=now() WHERE id=$1`, [row.id, final, tx]);
+    return true;
+  }
   if (!settlement || ['failed', 'expired', 'mismatched'].includes(settlement.status)) {
     await pool.query("UPDATE personal_bill_orders SET status='payment_failed',error='payment_not_confirmed',updated_at=now() WHERE id=$1 AND status IN ('paid','fulfilling')", [row.id]);
     return true;
@@ -271,16 +289,24 @@ export async function reconcileOneBillOrder(override?: BillsProvider) {
     await pool.query("UPDATE personal_bill_orders SET next_check_at=now()+interval '15 seconds' WHERE id=$1", [row.id]);
     return true;
   }
+  if (escrowed && !row.escrow_state) {
+    // Record the confirmed payment against this order before anything is bought with it.
+    const onChain = await escrow!.state(row.id);
+    const tx = onChain === 'none' ? await escrow!.hold(row.id, settlement.source_address, BigInt(row.price_atomic)) : null;
+    await pool.query("UPDATE personal_bill_orders SET escrow_state=$2,escrow_hold_tx=COALESCE($3,escrow_hold_tx),next_check_at=now(),updated_at=now() WHERE id=$1",
+      [row.id, onChain === 'none' ? 'held' : onChain, tx]);
+    return true;
+  }
   if (!provider || (provider.sandbox ? 'sandbox' : 'production') !== row.provider_environment) {
     await pool.query("UPDATE personal_bill_orders SET next_check_at=now()+interval '10 minutes' WHERE id=$1", [row.id]);
     return true;
   }
   const finish = async (order: ProviderOrder) => {
     if (order.status === 'SUCCESSFUL')
-      await pool.query("UPDATE personal_bill_orders SET status='delivered',provider_transaction_id=$2,delivery=$3,error=NULL,updated_at=now() WHERE id=$1",
+      await pool.query("UPDATE personal_bill_orders SET status='delivered',provider_transaction_id=$2,delivery=$3,error=NULL,next_check_at=now(),updated_at=now() WHERE id=$1",
         [row.id, order.transactionId, JSON.stringify(order.details)]);
     else if (order.status === 'FAILED')
-      await pool.query("UPDATE personal_bill_orders SET status='refund_due',provider_transaction_id=$2,error='provider_failed',updated_at=now() WHERE id=$1",
+      await pool.query("UPDATE personal_bill_orders SET status='refund_due',provider_transaction_id=$2,error='provider_failed',next_check_at=now(),updated_at=now() WHERE id=$1",
         [row.id, order.transactionId]);
     else
       await pool.query("UPDATE personal_bill_orders SET status='fulfilling',provider_transaction_id=$2,next_check_at=now()+interval '30 seconds',updated_at=now() WHERE id=$1",
@@ -294,7 +320,7 @@ export async function reconcileOneBillOrder(override?: BillsProvider) {
       const existing = row.kind === 'giftcard' ? await provider.findGiftCardOrder(row.id, txId) : await provider.findTopup(row.id, txId);
       if (existing) { await finish(existing); return true; }
       // No trace of it after repeated checks: hold it for a refund rather than risk buying twice.
-      if (row.attempts > 20) await pool.query("UPDATE personal_bill_orders SET status='refund_due',error='not_confirmed_by_provider',updated_at=now() WHERE id=$1", [row.id]);
+      if (row.attempts > 20) await pool.query("UPDATE personal_bill_orders SET status='refund_due',error='not_confirmed_by_provider',next_check_at=now(),updated_at=now() WHERE id=$1", [row.id]);
       else await pool.query("UPDATE personal_bill_orders SET next_check_at=now()+interval '1 minute' WHERE id=$1", [row.id]);
       return true;
     }
@@ -308,7 +334,7 @@ export async function reconcileOneBillOrder(override?: BillsProvider) {
     await finish(placed);
   } catch (error) {
     if (error instanceof BillsProviderError && error.definite) {
-      await pool.query("UPDATE personal_bill_orders SET status='refund_due',error=$2,updated_at=now() WHERE id=$1", [row.id, error.code]);
+      await pool.query("UPDATE personal_bill_orders SET status='refund_due',error=$2,next_check_at=now(),updated_at=now() WHERE id=$1", [row.id, error.code]);
       return true;
     }
     // Unclear (timeout, 5xx): the next pass looks the reference up before trying again.

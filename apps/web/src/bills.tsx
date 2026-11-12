@@ -11,14 +11,15 @@ type Operator = { id: number; name: string; logo: string | null; currency: strin
 type Card = { id: number; name: string; brand: string; logo: string | null; currency: string; denomination: 'RANGE' | 'FIXED'; fixed: number[]; min: number | null; max: number | null };
 type Quote = { product_name: string; face: { amount: number; currency: string }; fee_usd: number; price_atomic: string; pay_to: string };
 type Order = { id: string; kind: Kind; status: string; product_name: string; recipient: string | null; face: { amount: number; currency: string };
-  price_atomic: string; environment: string; created_at: string; codes?: { code: string; pin: string | null }[]; codes_unavailable?: boolean };
+  price_atomic: string; environment: string; created_at: string; codes?: { code: string; pin: string | null }[]; codes_unavailable?: boolean;
+  escrow?: { state: 'held' | 'settled' | 'refunded'; hold_tx: string | null; final_tx: string | null } | null };
 
 const money = (amount: number, currency: string) =>
   currency === 'NGN' ? `₦${amount.toLocaleString('en-US')}` : `${amount.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${currency}`;
 const qusdc = (atomic: string) => `${formatAtomic(atomic, 6)} QUSDC`;
 const statusText: Record<string, string> = {
   paying: 'Paying', paid: 'Payment confirming', fulfilling: 'Delivering', delivered: 'Delivered',
-  payment_failed: 'Payment did not go through', refund_due: 'Refund on the way',
+  payment_failed: 'Payment did not go through', refund_due: 'Refund on the way', refunded: 'Refunded',
 };
 const AIRTIME_AMOUNTS = [100, 200, 500, 1000, 2000, 5000];
 const titles: Record<Kind, string> = { airtime: 'Airtime', data: 'Data', giftcard: 'Subscriptions & gift cards' };
@@ -200,7 +201,7 @@ export function BillReceipt({ id, go }: { id: string; go: (path: string) => void
     const load = () => consumerRequest<Order>(`bills/orders/${id}`).then((o) => {
       if (stop) return;
       setOrder(o);
-      if (['paying', 'paid', 'fulfilling'].includes(o.status)) setTimeout(load, 4000);
+      if (['paying', 'paid', 'fulfilling', 'refund_due'].includes(o.status) || o.escrow?.state === 'held') setTimeout(load, 4000);
     }).catch((e) => setError((e as Error).message));
     void load();
     return () => { stop = true; };
@@ -216,6 +217,11 @@ export function BillReceipt({ id, go }: { id: string; go: (path: string) => void
       <div><dt>Paid</dt><dd>{qusdc(order.price_atomic)}</dd></div>
       <div><dt>Date</dt><dd>{new Date(order.created_at).toLocaleString([], { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}</dd></div>
       {order.environment === 'sandbox' && <div><dt>Mode</dt><dd>Test</dd></div>}
+      {order.escrow && <div><dt>On chain</dt><dd>
+        {order.escrow.state === 'held' ? 'Held in escrow' : order.escrow.state === 'settled' ? 'Paid from escrow' : 'Refunded from escrow'}
+        {[order.escrow.hold_tx, order.escrow.final_tx].filter(Boolean).map((tx) => <a key={tx} className="rt-tx" href={`https://mainnet.qie.digital/tx/${tx}`}
+          target="_blank" rel="noreferrer">{tx!.slice(0, 8)}…</a>)}
+      </dd></div>}
     </dl>
     {order.codes?.map((c, i) => <div className="rt-code" key={i}>
       <span>Code</span><code>{c.code}</code>
@@ -225,7 +231,8 @@ export function BillReceipt({ id, go }: { id: string; go: (path: string) => void
       </button>
     </div>)}
     {order.codes_unavailable && <p className="fin-small">The code is on its way to your email.</p>}
-    {order.status === 'refund_due' && <p className="fin-small">The provider could not complete this. Your QUSDC will be returned to your wallet.</p>}
+    {order.status === 'refund_due' && <p className="fin-small">The provider could not complete this. Your QUSDC is on its way back to your wallet.</p>}
+    {order.status === 'refunded' && <p className="fin-small">Your QUSDC was returned to your wallet.</p>}
     <button className="fin-text" type="button" onClick={() => go('/personal/home')}>Done</button>
   </section>;
 }

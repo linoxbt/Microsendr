@@ -75,6 +75,7 @@ export function configReport() {
   if (!env.PRIVY_APP_ID || !env.PRIVY_APP_SECRET) optional.push('account wallets (PRIVY_APP_ID, PRIVY_APP_SECRET)');
   if (!env.RELOADLY_CLIENT_ID || !env.RELOADLY_CLIENT_SECRET || !env.BILLS_TREASURY_ADDRESS)
     optional.push('airtime, data and gift cards (RELOADLY_CLIENT_ID, RELOADLY_CLIENT_SECRET, BILLS_TREASURY_ADDRESS)');
+  if (!env.MICROSENDR_PAY_ADDRESS || !env.OPERATOR_PRIVATE_KEY) optional.push('MicrosendrPay escrow (MICROSENDR_PAY_ADDRESS, OPERATOR_PRIVATE_KEY)');
   return { ready: missing.length === 0, missing, optional };
 }
 

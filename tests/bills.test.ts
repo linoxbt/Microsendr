@@ -230,3 +230,67 @@ test('after an unclear provider error the order is only read back, never placed 
   await reconcileOneBillOrder(fake);
   assert.equal((await who.get(`/personal/api/bills/orders/${order.id}`)).json().status, 'refund_due');
 });
+
+test('with the MicrosendrPay escrow: the payment is held on chain, settled on delivery, refunded on failure', async () => {
+  const { createRequire } = await import('node:module');
+  const { readFileSync } = await import('node:fs');
+  const { createPublicClient, createWalletClient, http } = await import('viem');
+  const ganache = createRequire(import.meta.url)('ganache');
+  const keysForChain = [generatePrivateKey(), generatePrivateKey()];
+  const [deployerKey, operatorKey] = keysForChain;
+  const server = ganache.server({ logging: { quiet: true }, chain: { hardfork: 'merge', chainId: 1990 },
+    wallet: { accounts: keysForChain.map((secretKey) => ({ secretKey, balance: '0x56bc75e2d63100000' })) } });
+  await new Promise<void>((resolve, reject) => server.listen(0, (e: Error | null) => (e ? reject(e) : resolve())));
+  const rpcUrl = `http://127.0.0.1:${server.address().port}`;
+  const chain = { id: 1990, name: 'test', nativeCurrency: { name: 'QIE', symbol: 'QIE', decimals: 18 }, rpcUrls: { default: { http: [rpcUrl] } } } as const;
+  const reader = createPublicClient({ chain, transport: http(rpcUrl) });
+  const deployer = createWalletClient({ account: privateKeyToAccount(deployerKey), chain, transport: http(rpcUrl) });
+  const artifact = (name: string) => JSON.parse(readFileSync(`contracts/artifacts/${name}.json`, 'utf8'));
+  const deploy = async (name: string, args: unknown[]) => (await reader.waitForTransactionReceipt({
+    hash: await deployer.deployContract({ abi: artifact(name).abi, bytecode: artifact(name).bytecode, args } as never) })).contractAddress!;
+  const token = await deploy('TestToken', []);
+  const vault = privateKeyToAccount(generatePrivateKey()).address;
+  const contract = await deploy('MicrosendrPay', [token, vault, privateKeyToAccount(operatorKey).address]);
+  const balanceOf = (who: string) => reader.readContract({ address: token, abi: artifact('TestToken').abi, functionName: 'balanceOf', args: [who] } as never) as Promise<bigint>;
+  const mintTo = async (who: string, amount: bigint) => reader.waitForTransactionReceipt({
+    hash: await deployer.writeContract({ address: token, abi: artifact('TestToken').abi, functionName: 'mint', args: [who, amount] } as never) });
+  const previous = { address: process.env.MICROSENDR_PAY_ADDRESS, key: process.env.OPERATOR_PRIVATE_KEY, rpc: process.env.QIE_RPC_URL };
+  Object.assign(process.env, { MICROSENDR_PAY_ADDRESS: contract, OPERATOR_PRIVATE_KEY: operatorKey, QIE_RPC_URL: rpcUrl });
+  try {
+    const { configuredEscrow } = await import('../services/api/src/escrow.js');
+    const escrow = configuredEscrow()!;
+    const who = await member();
+    const body = { kind: 'airtime', country: 'NG', phone: '2348031234567', operator_id: 341, amount: 1600 };
+    const quote = (await who.post('/personal/api/bills/quote', body)).json();
+    // Customers now pay the contract, not a plain treasury address.
+    assert.equal(quote.pay_to.toLowerCase(), contract.toLowerCase());
+    const order = (await who.post('/personal/api/bills/orders', { ...body, max_price_atomic: quote.price_atomic, pin: '402913' }, { 'idempotency-key': id('key') })).json();
+    // The QUSDC transfer lands in the contract (here: minted to stand in for it), then confirms.
+    await mintTo(contract, BigInt(quote.price_atomic));
+    await settle((await pool.query('SELECT settlement_id FROM personal_bill_orders WHERE id=$1', [order.id])).rows[0].settlement_id);
+    await pool.query('UPDATE personal_bill_orders SET next_check_at=now() WHERE id=$1', [order.id]);
+    for (let i = 0; i < 4 && await reconcileOneBillOrder(fake, escrow); i++) { /* hold, deliver, settle */ }
+    const done = (await who.get(`/personal/api/bills/orders/${order.id}`)).json();
+    assert.equal(done.status, 'delivered');
+    assert.equal(done.escrow.state, 'settled');
+    assert.match(done.escrow.hold_tx, /^0x[0-9a-f]{64}$/);
+    assert.equal(await escrow.state(order.id), 'settled');
+    assert.equal(await balanceOf(vault), BigInt(quote.price_atomic));
+    // A purchase the provider refuses is refunded on chain to the wallet that paid.
+    const second = (await who.post('/personal/api/bills/orders', { ...body, amount: 800, max_price_atomic: '9000000', pin: '402913' }, { 'idempotency-key': id('key') })).json();
+    await mintTo(contract, BigInt(second.price_atomic));
+    await settle((await pool.query('SELECT settlement_id FROM personal_bill_orders WHERE id=$1', [second.id])).rows[0].settlement_id);
+    await pool.query('UPDATE personal_bill_orders SET next_check_at=now() WHERE id=$1', [second.id]);
+    await reconcileOneBillOrder(fake, escrow); // hold
+    failNext = new BillsProviderError(400, 'INVALID_PHONE', 'Invalid phone number', true);
+    await reconcileOneBillOrder(fake, escrow); // provider refuses
+    await reconcileOneBillOrder(fake, escrow); // refund
+    const refunded = (await who.get(`/personal/api/bills/orders/${second.id}`)).json();
+    assert.deepEqual([refunded.status, refunded.escrow.state], ['refunded', 'refunded']);
+    assert.equal(await balanceOf(who.account.address), BigInt(second.price_atomic));
+  } finally {
+    for (const [name, value] of [['MICROSENDR_PAY_ADDRESS', previous.address], ['OPERATOR_PRIVATE_KEY', previous.key], ['QIE_RPC_URL', previous.rpc]] as const)
+      if (value === undefined) delete process.env[name]; else process.env[name] = value;
+    await server.close();
+  }
+});
