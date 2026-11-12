@@ -1,5 +1,5 @@
 import { formatAtomic } from './money.js';
-import { RootsWatermark } from './roots-logo.js';
+import { MicrosendrWatermark } from './microsendr-logo.js';
 import React from 'react';
 import { ArrowDownLeft, ArrowLeft, ArrowRight, ArrowUpRight, Clock3, RefreshCw } from 'lucide-react';
 
@@ -62,7 +62,7 @@ export function AssetDetail({ asset, activity, go, hidden, refresh, refreshing }
       </button>
     </div>
     <section className="fin-asset-detail-card" aria-label={`${asset.code} details`}>
-      <RootsWatermark className="fin-asset-watermark" />
+      <MicrosendrWatermark className="fin-asset-watermark" />
       <div className="fin-asset-detail-card-top">
         <div className="fin-asset-detail-title"><AssetIcon code={asset.code} large />
           <div><span>{asset.code === 'QIE' ? 'QIE Mainnet' : asset.name}</span><h1>{asset.code}</h1></div>
@@ -72,7 +72,7 @@ export function AssetDetail({ asset, activity, go, hidden, refresh, refreshing }
       <div className="fin-asset-detail-balance">
         <span>Your balance</span>
         <strong>{hidden ? '••••' : assetAmount(asset)} <small>{asset.amount_atomic === null ? '' : asset.code}</small></strong>
-        <p>{asset.status === 'ready' ? 'Across your Roots wallets' : asset.code === 'NGN'
+        <p>{asset.status === 'ready' ? 'Across your Microsendr wallets' : asset.code === 'NGN'
           ? 'Naira accounts are not available yet' : 'Balance could not be loaded'}</p>
       </div>
       <div className="fin-asset-detail-actions">

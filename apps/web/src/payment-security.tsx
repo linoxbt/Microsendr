@@ -76,7 +76,7 @@ export function PaymentSecurity({ csrf, hasPassword }: { csrf: string; hasPasswo
   return <section className="fin-panel fin-payment-security" aria-label="Payment approval">
     <h2>Approve payments</h2>
     {status?.send_hold_until && new Date(status.send_hold_until) > new Date() && <p className="fin-notice" role="note">
-      For your security, sending from your Roots wallet is paused until {new Date(status.send_hold_until).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })} after a recent sign-in change.
+      For your security, sending from your Microsendr wallet is paused until {new Date(status.send_hold_until).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })} after a recent sign-in change.
     </p>}
     <div className="fin-security-row">
       <KeyRound size={20} />

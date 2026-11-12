@@ -16,18 +16,18 @@ export class SessionExpiredError extends ConsumerRequestError {
     this.name = 'SessionExpiredError';
   }
 }
-export const sessionExpiredEvent = 'roots:personal-session-expired';
+export const sessionExpiredEvent = 'microsendr:personal-session-expired';
 // Credential errors from sign-in routes (invalid_code, invalid_credentials) are not session expiry.
 const expiredCodes = new Set(['personal_login_required', 'csrf_invalid']);
 export function isSessionExpired(error: unknown): error is SessionExpiredError {
   return error instanceof SessionExpiredError;
 }
 
-/** The request may or may not have reached Roots (offline, timed out, dropped). */
+/** The request may or may not have reached Microsendr (offline, timed out, dropped). */
 export class NetworkError extends ConsumerRequestError {
   constructor(timedOut: boolean) {
-    super(timedOut ? 'Roots is taking too long to answer. Check your connection and try again.'
-      : "Can't reach Roots. Check your connection and try again.", 0, timedOut ? 'timeout' : 'network');
+    super(timedOut ? 'Microsendr is taking too long to answer. Check your connection and try again.'
+      : "Can't reach Microsendr. Check your connection and try again.", 0, timedOut ? 'timeout' : 'network');
     this.name = 'NetworkError';
   }
 }

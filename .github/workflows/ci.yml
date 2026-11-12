@@ -1,4 +1,4 @@
-name: Roots CI
+name: Microsendr CI
 on:
   push:
   pull_request:
@@ -61,22 +61,22 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Build production image
-        run: docker build -t roots:ci .
+        run: docker build -t microsendr:ci .
       - name: Boot image against PostgreSQL
         run: |
           set -eu
-          docker network create roots
-          docker run -d --name db --network roots -e POSTGRES_USER=kora \
+          docker network create microsendr
+          docker run -d --name db --network microsendr -e POSTGRES_USER=kora \
             -e POSTGRES_PASSWORD=kora_ci_only -e POSTGRES_DB=kora postgres:17-alpine
           for i in $(seq 1 30); do docker exec db pg_isready -U kora -d kora && break; sleep 1; done
-          env="--network roots -e DATABASE_URL=postgres://kora:kora_ci_only@db:5432/kora -e KORA_MODE=sandbox -e KORA_CONSOLE_ORIGINS=https://ci.example"
-          docker run --rm $env roots:ci node --import tsx packages/database/src/migrate.ts
-          docker run -d --name api $env -e HOST=0.0.0.0 -e PORT=4312 -p 4312:4312 roots:ci
+          env="--network microsendr -e DATABASE_URL=postgres://kora:kora_ci_only@db:5432/kora -e KORA_MODE=sandbox -e KORA_CONSOLE_ORIGINS=https://ci.example"
+          docker run --rm $env microsendr:ci node --import tsx packages/database/src/migrate.ts
+          docker run -d --name api $env -e HOST=0.0.0.0 -e PORT=4312 -p 4312:4312 microsendr:ci
           for i in $(seq 1 60); do curl -fsS http://127.0.0.1:4312/health && break; sleep 1; done
           curl -fsS http://127.0.0.1:4312/health | grep -q '"status":"ok"'
           curl -fsS http://127.0.0.1:4312/ | grep -q '<div id="root">'
           test "$(docker exec api id -u)" != "0"
-          docker run --rm $env roots:ci node --import tsx services/worker/src/index.ts --once
+          docker run --rm $env microsendr:ci node --import tsx services/worker/src/index.ts --once
       - name: Container logs on failure
         if: failure()
         run: docker logs api || true

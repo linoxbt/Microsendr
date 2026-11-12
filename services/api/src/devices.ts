@@ -4,7 +4,7 @@ import { pool } from '../../../packages/database/src/index.js';
 import { hashKey } from '../../../packages/payments/src/auth.js';
 import { secureCookie } from './config.js';
 
-const COOKIE = 'roots_device';
+const COOKIE = 'microsendr_device';
 
 /** True when this browser has signed in to the account with this email before. */
 export async function knownDevice(request: FastifyRequest, email: string) {

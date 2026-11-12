@@ -147,7 +147,7 @@ export class FonbnkClient {
     return this.parse(orderSchema, await this.request('GET', `/api/v2/order?orderId=${encodeURIComponent(orderId)}`));
   }
 
-  /** Looks an order up by the reference Roots sent as orderParams; null if Fonbnk has none. */
+  /** Looks an order up by the reference Microsendr sent as orderParams; null if Fonbnk has none. */
   async findOrderByParams(orderParams: string) {
     if (!/^[A-Za-z0-9_-]{6,64}$/.test(orderParams)) throw new FonbnkError(400, 'invalid_order', 'Invalid order reference');
     try {

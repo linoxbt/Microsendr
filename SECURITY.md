@@ -7,7 +7,7 @@ This repository is a development sandbox. Paystack accepts test keys only and no
 ## Accepted dependency advisories
 
 - **GHSA-mrhx-c7xc-m3w5** (zod memory exhaustion on oversized collections).
-  Roots' own code uses zod 4.6.6 or later, which is fixed. The advisory
+  Microsendr' own code uses zod 4.6.6 or later, which is fixed. The advisory
   remains only for zod 3, which Privy's browser SDK pulls in through
   `@base-org/account` and Reown/WalletConnect. No zod 3 release is patched,
   and forcing zod 4 onto those packages risks breaking them. Exposure is limited

@@ -13,7 +13,7 @@ type Person = { user_id: string; account_id: string; email: string | null };
 
 /**
  * Buying stablecoins with naira (and sell quotes) through Fonbnk. The customer pays
- * Fonbnk's own bank instructions, so Roots never holds the naira, and coins are
+ * Fonbnk's own bank instructions, so Microsendr never holds the naira, and coins are
  * delivered only to a self-custody wallet the customer linked.
  */
 // US-dollar stablecoins on EVM networks only: the delivery address is an EVM wallet,
@@ -28,7 +28,7 @@ const describeAsset = (code: string) => {
   return { code, network: networkNames[network] ?? network, asset: rest.join('_') };
 };
 const feeLabels: Record<string, string> = {
-  platform: 'Fonbnk service fee', provider: 'Payment provider fee', blockchain: 'Network fee', merchant: 'Roots fee',
+  platform: 'Fonbnk service fee', provider: 'Payment provider fee', blockchain: 'Network fee', merchant: 'Microsendr fee',
 };
 const legs = (direction: 'buy' | 'sell', asset: string, amount: number): [LegRequest, LegRequest] => {
   const naira: LegRequest = { paymentChannel: 'bank', currencyType: 'fiat', currencyCode: 'NGN', countryIsoCode: 'NG' };
@@ -82,7 +82,7 @@ function publicOrder(row: Record<string, any>) {
   };
 }
 
-// Fonbnk's documented error codes, in Roots words. Anything else is logged, not shown.
+// Fonbnk's documented error codes, in Microsendr words. Anything else is logged, not shown.
 function providerError(error: unknown, log?: (detail: Record<string, unknown>) => void): never {
   if (error instanceof FonbnkError) {
     const min = error.details.min, max = error.details.max;
@@ -96,7 +96,7 @@ function providerError(error: unknown, log?: (detail: Record<string, unknown>) =
       QUOTE_REQUIRED: [409, 'Get a new quote and try again.'],
     };
     if (known[error.code]) throw new PaymentError(known[error.code][0], 'conversion_' + error.code.toLowerCase(), known[error.code][1]);
-    if (error.status === 403) throw new PaymentError(503, 'conversion_unavailable', 'Buying with naira is not enabled for Roots yet.');
+    if (error.status === 403) throw new PaymentError(503, 'conversion_unavailable', 'Buying with naira is not enabled for Microsendr yet.');
     if (error.status === 429) throw new PaymentError(503, 'conversion_busy', 'The exchange is busy. Try again in a moment.');
     log?.({ provider_status: error.status, provider_code: error.code, provider_message: error.message.slice(0, 200) });
     throw new PaymentError(error.status >= 500 ? 503 : 422, 'conversion_provider_error',

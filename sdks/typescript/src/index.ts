@@ -6,14 +6,14 @@ type Body<K extends keyof operations> = operations[K] extends {
 }
   ? B
   : never;
-export interface RootsOptions {
+export interface MicrosendrOptions {
   baseUrl?: string;
   apiKey?: string;
   csrfToken?: string;
   fetch?: typeof fetch;
   timeoutMs?: number;
 }
-export class RootsError extends Error {
+export class MicrosendrError extends Error {
   constructor(
     public status: number,
     public code: string,
@@ -21,11 +21,11 @@ export class RootsError extends Error {
     public requestId: string | null,
   ) {
     super(message);
-    this.name = 'RootsError';
+    this.name = 'MicrosendrError';
   }
 }
-export class Roots {
-  constructor(private options: RootsOptions = {}) {}
+export class Microsendr {
+  constructor(private options: MicrosendrOptions = {}) {}
   async request<T>(
     method: string,
     path: string,
@@ -49,7 +49,7 @@ export class Roots {
     });
     const data = await response.json();
     if (!response.ok)
-      throw new RootsError(
+      throw new MicrosendrError(
         response.status,
         data.error?.code ?? 'request_failed',
         data.error?.message ?? 'Request failed',

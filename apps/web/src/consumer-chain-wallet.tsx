@@ -4,7 +4,7 @@ import { formatUnits, getAddress, isAddress, parseUnits } from 'viem';
 import { ArrowLeft, ArrowRight, ArrowUpRight, Check, Copy, Fingerprint, RefreshCw, Share2 } from 'lucide-react';
 import { consumerRequest, isNetworkError } from './consumer-api.js';
 import { RecipientStatus, recipientPattern, useRecipient } from './recipient.js';
-import { RootsMark } from './roots-logo.js';
+import { MicrosendrMark } from './microsendr-logo.js';
 import { startAuthentication } from '@simplewebauthn/browser';
 import { passkeysSupported, type PaymentAuthStatus } from './payment-security.js';
 
@@ -79,14 +79,14 @@ async function signature(wallet: EthereumProvider, address: string, message: str
 type Source = { key: string; wallet: WalletRecord; managed: boolean; label: string };
 /**
  * A send in progress. `done` shows the Sent screen; `unrecorded` means the wallet broadcast
- * it but Roots could not record it yet, so the user can finish recording.
+ * it but Microsendr could not record it yet, so the user can finish recording.
  */
 type Sent = { id: string; hash?: string | null; done: boolean; unrecorded?: boolean };
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const short = (address: string) => `${address.slice(0, 6)}…${address.slice(-4)}`;
 
 /**
- * Receive and send QIE. Sources are the Roots account wallet (only while it can
+ * Receive and send QIE. Sources are the Microsendr account wallet (only while it can
  * also send) and the self-custody wallets the user linked. Receive shows one
  * address at a time; send goes form → review → done.
  */
@@ -116,9 +116,9 @@ export function ConsumerChainWallet({
   const managed = (wallets ?? []).find(isManaged);
   const managedOpen = !!managed?.can_send && !!limits;
   const linked = (wallets ?? []).filter(wallet => !isManaged(wallet));
-  // Your Roots address can always receive; it is offered for sending while account-wallet sends are on.
+  // Your Microsendr address can always receive; it is offered for sending while account-wallet sends are on.
   const sources: Source[] = [
-    ...(managed && (mode === 'receive' || managedOpen) ? [{ key: managed.id, wallet: managed, managed: true, label: 'Roots wallet' }] : []),
+    ...(managed && (mode === 'receive' || managedOpen) ? [{ key: managed.id, wallet: managed, managed: true, label: 'Microsendr wallet' }] : []),
     ...linked.map((wallet) => ({
       key: wallet.id, wallet, managed: false,
       label: linked.length > 1 ? `Wallet ··${wallet.address.slice(-4)}` : 'My wallet',
@@ -156,11 +156,11 @@ export function ConsumerChainWallet({
         {mode === 'receive' ? <><i className="fin-sk fin-sk-line" /><i className="fin-sk fin-sk-qr" /></>
           : <><i className="fin-sk fin-sk-field" /><i className="fin-sk fin-sk-field" /><i className="fin-sk fin-sk-button" /></>}
       </div>
-      : !source ? <div className="fin-chain-empty" role="group" aria-label="Roots account wallet">
+      : !source ? <div className="fin-chain-empty" role="group" aria-label="Microsendr account wallet">
         {mode === 'receive' && <h1 className="fin-sr-only">Your address</h1>}
         {managed
           ? <p>Sending isn’t available right now. You can still receive.</p>
-          : <><p>Your Roots address is being set up.</p>
+          : <><p>Your Microsendr address is being set up.</p>
             <button className="fin-secondary" type="button" onClick={() => void setUpAccountWallet()} disabled={busy}>
               <RefreshCw size={15} /> {busy ? 'Checking…' : 'Check again'}
             </button></>}
@@ -188,14 +188,14 @@ function ReceiveCard({ source, token }: { source: Source; token: Token }) {
     catch { setProblem('Copy is unavailable. Select the address instead.'); }
   }
   const canShare = typeof navigator !== 'undefined' && 'share' in navigator;
-  return <div className="fin-receive" role="group" aria-label={source.managed ? 'Roots account wallet' : 'Linked wallet'}>
+  return <div className="fin-receive" role="group" aria-label={source.managed ? 'Microsendr account wallet' : 'Linked wallet'}>
     <h1 className="fin-sr-only">Your address</h1>
     <p className="fin-receive-warning">Only send {token} on QIE Mainnet.</p>
     <div className="fin-chain-receive">
       <div className="fin-qr">
         {qr && <img src={qr} width="240" height="240"
           alt={source.managed ? 'QR code for your account wallet address' : 'QR code for the QIE wallet address shown below'} />}
-        <span className="fin-qr-mark" aria-hidden="true">{token === 'QUSDC' ? <img src="/images/qusdc-icon.jpg" alt="" /> : <RootsMark />}</span>
+        <span className="fin-qr-mark" aria-hidden="true">{token === 'QUSDC' ? <img src="/images/qusdc-icon.jpg" alt="" /> : <MicrosendrMark />}</span>
       </div>
       <code>{address}</code>
     </div>
@@ -252,7 +252,7 @@ function SendFlow({ source, token, limits, csrf, draft, onDraft, onChanged, onLo
     const target = payee.recipient?.address;
     if (target && getAddress(target) === getAddress(source.wallet.address))
       return setError("That's this wallet's own address. Choose someone else to pay.");
-    if (!target) return setError(payee.error ?? 'Enter a QIE address or the @username of a Roots user.');
+    if (!target) return setError(payee.error ?? 'Enter a QIE address or the @username of a Microsendr user.');
     if (!new RegExp(`^\\d+(?:\\.\\d{1,${decimals}})?$`).test(amount) || atomicAmount() <= 0n)
       return setError(`Enter an amount above zero, with up to ${decimals} decimal places.`);
     const max = token === 'QUSDC' ? limits?.qusdc_per_transfer_atomic : limits?.per_transfer_wei;
@@ -284,7 +284,7 @@ function SendFlow({ source, token, limits, csrf, draft, onDraft, onChanged, onLo
     }
     setSent({ id: result.id, hash: result.tx_hash, done: true });
   }
-  // The wallet already broadcast the transaction; record it with Roots, retrying briefly.
+  // The wallet already broadcast the transaction; record it with Microsendr, retrying briefly.
   async function record(settlementId: string, hash: string) {
     for (let attempt = 0; ; attempt++) {
       try {
@@ -294,7 +294,7 @@ function SendFlow({ source, token, limits, csrf, draft, onDraft, onChanged, onLo
       } catch (cause) {
         if (attempt >= 2) {
           setSent({ id: settlementId, hash, done: false, unrecorded: true });
-          throw new Error('Your wallet sent the payment, but Roots could not record it yet. Tap Finish recording.');
+          throw new Error('Your wallet sent the payment, but Microsendr could not record it yet. Tap Finish recording.');
         }
         await sleep(1000 * 3 ** attempt);
       }
@@ -371,7 +371,7 @@ function SendFlow({ source, token, limits, csrf, draft, onDraft, onChanged, onLo
 
   if (sent?.unrecorded) return <div className="fin-send-done" role="alert">
     <h2>Almost done</h2>
-    <p>Your wallet sent {amount} {token} to {who}. Roots still needs to record it.</p>
+    <p>Your wallet sent {amount} {token} to {who}. Microsendr still needs to record it.</p>
     {sent.hash && <a href={`${explorer}tx/${sent.hash}`} target="_blank" rel="noreferrer">View transaction <ArrowUpRight size={14} /></a>}
     <button className="fin-primary" type="button" onClick={() => void finishRecording()} disabled={busy}>{busy ? 'Recording…' : 'Finish recording'}</button>
     {error && <p className="fin-error">{error}</p>}
@@ -413,7 +413,7 @@ function SendFlow({ source, token, limits, csrf, draft, onDraft, onChanged, onLo
   return <form className="fin-chain-send" onSubmit={review}>
     <label>Recipient<input value={to} onChange={e => { setTo(e.target.value.trim()); fresh(); }}
       placeholder="@username or 0x…" autoComplete="off" autoCapitalize="none" spellCheck={false} required
-      pattern={recipientPattern} title="A Roots @username or a 0x-prefixed QIE address" /></label>
+      pattern={recipientPattern} title="A Microsendr @username or a 0x-prefixed QIE address" /></label>
     <RecipientStatus state={payee} />
     <label className="fin-amount-field">Amount
       <span><input value={amount} onChange={e => { setAmount(e.target.value); fresh(); }} placeholder="0.00" inputMode="decimal" required

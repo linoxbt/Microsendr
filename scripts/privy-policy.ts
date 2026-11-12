@@ -1,5 +1,5 @@
 /**
- * Creates the Privy policy that limits what Roots account wallets can sign, and attaches
+ * Creates the Privy policy that limits what Microsendr account wallets can sign, and attaches
  * it to every existing account wallet. Privy then refuses anything outside the policy
  * even if the app secret leaks: only QIE Mainnet (chain 1990), native QIE up to the
  * per-transfer limit with no calldata, or QUSDC transfer() calls on the QUSDC contract up
@@ -23,7 +23,7 @@ const erc20 = [{ type: 'function', name: 'transfer', stateMutability: 'nonpayabl
   inputs: [{ name: 'recipient', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ name: '', type: 'bool' }] }];
 const policy = {
   version: '1.0',
-  name: 'Roots account wallets',
+  name: 'Microsendr account wallets',
   chain_type: 'ethereum',
   rules: [
     {

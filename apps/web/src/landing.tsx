@@ -45,11 +45,11 @@ const tour = {
   Send: {
     status: 'available',
     title: 'Pay people, not long addresses.',
-    text: 'Send QIE or QUSDC on QIE Mainnet to another Roots user by their @username, or to any QIE address. Every send from your Roots account is approved with your PIN or a passkey.',
+    text: 'Send QIE or QUSDC on QIE Mainnet to another Microsendr user by their @username, or to any QIE address. Every send from your Microsendr account is approved with your PIN or a passkey.',
     points: [
-      'Look up a Roots user by @username and see their name before you pay',
+      'Look up a Microsendr user by @username and see their name before you pay',
       'Or paste any QIE Mainnet wallet address',
-      'Send from your Roots account, or from a wallet you link',
+      'Send from your Microsendr account, or from a wallet you link',
     ],
   },
   Receive: {
@@ -71,7 +71,7 @@ const tour = {
   Withdraw: {
     status: 'soon',
     title: 'From your screen to real life.',
-    text: 'Bank deposits and withdrawals are coming soon, so you can move money between Roots and a bank account you own.',
+    text: 'Bank deposits and withdrawals are coming soon, so you can move money between Microsendr and a bank account you own.',
     points: ['Deposits from and withdrawals to your bank', 'Not available yet'],
   },
 } as const;
@@ -82,7 +82,7 @@ const pillars = [
   {
     icon: AtSign,
     title: 'Pay by @username',
-    text: 'Send to people on Roots by name, instead of copying a long wallet address.',
+    text: 'Send to people on Microsendr by name, instead of copying a long wallet address.',
   },
   {
     icon: KeyRound,
@@ -120,7 +120,7 @@ const security = [
   {
     icon: KeyRound,
     title: 'Every send approved by you',
-    text: 'Sends from your Roots account need your payment PIN or a passkey, with limits per transfer and per day. A wallet you link stays yours; Roots never sees its keys.',
+    text: 'Sends from your Microsendr account need your payment PIN or a passkey, with limits per transfer and per day. A wallet you link stays yours; Microsendr never sees its keys.',
   },
   {
     icon: BadgeCheck,
@@ -135,56 +135,56 @@ const security = [
   {
     icon: Fingerprint,
     title: 'Identity checks',
-    text: 'Verify your identity with our provider Didit before you send from your Roots account. Your document is matched to your profile.',
+    text: 'Verify your identity with our provider Didit before you send from your Microsendr account. Your document is matched to your profile.',
   },
 ];
 
 const availability: { name: string; detail: string; soon?: boolean }[] = [
   { name: 'Personal account & profile', detail: 'Free account with email and password, profile and security settings' },
-  { name: 'Identity verification', detail: 'Provided by Didit; needed to send from your Roots account' },
+  { name: 'Identity verification', detail: 'Provided by Didit; needed to send from your Microsendr account' },
   { name: 'Linked self-custody wallet', detail: 'Any EVM wallet you control, on QIE Mainnet' },
-  { name: 'Roots account wallet', detail: 'Your own QIE address, sends approved with a PIN or passkey' },
+  { name: 'Microsendr account wallet', detail: 'Your own QIE address, sends approved with a PIN or passkey' },
   { name: 'Send and receive QIE and QUSDC', detail: 'On QIE Mainnet, from your account or a linked wallet' },
   { name: 'Incoming QIE & QUSDC in Activity', detail: 'Verified on chain, with receipts' },
-  { name: 'Pay Roots users by @username', detail: 'Recipients opt in to be payable by username' },
+  { name: 'Pay Microsendr users by @username', detail: 'Recipients opt in to be payable by username' },
   { name: 'Live balances', detail: 'With an approximate USD value' },
   { name: 'Bank deposits & withdrawals', detail: 'Move money to and from your bank', soon: true },
   { name: 'Buy digital dollars with naira', detail: 'By bank transfer, every fee shown first', soon: true },
-  { name: 'P2P trading marketplace', detail: 'Trade with other Roots users', soon: true },
+  { name: 'P2P trading marketplace', detail: 'Trade with other Microsendr users', soon: true },
 ];
 
 const questions: [string, string][] = [
   [
-    'What can I do on Roots today?',
-    'You can open a free Roots account with its own QIE address, send and receive QIE and QUSDC on QIE Mainnet, pay other Roots users by @username, and see incoming payments in Activity with receipts. You can also link a self-custody wallet you control. Bank deposits and withdrawals, buying digital dollars with naira and the P2P marketplace are coming soon.',
+    'What can I do on Microsendr today?',
+    'You can open a free Microsendr account with its own QIE address, send and receive QIE and QUSDC on QIE Mainnet, pay other Microsendr users by @username, and see incoming payments in Activity with receipts. You can also link a self-custody wallet you control. Bank deposits and withdrawals, buying digital dollars with naira and the P2P marketplace are coming soon.',
   ],
   [
-    'Is Roots a bank?',
-    'No. Roots is not a bank, and money in your wallet is not a bank deposit. Digital assets such as QIE and QUSDC are not covered by deposit insurance or protection schemes.',
+    'Is Microsendr a bank?',
+    'No. Microsendr is not a bank, and money in your wallet is not a bank deposit. Digital assets such as QIE and QUSDC are not covered by deposit insurance or protection schemes.',
   ],
   [
     'Do I need a crypto wallet to sign up?',
-    'No. You create your Roots account with an email address and a password, and it comes with its own QIE address. Linking a self-custody wallet is optional.',
+    'No. You create your Microsendr account with an email address and a password, and it comes with its own QIE address. Linking a self-custody wallet is optional.',
   ],
   [
     'Who holds the keys to my wallet?',
-    'Your Roots account wallet is held for you by our wallet provider, Privy, and every send needs your payment PIN or a passkey. A self-custody wallet you link is different: its keys stay with you and Roots never holds them.',
+    'Your Microsendr account wallet is held for you by our wallet provider, Privy, and every send needs your payment PIN or a passkey. A self-custody wallet you link is different: its keys stay with you and Microsendr never holds them.',
   ],
   [
     'How does paying by @username work?',
-    'Search for a Roots user by their username and check their name before you send. People can only be paid this way after they choose to be payable by username in their settings.',
+    'Search for a Microsendr user by their username and check their name before you send. People can only be paid this way after they choose to be payable by username in their settings.',
   ],
   [
     'What is QUSDC?',
-    'QUSDC is a digital dollar on the QIE network. You can hold, send and receive it in Roots alongside QIE.',
+    'QUSDC is a digital dollar on the QIE network. You can hold, send and receive it in Microsendr alongside QIE.',
   ],
   [
     'Do I have to verify my identity?',
-    'To send from your Roots account, yes. You verify with our identity provider, Didit, from your account, and the document must match the name and date of birth on your profile.',
+    'To send from your Microsendr account, yes. You verify with our identity provider, Didit, from your account, and the document must match the name and date of birth on your profile.',
   ],
   [
     'Can a payment be reversed?',
-    'No. Transfers on the QIE network are final once confirmed and cannot be reversed by you or by Roots. Always check the recipient and amount before you approve.',
+    'No. Transfers on the QIE network are final once confirmed and cannot be reversed by you or by Microsendr. Always check the recipient and amount before you approve.',
   ],
 ];
 
@@ -415,7 +415,7 @@ function TourVisual({ name }: { name: TourKey }) {
         <div className="lp-ui-convert">
           <div>
             <small>From</small>
-            <b>Roots</b>
+            <b>Microsendr</b>
           </div>
           <span>
             <ArrowRight size={16} />
@@ -465,7 +465,7 @@ export function LandingPage({ brand, go }: Props) {
   }, []);
 
   useEffect(() => {
-    document.title = 'Roots | Money for the life you’re building.';
+    document.title = 'Microsendr | Money for the life you’re building.';
   }, []);
 
   // Header condenses once the top-of-page sentinel scrolls away.
@@ -570,7 +570,7 @@ export function LandingPage({ brand, go }: Props) {
       <div ref={sentinel} className="lp-sentinel" aria-hidden="true" />
       <header className={`public-header lp-header${condensed ? ' is-condensed' : ''}`}>
         <div className="lp-container lp-header-inner">
-          <a className="lp-brand" href="/" aria-label="Roots home">
+          <a className="lp-brand" href="/" aria-label="Microsendr home">
             {brand}
           </a>
           <div className="lp-menu-panel" id="landing-menu">
@@ -615,14 +615,14 @@ export function LandingPage({ brand, go }: Props) {
             <div className="lp-hero-copy">
               <a className="lp-kicker" href="#pay" onClick={jump}>
                 <span className="lp-kicker-dot" aria-hidden="true" />
-                New: pay people on Roots by @username
+                New: pay people on Microsendr by @username
                 <ArrowRight size={14} aria-hidden="true" />
               </a>
               <h1 id="landing-title">
                 Money for the life you’re <span>building.</span>
               </h1>
               <p className="lp-lead">
-                Roots is a free account for everyday digital money on the QIE network. Pay people by
+                Microsendr is a free account for everyday digital money on the QIE network. Pay people by
                 @username, send from a wallet you control, and see every incoming payment verified on
                 chain.
               </p>
@@ -646,7 +646,7 @@ export function LandingPage({ brand, go }: Props) {
                 </li>
               </ul>
             </div>
-            <figure className="lp-hero-visual" aria-label="Illustrative preview of the Roots app">
+            <figure className="lp-hero-visual" aria-label="Illustrative preview of the Microsendr app">
               <div className="lp-hero-stage" aria-hidden="true">
                 <span className="lp-hero-ring" />
               </div>
@@ -674,7 +674,7 @@ export function LandingPage({ brand, go }: Props) {
         </section>
 
         {/* Value pillars */}
-        <section className="lp-pillars" aria-label="Why Roots">
+        <section className="lp-pillars" aria-label="Why Microsendr">
           <div className="lp-container">
             <ul className="lp-pillar-grid">
               {pillars.map(({ icon: Icon, title, text }, index) => (
@@ -697,12 +697,12 @@ export function LandingPage({ brand, go }: Props) {
               <span className="lp-eyebrow">Product</span>
               <h2 id="product-title">One account for everyday digital money.</h2>
               <p>
-                Here is what Roots does today, and what is on the way. Anything that isn’t live yet is
+                Here is what Microsendr does today, and what is on the way. Anything that isn’t live yet is
                 marked <strong>Coming soon</strong>.
               </p>
             </div>
             <div className="lp-tour" data-reveal>
-              <div className="lp-tabs" role="tablist" aria-label="Roots features">
+              <div className="lp-tabs" role="tablist" aria-label="Microsendr features">
                 {tourKeys.map((name, index) => (
                   <button
                     key={name}
@@ -789,7 +789,7 @@ export function LandingPage({ brand, go }: Props) {
             </div>
             <div className="lp-split-copy" data-reveal>
               <span className="lp-eyebrow">Payments between people</span>
-              <h2 id="pay-title">Pay anyone on Roots by their @username.</h2>
+              <h2 id="pay-title">Pay anyone on Microsendr by their @username.</h2>
               <p>
                 No more copying long wallet addresses. Type a username, check the name that comes back,
                 and approve the payment in your wallet. It arrives as QIE on QIE Mainnet.
@@ -798,7 +798,7 @@ export function LandingPage({ brand, go }: Props) {
                 <li>
                   <Check size={18} aria-hidden="true" />
                   <span>
-                    <b>See who you’re paying.</b> Roots shows the recipient’s name before you send.
+                    <b>See who you’re paying.</b> Microsendr shows the recipient’s name before you send.
                   </span>
                 </li>
                 <li>
@@ -853,7 +853,7 @@ export function LandingPage({ brand, go }: Props) {
                 <span className="lp-eyebrow">Security &amp; control</span>
                 <h2 id="security-title">You stay in control of your money.</h2>
                 <p>
-                  Roots is built so that you approve what leaves your wallet, and so that what arrives is
+                  Microsendr is built so that you approve what leaves your wallet, and so that what arrives is
                   checked before you see it.
                 </p>
                 <div className="lp-callout">
@@ -888,13 +888,13 @@ export function LandingPage({ brand, go }: Props) {
               <span className="lp-eyebrow">Availability</span>
               <h2 id="availability-title">What’s live, and what’s next.</h2>
               <p>
-                We’d rather be clear than clever. This is exactly where Roots stands today. We’ll update
+                We’d rather be clear than clever. This is exactly where Microsendr stands today. We’ll update
                 this list as new services launch.
               </p>
             </div>
             <div className="lp-table-card" data-reveal>
               <table className="lp-table">
-                <caption className="lp-visually-hidden">Roots features and their availability</caption>
+                <caption className="lp-visually-hidden">Microsendr features and their availability</caption>
                 <thead>
                   <tr>
                     <th scope="col">Feature</th>
@@ -925,7 +925,7 @@ export function LandingPage({ brand, go }: Props) {
             <div className="lp-heading" data-reveal>
               <span className="lp-eyebrow">FAQs</span>
               <h2 id="faq-title">Questions, answered.</h2>
-              <p>Straight answers about what Roots is, and what it isn’t.</p>
+              <p>Straight answers about what Microsendr is, and what it isn’t.</p>
             </div>
             <div className="lp-faq-list" data-reveal>
               {questions.map(([question, answer]) => (
@@ -945,7 +945,7 @@ export function LandingPage({ brand, go }: Props) {
         <section className="lp-section lp-final" aria-labelledby="final-title">
           <div className="lp-container">
             <div className="lp-final-card" data-reveal>
-              <h2 id="final-title">Start with a free Roots account.</h2>
+              <h2 id="final-title">Start with a free Microsendr account.</h2>
               <p>Sign up with your email address. Link a wallet whenever you’re ready.</p>
               <div className="lp-final-actions">
                 <button className="lp-button lp-button-light lp-button-lg" onClick={start}>
@@ -969,7 +969,7 @@ export function LandingPage({ brand, go }: Props) {
             </div>
             <nav aria-label="Footer navigation" className="lp-footer-nav">
               <div>
-                <h3>Roots</h3>
+                <h3>Microsendr</h3>
                 <a href="#product" onClick={jump}>
                   Product
                 </a>
@@ -994,12 +994,12 @@ export function LandingPage({ brand, go }: Props) {
           </div>
           <div className="lp-footer-legal">
             <p>
-              Roots is not a bank. Money in your wallet is not a bank deposit and is not covered by
+              Microsendr is not a bank. Money in your wallet is not a bank deposit and is not covered by
               deposit insurance. QIE network transfers are irreversible. Features marked “Coming soon”
               are not yet available. Identity verification is provided by Didit.
             </p>
             <div className="lp-footer-bottom">
-              <span>© {new Date().getFullYear()} Roots</span>
+              <span>© {new Date().getFullYear()} Microsendr</span>
               <a href="#main-content" onClick={jump}>
                 Back to top
               </a>

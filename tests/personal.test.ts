@@ -74,7 +74,7 @@ test('Personal transfer posts once under an idempotency key and cannot overdraw'
 
 test('Privy Personal requires a matching signed identity token with verified email', async () => {
   const pair = await generateKeyPair('ES256');
-  const appId = 'roots-personal-test';
+  const appId = 'microsendr-personal-test';
   const configured = await buildApi({ serveWeb: false, rateLimitMax: 10000, privyConfig: { appId, verificationKey: await exportSPKI(pair.publicKey) } });
   try {
     const subject = `did:privy:${id('user')}`, email = `${id('privy')}@example.test`;

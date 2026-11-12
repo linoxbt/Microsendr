@@ -1,6 +1,6 @@
 # Landing photographs
 
-The photographs on the Roots landing and Business pages are illustrative. The people shown are not Roots customers and do not endorse Roots.
+The photographs on the Microsendr landing and Business pages are illustrative. The people shown are not Microsendr customers and do not endorse Microsendr.
 
 | Asset | Photographer | Source | License |
 | --- | --- | --- | --- |

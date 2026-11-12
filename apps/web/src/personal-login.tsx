@@ -1,8 +1,8 @@
 import React, { useEffect, useState, type FormEvent } from 'react';
 import { ArrowLeft, ArrowRight, Check, LockKeyhole, ShieldCheck, Eye, EyeOff } from 'lucide-react';
 import { ConsumerRequestError, consumerRequest, emptyProfile, profilePayload } from './consumer-api.js';
-import { RootsAuth } from './auth-shell.js';
-import type { AuthConfig } from './roots-auth.js';
+import { MicrosendrAuth } from './auth-shell.js';
+import type { AuthConfig } from './microsendr-auth.js';
 import { ConsumerFields } from './consumer-fields.js';
 
 export function PersonalLogin({
@@ -34,7 +34,7 @@ export function PersonalLogin({
     [notice, setNotice] = useState('');
   useEffect(() => {
     document.title =
-      mode === 'register' ? 'Create your account | Roots' : 'Sign in | Roots';
+      mode === 'register' ? 'Create your account | Microsendr' : 'Sign in | Microsendr';
   }, [mode]);
   useEffect(() => {
     void consumerRequest('registration/config')
@@ -57,7 +57,7 @@ export function PersonalLogin({
     setChallenge(result.challenge_id);
     setCode('');
     setNotice(
-      `If ${email.trim()} belongs to a Roots account, a six-digit code is on its way. Codes only work for existing accounts.`,
+      `If ${email.trim()} belongs to a Microsendr account, a six-digit code is on its way. Codes only work for existing accounts.`,
     );
   }
   async function resendCode() {
@@ -97,7 +97,7 @@ export function PersonalLogin({
           } catch (cause) {
             if (cause instanceof ConsumerRequestError && cause.code === 'invalid_code')
               throw new Error(
-                'That code didn’t work. Check the latest code we sent, or request a new one. Recovery only works for an existing Roots account.',
+                'That code didn’t work. Check the latest code we sent, or request a new one. Recovery only works for an existing Microsendr account.',
               );
             throw cause;
           }
@@ -153,7 +153,7 @@ export function PersonalLogin({
           <div className="fin-auth-art" aria-hidden="true">
             <div className="fin-art-orbit" />
             <div className="fin-art-card">
-              <span>roots</span>
+              <span>microsendr</span>
               <b>
                 Made for
                 <br />
@@ -174,7 +174,7 @@ export function PersonalLogin({
         </aside>
         <main className="fin-auth-panel">
           <div className="fin-auth-form">
-            <span className="fin-kicker">ROOTS PERSONAL</span>
+            <span className="fin-kicker">MICROSENDR PERSONAL</span>
             <h1>
               {mode === 'login'
                 ? 'Welcome back.'
@@ -194,7 +194,7 @@ export function PersonalLogin({
                     ? 'Enter the six-digit code sent to your email.'
                     : 'Use a verified email code to recover your account.'
                   : step === 0
-                    ? 'Create your Roots account.'
+                    ? 'Create your Microsendr account.'
                     : step === 1
                       ? 'Use the details on your identity document.'
                       : 'Your address helps us keep your account up to date.'}
@@ -226,9 +226,9 @@ export function PersonalLogin({
             {restoring ? (
               <>
                 <p>
-                  Confirm ownership of your previous account, then choose a Roots password.
+                  Confirm ownership of your previous account, then choose a Microsendr password.
                 </p>
-                <RootsAuth
+                <MicrosendrAuth
                   restoreExisting
                   config={legacyConfig}
                   onComplete={async (session) => {
@@ -408,7 +408,7 @@ export function PersonalLogin({
             <div className="fin-auth-switch">
               {mode === 'login' ? (
                 <>
-                  New to Roots?{' '}
+                  New to Microsendr?{' '}
                   <button onClick={() => switchMode('register')}>Create an account</button>
                 </>
               ) : (
@@ -422,7 +422,7 @@ export function PersonalLogin({
         </main>
       </div>
       <footer className="fin-auth-footer">
-        © {new Date().getFullYear()} Roots <span>Made for your everyday.</span>
+        © {new Date().getFullYear()} Microsendr <span>Made for your everyday.</span>
       </footer>
     </div>
   );

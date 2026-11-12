@@ -46,7 +46,7 @@ test('paying @username resolves the recipient and sends to their address', async
     lookups.push(name);
     return name === 'ada_okafor'
       ? route.fulfill(json({ username: 'ada_okafor', display_name: 'Ada O.', address: payeeAddress, network: 'qie-mainnet', asset: 'QIEV3' }))
-      : route.fulfill(json({ error: { code: 'recipient_unavailable', message: 'No Roots user can be paid at that username' } }, 404));
+      : route.fulfill(json({ error: { code: 'recipient_unavailable', message: 'No Microsendr user can be paid at that username' } }, 404));
   });
   const posts: Record<string, string>[] = [];
   await page.route('**/personal/api/wallets/managed/transfers', (route) => {
@@ -94,7 +94,7 @@ test('being payable by username is an explicit opt-in on the Security page', asy
   expect(posts).toEqual([{ payable_by_username: true }]);
 });
 
-test('home is the balance card, shortcuts and activity; recent payees wait on the Roots user send page', async ({ page }) => {
+test('home is the balance card, shortcuts and activity; recent payees wait on the Microsendr user send page', async ({ page }) => {
   const now = new Date().toISOString();
   const sent = (id: string, to_username: string | null, status = 'confirmed') => ({
     id: 'stl_' + id.repeat(32), direction: 'sent', status, from: accountAddress, to: payeeAddress, to_username,
@@ -119,11 +119,11 @@ test('home is the balance card, shortcuts and activity; recent payees wait on th
   await expect(feed.getByRole('heading', { name: 'Today' })).toBeVisible();
   await expect(feed).toContainText('To @ada_okafor');
   await expect(feed).toContainText('−1.5');
-  await page.screenshot({ path: '/tmp/roots-home-phone.png', fullPage: true });
-  // Send → Roots user lists people paid before; one entry per username, failed and address-only sends add nobody.
+  await page.screenshot({ path: '/tmp/microsendr-home-phone.png', fullPage: true });
+  // Send → Microsendr user lists people paid before; one entry per username, failed and address-only sends add nobody.
   await page.getByRole('group', { name: 'Money actions' }).getByRole('button', { name: 'Send' }).click();
   await expect(page).toHaveURL(/\/personal\/send$/);
-  await page.getByRole('listitem').filter({ hasText: 'Roots user' }).click();
+  await page.getByRole('listitem').filter({ hasText: 'Microsendr user' }).click();
   await expect(page).toHaveURL(/\/personal\/send\/user$/);
   // The token is chosen from a list, not a toggle.
   await expect(page.getByRole('list', { name: 'Choose a token' }).getByRole('listitem')).toHaveCount(2);
@@ -138,7 +138,7 @@ test('home is the balance card, shortcuts and activity; recent payees wait on th
   await expect(page.getByRole('listitem').filter({ hasText: 'Bank account' })).toBeDisabled();
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/personal/home');
-  await page.screenshot({ path: '/tmp/roots-home-desktop.png', fullPage: true });
+  await page.screenshot({ path: '/tmp/microsendr-home-desktop.png', fullPage: true });
 });
 
 test('with a payment PIN set, the review step asks for the PIN instead of the password', async ({ page }) => {
@@ -206,7 +206,7 @@ test('a new account sees a simple empty activity state', async ({ page }) => {
   await expect(page.getByRole('list', { name: 'Choose a token' }).getByRole('listitem')).toHaveCount(2);
 });
 
-test('each token has its own receive screen, and QUSDC sends from the Roots wallet as QUSDC', async ({ page }) => {
+test('each token has its own receive screen, and QUSDC sends from the Microsendr wallet as QUSDC', async ({ page }) => {
   await signedIn(page);
   await page.route('**/personal/api/payment-auth', (route) => route.fulfill(json({ pin_set: true, pin_locked_until: null, passkeys: [] })));
   await page.route('**/personal/api/overview', (route) => route.fulfill(json({ ...overview, assets: [

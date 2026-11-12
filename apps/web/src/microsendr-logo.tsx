@@ -1,22 +1,22 @@
 import { useId } from 'react';
 
 /** Layered forward mark: two slanted bars and a rising accent, moving left to right. */
-export function RootsMark() {
+export function MicrosendrMark() {
   return (
-    <svg className="roots-mark" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-      <rect className="roots-mark-tile" width="48" height="48" rx="13" />
-      <path className="roots-mark-back" d="M9 36 18 12h7l-9 24Z" />
-      <path className="roots-mark-front" d="M19 36 28 12h7l-9 24Z" />
-      <path className="roots-mark-accent" d="M29 36l5-13.3 3.5 9.3L35.8 36Z" />
+    <svg className="microsendr-mark" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+      <rect className="microsendr-mark-tile" width="48" height="48" rx="13" />
+      <path className="microsendr-mark-back" d="M9 36 18 12h7l-9 24Z" />
+      <path className="microsendr-mark-front" d="M19 36 28 12h7l-9 24Z" />
+      <path className="microsendr-mark-accent" d="M29 36l5-13.3 3.5 9.3L35.8 36Z" />
     </svg>
   );
 }
 
-export function RootsWordmark() {
+export function MicrosendrWordmark() {
   return (
-    <span className="logo roots-wordmark" role="img" aria-label="Roots">
-      <RootsMark />
-      <span aria-hidden="true">roots</span>
+    <span className="logo microsendr-wordmark" role="img" aria-label="Microsendr">
+      <MicrosendrMark />
+      <span aria-hidden="true">microsendr</span>
     </span>
   );
 }
@@ -25,10 +25,10 @@ export function RootsWordmark() {
  * The mark's bars at card scale: a quiet watermark for brand surfaces. Each bar
  * fades toward the card edge so text over it stays readable.
  */
-export function RootsWatermark({ className = '' }: { className?: string }) {
+export function MicrosendrWatermark({ className = '' }: { className?: string }) {
   const id = useId().replace(/:/g, '');
   return (
-    <svg className={`roots-watermark ${className}`} viewBox="8 11 31 26" aria-hidden="true" focusable="false">
+    <svg className={`microsendr-watermark ${className}`} viewBox="8 11 31 26" aria-hidden="true" focusable="false">
       <defs>
         <linearGradient id={`${id}b`} x1="0" y1="1" x2="0.4" y2="0">
           <stop offset="0" stopColor="#7fb3dd" stopOpacity="0.02" />

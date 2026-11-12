@@ -7,8 +7,8 @@ import '@fontsource-variable/dm-sans';
 import './base.css';
 import { LandingPage } from './landing.js';
 import './personal.css';
-import './roots.css';
-import { RootsMark, RootsWordmark } from './roots-logo.js';
+import './microsendr.css';
+import { MicrosendrMark, MicrosendrWordmark } from './microsendr-logo.js';
 
 const PersonalPage = lazy(() =>
   import('./personal.js').then((module) => ({ default: module.PersonalPage })),
@@ -47,7 +47,7 @@ function Loading() {
   return (
     <div className="personal-loading" role="status" aria-label="Loading account">
       <span className="personal-loading-mark">
-        <RootsMark />
+        <MicrosendrMark />
       </span>
     </div>
   );
@@ -56,7 +56,8 @@ function Loading() {
 function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     try {
-      return localStorage.getItem('roots-theme') === 'dark' ? 'dark' : 'light';
+      // The theme saved under the earlier name carries over.
+      return (localStorage.getItem('microsendr-theme') ?? localStorage.getItem('roots-theme')) === 'dark' ? 'dark' : 'light';
     } catch {
       return 'light';
     }
@@ -70,7 +71,7 @@ function App() {
     for (const meta of document.querySelectorAll('meta[name="theme-color"]'))
       meta.setAttribute('content', active === 'dark' ? '#172d40' : '#f7f3e9');
     try {
-      localStorage.setItem('roots-theme', theme);
+      localStorage.setItem('microsendr-theme', theme);
     } catch {
       /* storage can be unavailable */
     }
@@ -91,7 +92,7 @@ function App() {
         <PersonalPage
           go={go}
           path={path}
-          brand={<RootsWordmark />}
+          brand={<MicrosendrWordmark />}
           themeToggle={themeToggle}
           theme={theme}
           onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
@@ -99,6 +100,6 @@ function App() {
         />
       </Suspense>
     );
-  return <LandingPage brand={<RootsWordmark />} go={go} />;
+  return <LandingPage brand={<MicrosendrWordmark />} go={go} />;
 }
 createRoot(document.getElementById('root')!).render(<App />);

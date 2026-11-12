@@ -149,7 +149,7 @@ export async function reconcileChainSettlement(settlementId: string, adapter: Ch
       ? adapter.tokenTransferEvidence!(row.tx_hash, row.asset_position_id, instruction)
       : adapter.nativeTransferEvidence(row.tx_hash, instruction);
     let evidence = await read();
-    // A Roots-signed transaction the node cannot find, whose nonce another transaction
+    // A Microsendr-signed transaction the node cannot find, whose nonce another transaction
     // has since used, can never be mined. A single RPC node can lag or disagree with its
     // peers, so this must hold on a re-read now and still hold ten minutes later before
     // the transfer is written off; until then it stays open (and counts toward limits).
@@ -169,11 +169,11 @@ export async function reconcileChainSettlement(settlementId: string, adapter: Ch
     }
     if (evidence.block_number !== null && BigInt(evidence.block_number) < BigInt(row.minimum_block_number))
       throw new SettlementError(422, 'historical_transaction', 'Transaction predates the settlement instruction');
-    // A transfer Roots signed is re-sent byte for byte while unmined, in case
+    // A transfer Microsendr signed is re-sent byte for byte while unmined, in case
     // the first broadcast never reached the network. It is never re-signed.
     if (evidence.state === 'pending' && row.signed_transaction)
       await adapter.sendRawTransaction?.(row.signed_transaction).catch(() => undefined);
-    // A transaction signed by Roots could still be mined later, so it is never written off
+    // A transaction signed by Microsendr could still be mined later, so it is never written off
     // by age; it ends only when confirmed, failed or replaced.
     if (evidence.state === 'pending' && !row.signed_transaction && Date.now() - new Date(row.created_at).getTime() > MAX_PENDING_AGE_MS) {
       await terminal('expired', 'not_final_after_7_days');

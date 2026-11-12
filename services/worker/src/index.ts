@@ -28,7 +28,7 @@ process.on('SIGTERM', () => {
 });
 try {
   await pool.query('SELECT 1');
-  console.log('Roots worker ready');
+  console.log('Microsendr worker ready');
   const dispatch = () => runOnce({ onlyIntent });
   const rail = () => (onlyIntent ? Promise.resolve(false) : runRailOnce());
   const webhooks = () => deliverOne({ onlyMerchant });
@@ -43,7 +43,7 @@ try {
     await reconcileOneConversionOrder();
     await cleanupExpired(true);
   } else {
-    // Roots jobs always run; the retired business platform and the Paystack sandbox only where enabled.
+    // Microsendr jobs always run; the retired business platform and the Paystack sandbox only where enabled.
     const queues: Record<string, () => Promise<boolean>> = {
       chain: reconcileOneChainSettlement, kyc: () => reconcileOneDiditSession(),
       incoming: () => indexOneIncomingWallet(), conversion: () => reconcileOneConversionOrder(), cleanup: () => cleanupExpired(),
@@ -66,7 +66,7 @@ try {
     const health = port ? createServer((request, response) => {
       const fresh = Date.now() - beat < 120_000;
       response.writeHead(request.url === '/health' ? (fresh ? 200 : 503) : 404, { 'content-type': 'application/json', 'cache-control': 'no-store' });
-      response.end(request.url === '/health' ? JSON.stringify({ status: fresh ? 'ok' : 'stalled', service: 'roots-worker' }) : '{}');
+      response.end(request.url === '/health' ? JSON.stringify({ status: fresh ? 'ok' : 'stalled', service: 'microsendr-worker' }) : '{}');
     }).on('error', (error) => console.error(JSON.stringify({ level: 'error', msg: 'worker health server failed', error: error.message })))
       .listen(port, process.env.HOST ?? '0.0.0.0') : undefined;
     // Watchdog: if no queue has completed an iteration for five minutes (database gone,

@@ -41,7 +41,7 @@ export function nativeTransferAuthorization(input: {
   token?: { code: string; contract: string };
 }): string {
   return [
-    'Roots settlement authorization',
+    'Microsendr settlement authorization',
     `Account: ${input.accountId}`,
     `Network: ${input.network}`,
     `Chain ID: ${input.chainId}`,

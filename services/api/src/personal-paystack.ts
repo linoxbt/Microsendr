@@ -166,7 +166,7 @@ export async function registerPersonalPaystack(app: FastifyInstance, dependencie
     if (!claimed) return publicOperation((await pool.query('SELECT * FROM personal_paystack_operations WHERE id=$1', [row.id])).rows[0]);
     try {
       const ack = z.object({ domain: z.literal('test'), reference: z.string(), currency: z.literal('NGN'), amount: wireMinor }).parse(await client.request('POST','/transfer', {
-        source: 'balance', currency: 'NGN', amount: Number(row.amount_minor), recipient: row.recipient_code, reference: row.reference, reason: 'Roots test-mode payout',
+        source: 'balance', currency: 'NGN', amount: Number(row.amount_minor), recipient: row.recipient_code, reference: row.reference, reason: 'Microsendr test-mode payout',
       }));
       if (ack.reference !== row.reference || ack.amount !== String(row.amount_minor)) throw new Error('Payout acknowledgement mismatch');
       await pool.query("UPDATE personal_paystack_operations SET status='pending',updated_at=now() WHERE id=$1 AND status='submitting'", [row.id]);

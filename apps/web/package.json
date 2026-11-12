@@ -1,1 +1,1 @@
-{"name":"@roots/web","version":"0.2.0","private":true,"type":"module","dependencies":{"@roots/sdk":"workspace:*"}}
+{"name":"@microsendr/web","version":"0.2.0","private":true,"type":"module","dependencies":{"@microsendr/sdk":"workspace:*"}}

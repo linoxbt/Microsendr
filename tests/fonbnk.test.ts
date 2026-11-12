@@ -116,7 +116,7 @@ test('a buy quote takes the naira rate from the deposit leg, lists every fee and
   const who = await member();
   const q = await getQuote(who);
   assert.deepEqual([q.pay, q.receive, q.rate, q.environment], [{ currency: 'NGN', amount: 10000 }, { currency: 'POLYGON_USDC', amount: 6.03 }, 1600, 'sandbox']);
-  assert.deepEqual(q.fees.map((f: { label: string; amount: number }) => [f.label, f.amount]), [['Fonbnk service fee', 250], ['Roots fee', 100], ['Network fee', 0.17]]);
+  assert.deepEqual(q.fees.map((f: { label: string; amount: number }) => [f.label, f.amount]), [['Fonbnk service fee', 250], ['Microsendr fee', 100], ['Network fee', 0.17]]);
   assert.deepEqual(q.fields.map((f: { key: string }) => f.key), ['phoneNumber', 'bankCode']);
   // transferType is allowed on the quote's deposit leg only.
   assert.deepEqual(calls.at(-1)!.body.deposit, { paymentChannel: 'bank', currencyType: 'fiat', currencyCode: 'NGN', countryIsoCode: 'NG', amount: 10000, transferType: 'manual' });
@@ -196,7 +196,7 @@ test('orders need a verified email, a linked wallet and Fonbnk BVN verification'
   kycByEmail.delete(who.email);
 });
 
-test('Fonbnk error codes are shown in Roots words, and unknown ones are not passed through', async () => {
+test('Fonbnk error codes are shown in Microsendr words, and unknown ones are not passed through', async () => {
   const who = await member();
   createReply = { status: 400, body: { message: 'Amount too low', errorCode: 'AMOUNT_BELOW_MINIMUM', details: { min: 1000 } } };
   const low = await placeOrder(who);
@@ -213,7 +213,7 @@ test('Fonbnk error codes are shown in Roots words, and unknown ones are not pass
   assert.equal((await app.inject({ url: '/personal/api/conversion/orders', headers: who.headers })).json().data.length, 0);
 });
 
-test('an unclear failure is resolved by looking the order up by its Roots reference', async () => {
+test('an unclear failure is resolved by looking the order up by its Microsendr reference', async () => {
   const who = await member();
   // Fonbnk created the order but the reply was lost: the lookup finds it.
   createReply = { status: 502, body: { message: 'Bad gateway' } };

@@ -92,7 +92,7 @@ const waiting: Record<HashLane, (() => void)[]> = { login: [], payment: [] };
 const MAX_WAITING: Record<HashLane, number> = { login: 64, payment: 32 };
 async function derive(value: string, salt: string, N = CURRENT_N, lane: HashLane = 'login') {
   if (deriving >= 2 && waiting[lane].length >= MAX_WAITING[lane])
-    throw new PaymentError(503, 'busy', 'Roots is busy. Try again in a moment.');
+    throw new PaymentError(503, 'busy', 'Microsendr is busy. Try again in a moment.');
   while (deriving >= 2) await new Promise<void>((resolve) => waiting[lane].push(resolve));
   deriving++;
   try {
@@ -118,7 +118,7 @@ export async function matches(value: string, stored: string | null, lane: HashLa
   const [salt, hex, N] = parts[0] === 'scrypt2' ? [parts[2], parts[3], Number(parts[1])]
     : parts[0] === 'scrypt' ? [parts[1], parts[2], LEGACY_N] : ['', '', CURRENT_N];
   if (![CURRENT_N, LEGACY_N].includes(N)) return false;
-  const key = await derive(value, salt || 'roots-constant-time-missing-user', N, lane);
+  const key = await derive(value, salt || 'microsendr-constant-time-missing-user', N, lane);
   return !!hex && /^[a-f0-9]{128}$/.test(hex) && timingSafeEqual(key, Buffer.from(hex, 'hex'));
 }
 function profile(row: Record<string, any>) {
@@ -457,7 +457,7 @@ export function registerConsumer(app: FastifyInstance, deps: Dependencies) {
         withdrawal: { available: false, reason: 'Bank withdrawals are not available yet.' },
         transfer: {
           available: false,
-          reason: 'Transfers from your Roots balance are not available yet.',
+          reason: 'Transfers from your Microsendr balance are not available yet.',
         },
         // Buying stablecoins with naira through Fonbnk, when its credentials are set.
         conversion: FonbnkClient.configured()

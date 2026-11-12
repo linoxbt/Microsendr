@@ -39,6 +39,8 @@ export async function ensureManagedWallet(userId: string, accountId: string): Pr
   if (!appId || !secret) return null;
   // Unique per app and write-once at Privy. Wallets issued under an earlier prefix
   // stay linked through the personal_managed_wallets row, which is checked first.
+  // The prefix stays roots_ (the product's name when it was introduced): Privy stores
+  // external ids permanently, so changing it would orphan wallets already issued.
   const externalId = `roots_${userId}`;
   const call = async (url: string, init: RequestInit = {}) => {
     let response: Response;

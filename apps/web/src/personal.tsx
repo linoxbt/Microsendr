@@ -44,7 +44,7 @@ import {
   type ConsumerProfile,
 } from './consumer-api.js';
 import { logoutPrivyIfMounted } from './auth-shell.js';
-import { RootsMark, RootsWatermark } from './roots-logo.js';
+import { MicrosendrMark, MicrosendrWatermark } from './microsendr-logo.js';
 import { ConsumerChainWallet } from './consumer-chain-wallet.js';
 import { AssetDetail, AssetIcon, assetAmount, assetDefaults, type PersonalAsset } from './personal-assets.js';
 import { formatAtomic } from './money.js';
@@ -126,7 +126,7 @@ function PersonalLoading() {
   return (
     <div className="personal-loading" role="status" aria-label="Loading account">
       <span className="personal-loading-mark">
-        <RootsMark />
+        <MicrosendrMark />
       </span>
     </div>
   );
@@ -136,7 +136,7 @@ function PersonalSkeleton() {
   return (
     <div className="fin-app fin-skeleton-app" role="status" aria-label="Loading account">
       <header className="fin-topbar fin-skeleton-top">
-        <span className="fin-mobile-logo"><RootsMark /></span>
+        <span className="fin-mobile-logo"><MicrosendrMark /></span>
         <i className="fin-sk fin-sk-circle" />
       </header>
       <main className="fin-content fin-home-content" aria-hidden="true">
@@ -254,7 +254,7 @@ export function PersonalPage({
   useEffect(() => {
     const titles: Record<string, string> = { home: 'Home', payments: 'Payments', deposit: 'Add money', send: 'Send', convert: 'Convert',
       withdraw: 'Withdraw', activity: 'Activity', profile: 'Account', security: 'Security', identity: 'Identity', assets: 'Assets', onboarding: 'Welcome' };
-    if (session?.authenticated) document.title = `${titles[tab] ?? 'Roots'} · Roots`;
+    if (session?.authenticated) document.title = `${titles[tab] ?? 'Microsendr'} · Microsendr`;
   }, [tab, session?.authenticated]);
   useEffect(() => {
     if (tab !== 'activity') setSelected(null);
@@ -328,14 +328,14 @@ export function PersonalPage({
     ]);
     if (server.status === 'rejected' && !isSessionExpired(server.reason))
       setSignInNotice(
-        'You are signed out on this device. We could not reach Roots to end the session, so it will expire on its own.',
+        'You are signed out on this device. We could not reach Microsendr to end the session, so it will expire on its own.',
       );
     signingOut.current = false;
   }
   if (!session || (session.authenticated && !profile))
     return error ? (
       <div className="fin-connection">
-        <RootsMark />
+        <MicrosendrMark />
         <h1>Let’s reconnect.</h1>
         <p role="alert">{error}</p>
         <button className="fin-primary" onClick={retry}>
@@ -509,7 +509,7 @@ export function PersonalPage({
         <header className="fin-topbar">
           <div>
             <span className="fin-mobile-logo">
-              <RootsMark />
+              <MicrosendrMark />
             </span>
             <span className="fin-topbar-brand">{brand}</span>
           </div>
@@ -560,7 +560,7 @@ export function PersonalPage({
               <div className="rt-home">
                 <h1 className="fin-sr-only">{greeting()}{p.first_name ? `, ${p.first_name}` : ''}</h1>
                 <section className="rt-balance" aria-label="Your wallet overview">
-                  <RootsWatermark />
+                  <MicrosendrWatermark />
                   <div className="rt-balance-top">
                     <button className="rt-balance-avatar" onClick={() => go('/personal/profile')} aria-label="Open your account">
                       {(p.first_name?.[0] ?? 'R') + (p.last_name?.[0] ?? '')}
@@ -716,7 +716,7 @@ export function PersonalPage({
               {receipt && (
                 <section className="fin-panel fin-receipt" aria-label="Receipt">
                   <div className="fin-receipt-print-head" aria-hidden="true">
-                    <RootsMark /> <b>Roots</b> <span>Payment receipt</span>
+                    <MicrosendrMark /> <b>Microsendr</b> <span>Payment receipt</span>
                   </div>
                   <div className="fin-section-head">
                     <h2>{movementTitle(receipt)}</h2>
@@ -976,7 +976,7 @@ function MoneyFlow({
         <div className="rt-page">
           <PageBar title="Send" back={back('/personal/home')} />
           <OptionList label="Send to" options={[
-            { key: 'user', title: 'Roots user', badge: 'No fee', badgeTone: 'green', text: 'Send to an @username', icon: <AtSign size={22} />, onClick: back('/personal/send/user') },
+            { key: 'user', title: 'Microsendr user', badge: 'No fee', badgeTone: 'green', text: 'Send to an @username', icon: <AtSign size={22} />, onClick: back('/personal/send/user') },
             { key: 'address', title: 'Wallet address', text: 'QIE or QUSDC to any address', icon: <Wallet size={22} />, onClick: back('/personal/send/address') },
             { key: 'bank', title: 'Bank account', badge: 'Soon', badgeTone: 'blue', text: 'Send to a bank account', icon: <Landmark size={22} /> },
           ]} />

@@ -10,9 +10,9 @@ type Props = AuthProps & { config: AuthConfig };
 
 /**
  * Privy is used only to prove ownership of a previous email-code account. The Privy session is
- * ended as soon as the Roots session exists, and the exchange never runs without a click.
+ * ended as soon as the Microsendr session exists, and the exchange never runs without a click.
  */
-export function RootsAuthForm({ onComplete, restoreExisting }: AuthProps) {
+export function MicrosendrAuthForm({ onComplete, restoreExisting }: AuthProps) {
   const { ready, authenticated, getAccessToken, logout } = usePrivy();
   const { sendCode, loginWithCode } = useLoginWithEmail();
   const [email, setEmail] = useState('');
@@ -37,7 +37,7 @@ export function RootsAuthForm({ onComplete, restoreExisting }: AuthProps) {
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(result.error?.message ?? 'Sign-in failed');
-    // The Roots session now stands on its own; do not leave a Privy session behind.
+    // The Microsendr session now stands on its own; do not leave a Privy session behind.
     await logout().catch(() => undefined);
     await onComplete(result);
   }
@@ -80,7 +80,7 @@ export function RootsAuthForm({ onComplete, restoreExisting }: AuthProps) {
             disabled={busy || !ready}
             onClick={() => void run(exchange)}
           >
-            {error ? 'Retry sign-in' : 'Continue to Roots'} <ArrowRight size={17} />
+            {error ? 'Retry sign-in' : 'Continue to Microsendr'} <ArrowRight size={17} />
           </button>
           <button
             className="personal-text"
@@ -158,7 +158,7 @@ export function RootsAuthForm({ onComplete, restoreExisting }: AuthProps) {
   );
 }
 
-export function RootsAuth(props: Props) {
+export function MicrosendrAuth(props: Props) {
   const config = props.config;
   return (
     <PrivyProvider
@@ -175,7 +175,7 @@ export function RootsAuth(props: Props) {
         appearance: { theme: 'light', accentColor: '#4682B4' },
       }}
     >
-      <RootsAuthForm {...props} />
+      <MicrosendrAuthForm {...props} />
     </PrivyProvider>
   );
 }

@@ -188,7 +188,7 @@ export function registerPaymentAuth(app: FastifyInstance, required: Required) {
     const existing = (await pool.query('SELECT credential_id,transports FROM personal_passkeys WHERE personal_user_id=$1', [person.user_id])).rows;
     if (existing.length >= 10) throw new PaymentError(409, 'passkey_limit', 'Remove a passkey before adding another');
     const options = await generateRegistrationOptions({
-      rpName: 'Roots', rpID, userName: user?.username ? `@${user.username}` : user?.email ?? 'Roots account',
+      rpName: 'Microsendr', rpID, userName: user?.username ? `@${user.username}` : user?.email ?? 'Microsendr account',
       userID: new TextEncoder().encode(person.user_id), attestationType: 'none',
       excludeCredentials: existing.map((key) => ({ id: key.credential_id, transports: key.transports })),
       authenticatorSelection: { residentKey: 'preferred', userVerification: 'required' },

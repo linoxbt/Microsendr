@@ -10,7 +10,7 @@ import { publicSettlement } from '../../../packages/settlement/src/service.js';
 import { findManagedWallet, managedWalletConfigured, privyWalletRpc } from './managed-wallet.js';
 
 /**
- * Sending from a Privy-managed wallet makes Roots custodial of the funds, so it
+ * Sending from a Privy-managed wallet makes Microsendr custodial of the funds, so it
  * is off unless KORA_MANAGED_TRANSFERS=true, and needs a verified email, approved
  * identity verification (unless KORA_MANAGED_TRANSFERS_REQUIRE_KYC=false), the
  * account password, and per-transfer and rolling 24-hour limits.

@@ -20,7 +20,7 @@ export function walletChallengeMessage(input: {
   accountId: string; address: string; nonce: string; expiresAt: string;
 }) {
   return [
-    'Link this QIE wallet to your Roots account',
+    'Link this QIE wallet to your Microsendr account',
     `Account: ${input.accountId}`,
     `Network: ${QIE_NETWORK}`,
     `Chain ID: ${QIE_CHAIN_ID}`,

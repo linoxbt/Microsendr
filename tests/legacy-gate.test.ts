@@ -22,7 +22,7 @@ test('the retired business platform is unreachable when switched off (the produc
       assert.equal((await app.inject({ url })).statusCode, 404, url);
     // Nothing was created by the attempted workspace provisioning.
     const health = await app.inject({ url: '/health' });
-    assert.deepEqual([health.statusCode, health.json().service], [200, 'roots-api']);
+    assert.deepEqual([health.statusCode, health.json().service], [200, 'microsendr-api']);
     assert.equal((await app.inject({ url: '/personal/api/session' })).statusCode, 200);
     // Paths that only share a prefix are not caught.
     assert.notEqual((await app.inject({ url: '/personal/api/v1-like' })).statusCode, 500);
@@ -75,7 +75,7 @@ test('the config report names missing settings without their values', async () =
     assert.ok(report.missing.includes('KORA_AUTH_SECRET'));
     assert.ok(report.missing.includes('email (RESEND_API_KEY and EMAIL_FROM)'));
     assert.ok(!JSON.stringify(report).includes('short'));
-    process.env.KORA_AUTH_SECRET = 'x'.repeat(40); process.env.RESEND_API_KEY = 're_test'; process.env.EMAIL_FROM = 'Roots <codes@example.test>';
+    process.env.KORA_AUTH_SECRET = 'x'.repeat(40); process.env.RESEND_API_KEY = 're_test'; process.env.EMAIL_FROM = 'Microsendr <codes@example.test>';
     assert.deepEqual(configReport().missing, []);
   } finally {
     for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];

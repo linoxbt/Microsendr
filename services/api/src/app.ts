@@ -149,7 +149,7 @@ export async function buildApi(options: ApiOptions = {}) {
     request.proxySigned = proxy.signed;
     if (!proxy.signed && proxySignatureRequired()
       && paths.some((value) => value.startsWith('/personal/api/') && !proxyExemptPath.test(value)))
-      throw new PaymentError(403, 'proxy_required', 'Use the Roots app');
+      throw new PaymentError(403, 'proxy_required', 'Use the Microsendr app');
   });
   await app.register(rateLimit, {
     // Shared counters across API instances when enabled; a counter failure never blocks a request.
@@ -164,7 +164,7 @@ export async function buildApi(options: ApiOptions = {}) {
     openapi: {
       openapi: '3.0.3',
       info: {
-        title: 'Roots API',
+        title: 'Microsendr API',
         version: '0.8.0',
         description:
           'African financial interoperability infrastructure. Paystack NGN collections and payouts accept test keys only. Cross-border routes and identity checks remain sandbox simulations.',
@@ -432,7 +432,7 @@ export async function buildApi(options: ApiOptions = {}) {
   app.get('/health', async () => {
     await pool.query('SELECT 1');
     const config = configReport();
-    return { status: config.ready ? 'ok' : 'degraded', service: 'roots-api', missing: config.missing };
+    return { status: config.ready ? 'ok' : 'degraded', service: 'microsendr-api', missing: config.missing };
   });
   // Reached through the web proxy: reports whether the proxy's signature checked out.
   app.get('/personal/api/health', async (request, reply) => {

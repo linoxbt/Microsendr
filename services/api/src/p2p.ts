@@ -10,7 +10,7 @@ type Person = { user_id: string; account_id: string };
 const usernameSchema = z.string().trim().toLowerCase().regex(/^@?[a-z][a-z0-9_]{2,23}$/).transform((v) => v.replace(/^@/, ''));
 
 /**
- * Where a Roots user receives P2P payments: their own linked wallet (most recent), or
+ * Where a Microsendr user receives P2P payments: their own linked wallet (most recent), or
  * their account wallet only while it can also send, so money never lands somewhere it
  * cannot leave. Null when they cannot be paid.
  */
@@ -24,7 +24,7 @@ export async function receivingAddress(userId: string, accountId: string) {
   return managed ? { address: getAddress(managed.address), custody: 'managed' as const } : null;
 }
 
-/** The Roots user payable at this username, or null. Never the requester themselves. */
+/** The Microsendr user payable at this username, or null. Never the requester themselves. */
 export async function payableUser(username: unknown, requesterId: string) {
   const parsed = usernameSchema.safeParse(username);
   if (!parsed.success) return null;
@@ -59,7 +59,7 @@ export function registerP2P(app: FastifyInstance, required: (request: FastifyReq
   app.get('/personal/api/recipients/:username', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request) => {
     const person = await required(request);
     const found = await payableUser((request.params as { username: string }).username, person.user_id);
-    if (!found) throw new PaymentError(404, 'recipient_unavailable', 'No Roots user can be paid at that username');
+    if (!found) throw new PaymentError(404, 'recipient_unavailable', 'No Microsendr user can be paid at that username');
     return { ...found, network: QIE_NETWORK, asset: 'QIEV3' };
   });
 

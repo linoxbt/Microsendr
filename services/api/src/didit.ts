@@ -44,7 +44,7 @@ const tokens = (value: unknown) => fold(value).split(/[^A-Z]+/).filter(Boolean);
 const isoDate = (value: unknown) => value instanceof Date ? value.toISOString().slice(0, 10) : String(value ?? '').slice(0, 10);
 
 /**
- * Didit approves a document and a face; Roots also needs that document to be this
+ * Didit approves a document and a face; Microsendr also needs that document to be this
  * customer's. The profile's names must all appear on the document and the dates of
  * birth must be equal. Middle names on the document are allowed.
  */

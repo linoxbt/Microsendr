@@ -133,7 +133,7 @@ body {
 }
 
 /* Wordmark: the send monogram followed by the name in DM Sans. */
-.logo.roots-wordmark {
+.logo.microsendr-wordmark {
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -146,24 +146,24 @@ body {
   white-space: nowrap;
   text-transform: none;
 }
-.logo.roots-wordmark > svg {
+.logo.microsendr-wordmark > svg {
   width: 1.3em;
   height: 1.3em;
   flex-shrink: 0;
 }
-.logo.roots-wordmark > span {
+.logo.microsendr-wordmark > span {
   font: inherit;
   letter-spacing: inherit;
   color: inherit;
 }
-:root[data-theme='dark'] .logo.roots-wordmark {
+:root[data-theme='dark'] .logo.microsendr-wordmark {
   color: #f7f3e9;
 }
 /* Mark colours; on dark surfaces the tile inverts so the mark keeps its edge. */
-.roots-mark-tile { fill: #203749; }
-.roots-mark-back { fill: #7fb3dd; }
-.roots-mark-front { fill: #4f93c8; }
-.roots-mark-accent { fill: #f7f3e9; }
-:root[data-theme='dark'] .roots-mark-tile { fill: #f7f3e9; }
-:root[data-theme='dark'] .roots-mark-front { fill: #2f6e9f; }
-:root[data-theme='dark'] .roots-mark-accent { fill: #203749; }
+.microsendr-mark-tile { fill: #203749; }
+.microsendr-mark-back { fill: #7fb3dd; }
+.microsendr-mark-front { fill: #4f93c8; }
+.microsendr-mark-accent { fill: #f7f3e9; }
+:root[data-theme='dark'] .microsendr-mark-tile { fill: #f7f3e9; }
+:root[data-theme='dark'] .microsendr-mark-front { fill: #2f6e9f; }
+:root[data-theme='dark'] .microsendr-mark-accent { fill: #203749; }

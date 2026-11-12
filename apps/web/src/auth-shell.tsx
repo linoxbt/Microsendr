@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import type { AuthConfig, AuthProps } from './roots-auth.js';
+import type { AuthConfig, AuthProps } from './microsendr-auth.js';
 const Auth = React.lazy(() =>
-  import('./roots-auth.js').then((module) => ({ default: module.RootsAuth })),
+  import('./microsendr-auth.js').then((module) => ({ default: module.MicrosendrAuth })),
 );
 
-// Set while a Privy provider is mounted, so a Roots sign-out can end that Privy session too.
+// Set while a Privy provider is mounted, so a Microsendr sign-out can end that Privy session too.
 let privyLogout: (() => Promise<void>) | null = null;
 export function registerPrivyLogout(logout: () => Promise<void>) {
   privyLogout = logout;
@@ -16,7 +16,7 @@ export async function logoutPrivyIfMounted() {
   await privyLogout?.().catch(() => undefined);
 }
 
-export function RootsAuth(props: AuthProps & { config?: AuthConfig }) {
+export function MicrosendrAuth(props: AuthProps & { config?: AuthConfig }) {
   const [fetchedConfig, setFetchedConfig] = useState<AuthConfig>();
   useEffect(() => {
     if (props.config) return;

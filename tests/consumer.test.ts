@@ -331,24 +331,24 @@ test('the account-wide login cap does not lock out a browser that signed in befo
     headers: { origin }, payload: { email: data.email, password: data.password } });
   const good = await login(auth.data);
   assert.equal(good.statusCode, 200, good.body);
-  const device = String(good.headers['set-cookie']).match(/roots_device=([a-f0-9]{64})/)?.[1];
+  const device = String(good.headers['set-cookie']).match(/microsendr_device=([a-f0-9]{64})/)?.[1];
   assert.ok(device, 'a known-device cookie is set on sign-in');
   // Simulate a distributed attack that exhausted the account-wide cap.
   await pool.query(`INSERT INTO personal_auth_limits(email_hash,failures) VALUES($1,500)
     ON CONFLICT(email_hash) DO UPDATE SET failures=500, window_started_at=now()`, [hashKey(`${auth.data.email}|*`)]);
   const stranger = await login(auth.data);
   assert.equal(stranger.statusCode, 429);
-  const owner = await app.inject({ method: 'POST', url: '/personal/api/auth/password', remoteAddress: '10.30.0.2', headers: { origin, cookie: `roots_device=${device}` },
+  const owner = await app.inject({ method: 'POST', url: '/personal/api/auth/password', remoteAddress: '10.30.0.2', headers: { origin, cookie: `microsendr_device=${device}` },
     payload: { email: auth.data.email, password: auth.data.password } });
   assert.equal(owner.statusCode, 200, owner.body);
   // A device cookie for another account does not help.
   const other = await register(input(), '10.30.1.2');
-  const otherDevice = await app.inject({ method: 'POST', url: '/personal/api/auth/password', remoteAddress: '10.30.0.2', headers: { origin, cookie: `roots_device=${device}` },
+  const otherDevice = await app.inject({ method: 'POST', url: '/personal/api/auth/password', remoteAddress: '10.30.0.2', headers: { origin, cookie: `microsendr_device=${device}` },
     payload: { email: other.data.email, password: other.data.password } });
   assert.equal(otherDevice.statusCode, 200);
   await pool.query(`INSERT INTO personal_auth_limits(email_hash,failures) VALUES($1,500)
     ON CONFLICT(email_hash) DO UPDATE SET failures=500, window_started_at=now()`, [hashKey(`${other.data.email}|*`)]);
-  const crossDevice = await app.inject({ method: 'POST', url: '/personal/api/auth/password', remoteAddress: '10.30.0.2', headers: { origin, cookie: `roots_device=${device}` },
+  const crossDevice = await app.inject({ method: 'POST', url: '/personal/api/auth/password', remoteAddress: '10.30.0.2', headers: { origin, cookie: `microsendr_device=${device}` },
     payload: { email: other.data.email, password: other.data.password } });
   assert.equal(crossDevice.statusCode, 429);
 });

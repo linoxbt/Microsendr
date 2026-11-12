@@ -112,7 +112,7 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
       let user = (await c.query('SELECT * FROM personal_users WHERE privy_app_id=$1 AND privy_subject=$2 FOR UPDATE', [verified.app_id, verified.subject])).rows[0];
       const foundBySubject = !!user;
       if (!user && email) user = (await c.query('SELECT * FROM personal_users WHERE email=$1 FOR UPDATE', [email])).rows[0];
-      if (!user) throw new PaymentError(404, 'previous_account_not_found', 'No Roots account uses this sign-in. Create an account with your email.');
+      if (!user) throw new PaymentError(404, 'previous_account_not_found', 'No Microsendr account uses this sign-in. Create an account with your email.');
       if (foundBySubject && email && user.email !== email) {
         if ((await c.query('SELECT 1 FROM personal_users WHERE email=$1', [email])).rowCount)
           throw new PaymentError(409, 'identity_conflict', 'This email is linked to another account');
@@ -343,7 +343,7 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
       }
       const recipient = (await c.query("SELECT a.id FROM personal_users u JOIN kora_accounts a ON a.personal_user_id=u.id WHERE u.email=$1 AND u.email_verified_at IS NOT NULL AND u.kyc_state='sandbox_approved' AND a.status='active'", [recipient_email])).rows[0];
       if (!recipient || recipient.id === row.account_id)
-        throw new PaymentError(422, 'recipient_unavailable', 'Choose another eligible Roots Personal recipient');
+        throw new PaymentError(422, 'recipient_unavailable', 'Choose another eligible Microsendr Personal recipient');
       const transferId = id('trf');
       const journalId = await postJournal(c, { reference: `personal:transfer:${transferId}`, description: 'Personal sandbox P2P transfer', entries: [
         { account_id: personalAccount(row.account_id), side: 'credit', amount: amount_minor },
@@ -358,7 +358,7 @@ export async function registerPersonal(app: FastifyInstance, options: PersonalOp
     const row = await required(request);
     const result = await pool.query(`SELECT t.id,t.amount_minor::text,t.created_at,
       CASE WHEN t.sender_account_id=$1 THEN 'sent' ELSE 'received' END AS direction,
-      CASE WHEN t.sender_account_id=$1 THEN COALESCE(recipient.email,'Roots member') ELSE COALESCE(sender.email,'Roots member') END AS counterparty
+      CASE WHEN t.sender_account_id=$1 THEN COALESCE(recipient.email,'Microsendr member') ELSE COALESCE(sender.email,'Microsendr member') END AS counterparty
       FROM personal_transfers t
       JOIN kora_accounts sa ON sa.id=t.sender_account_id JOIN personal_users sender ON sender.id=sa.personal_user_id
       JOIN kora_accounts ra ON ra.id=t.receiver_account_id JOIN personal_users recipient ON recipient.id=ra.personal_user_id

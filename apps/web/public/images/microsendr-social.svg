@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="Roots: Money for the life you’re building.">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="Microsendr: Money for the life you’re building.">
   <defs>
     <radialGradient id="glow" cx="0.75" cy="0.15" r="0.8">
       <stop offset="0" stop-color="#4f93c8" stop-opacity="0.45"/>
@@ -34,13 +34,13 @@
       <path d="M19 36 28 12h7l-9 24Z" fill="#4f93c8"/>
       <path d="M29 36l5-13.3 3.5 9.3L35.8 36Z" fill="#f7f3e9"/>
     </g>
-    <text x="80" y="47" fill="#203749" font-family="'DM Sans Variable','DM Sans',Arial,Helvetica,sans-serif" font-size="50" font-weight="700" letter-spacing="-2">roots</text>
+    <text x="80" y="47" fill="#203749" font-family="'DM Sans Variable','DM Sans',Arial,Helvetica,sans-serif" font-size="50" font-weight="700" letter-spacing="-2">microsendr</text>
   </g>
   <g font-family="'DM Sans Variable','DM Sans',Arial,Helvetica,sans-serif">
     <text x="80" y="296" fill="#14283a" font-size="62" font-weight="650" letter-spacing="-2.4">Money for the life</text>
     <text x="80" y="368" fill="#14283a" font-size="62" font-weight="650" letter-spacing="-2.4">you’re <tspan fill="#2f6e9f">building.</tspan></text>
-    <text x="80" y="444" fill="#4d6072" font-size="24" font-weight="400">Pay people by @username. Send and receive on</text>
-    <text x="80" y="478" fill="#4d6072" font-size="24" font-weight="400">QIE from a wallet you control.</text>
+    <text x="80" y="444" fill="#4d6072" font-size="24" font-weight="400">Your own QIE address. Pay people by @username,</text>
+    <text x="80" y="478" fill="#4d6072" font-size="24" font-weight="400">send and receive QIE and QUSDC.</text>
     <g transform="translate(80 528)">
       <rect width="246" height="44" rx="22" fill="#ffffff" stroke="#203749" stroke-opacity="0.12"/>
       <circle cx="24" cy="22" r="5" fill="#1f7a50"/>

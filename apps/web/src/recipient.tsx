@@ -8,7 +8,7 @@ const usernamePattern = /^@?[a-zA-Z][a-zA-Z0-9_]{2,23}$/;
 
 /**
  * Resolves what the user typed into a send form: a 0x address as is, or an
- * @username through the opt-in Roots directory. The label tells the user who
+ * @username through the opt-in Microsendr directory. The label tells the user who
  * they are paying before they confirm.
  */
 export function useRecipient(value: string) {
@@ -27,7 +27,7 @@ export function useRecipient(value: string) {
           if (!active) return;
           const code = (cause as { code?: string }).code;
           const name = input.replace(/^@/, '').toLowerCase();
-          setState({ loading: false, error: code === 'recipient_unavailable' || /No Roots user/.test((cause as Error).message)
+          setState({ loading: false, error: code === 'recipient_unavailable' || /No Microsendr user/.test((cause as Error).message)
             ? `@${name} can't receive by username yet.` : (cause as Error).message });
         });
     }, 350);

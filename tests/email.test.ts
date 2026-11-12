@@ -13,7 +13,7 @@ async function withEnv(values: Partial<Record<(typeof keys)[number], string>>, r
 }
 
 test('Resend delivery sends the code from the configured sender, as text and HTML', async () => {
-  await withEnv({ EMAIL_FROM: 'Roots <codes@example.test>', RESEND_API_KEY: 're_test_key' }, async () => {
+  await withEnv({ EMAIL_FROM: 'Microsendr <codes@example.test>', RESEND_API_KEY: 're_test_key' }, async () => {
     const sent: { url: string; init?: RequestInit }[] = [];
     const send = mailer(async (url, init) => { sent.push({ url: String(url), init }); return Response.json({ id: 'email_1' }); });
     assert.ok(send);
@@ -22,8 +22,8 @@ test('Resend delivery sends the code from the configured sender, as text and HTM
     assert.equal((sent[0].init?.headers as Record<string, string>).authorization, 'Bearer re_test_key');
     const body = JSON.parse(String(sent[0].init?.body));
     assert.deepEqual(body.to, ['person@example.test']);
-    assert.equal(body.from, 'Roots <codes@example.test>');
-    assert.equal(body.subject, '042917 is your Roots code');
+    assert.equal(body.from, 'Microsendr <codes@example.test>');
+    assert.equal(body.subject, '042917 is your Microsendr code');
     assert.match(body.text, /042917/);
     assert.match(body.html, /042917/);
   });
@@ -42,6 +42,6 @@ test('a provider rejection is an error, and delivery is off without a sender', a
 test('codes are six digits and never injected into HTML', () => {
   assert.throws(() => codeMessage('<b>1</b>'));
   const message = codeMessage('000001');
-  assert.equal(message.subject, '000001 is your Roots code');
+  assert.equal(message.subject, '000001 is your Microsendr code');
   assert.doesNotMatch(message.html, /<script/i);
 });

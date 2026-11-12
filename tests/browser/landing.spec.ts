@@ -13,8 +13,8 @@ test('landing hero has one h1; Get started opens sign-up and Sign in opens sign-
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Money for the life you’re building.');
   await expect(page.getByRole('banner')).toBeVisible();
   await expect(page.getByRole('main')).toBeVisible();
-  await expect(page.getByRole('contentinfo')).toContainText('Roots is not a bank.');
-  await expect(page.getByRole('figure', { name: 'Illustrative preview of the Roots app' })).toContainText(
+  await expect(page.getByRole('contentinfo')).toContainText('Microsendr is not a bank.');
+  await expect(page.getByRole('figure', { name: 'Illustrative preview of the Microsendr app' })).toContainText(
     'Illustrative preview',
   );
   await page.locator('.lp-hero-actions').getByRole('button', { name: 'Get started' }).click();
@@ -101,9 +101,9 @@ test('planned features are clearly labelled Coming soon', async ({ page }) => {
     await expect(table.getByRole('row', { name: new RegExp(feature) })).toContainText('Coming soon');
   for (const feature of [
     'Personal account & profile',
-    'Roots account wallet',
+    'Microsendr account wallet',
     'Send and receive QIE and QUSDC',
-    'Pay Roots users by @username',
+    'Pay Microsendr users by @username',
   ])
     await expect(table.getByRole('row', { name: new RegExp(feature) })).toContainText('Available');
 
@@ -149,12 +149,12 @@ test('reduced motion disables animation, reveal and smooth scrolling', async ({ 
   await expect(page.locator('.lp-site')).toHaveClass(/lp-motion/);
 });
 
-test('Roots can be installed on a phone home screen', async ({ page, request }) => {
+test('Microsendr can be installed on a phone home screen', async ({ page, request }) => {
   await page.goto('/');
   await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', '/manifest.webmanifest');
   await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute('href', '/icons/apple-touch-icon.png');
   const manifest = await (await request.get('/manifest.webmanifest')).json();
-  expect(manifest).toMatchObject({ name: 'Roots', display: 'standalone', start_url: '/personal/home' });
+  expect(manifest).toMatchObject({ name: 'Microsendr', display: 'standalone', start_url: '/personal/home' });
   for (const icon of manifest.icons) expect((await request.get(icon.src)).ok()).toBe(true);
   expect(manifest.icons.some((icon: { purpose: string }) => icon.purpose === 'maskable')).toBe(true);
   await expect(page.locator('meta[name="viewport"]')).toHaveAttribute('content', /viewport-fit=cover/);
